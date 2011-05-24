@@ -2024,7 +2024,7 @@ void evaluate_breakpoint(Context * ctx) {
                     req->bp_cnt = bp_cnt;
                 }
             }
-            for (i = 0; i < bp_cnt; i++) {
+            for (i = 0; i < bi->ref_cnt; i++) {
                 BreakpointInfo * bp = bi->refs[i].bp;
                 assert(bp->instruction_cnt);
                 assert(bp->unsupported == NULL);
