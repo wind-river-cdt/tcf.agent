@@ -740,15 +740,31 @@ static void expr_cache_enter(CacheClient * client, BreakpointInfo * bp, Context 
         bp->status_changed = 1;
     }
 
-    l = broadcast_group->channels.next;
-    while (l != &broadcast_group->channels) {
-        Channel * c = link_bcg2chnl(l);
-        if (!is_channel_closed(c)) {
-            cache_enter_cnt++;
-            run_ctrl_lock();
-            cache_enter(client, c, &args, sizeof(args));
+    if (bp != NULL && *bp->id) {
+        l = bp->link_clients.next;
+        while (l != &bp->link_clients) {
+            BreakpointRef * br = link_bp2br(l);
+            Channel * c = br->channel;
+            assert(br->bp == bp);
+            if (!is_channel_closed(c)) {
+                cache_enter_cnt++;
+                run_ctrl_lock();
+                cache_enter(client, c, &args, sizeof(args));
+            }
+            l = l->next;
         }
-        l = l->next;
+    }
+    else {
+        l = broadcast_group->channels.next;
+        while (l != &broadcast_group->channels) {
+            Channel * c = link_bcg2chnl(l);
+            if (!is_channel_closed(c)) {
+                cache_enter_cnt++;
+                run_ctrl_lock();
+                cache_enter(client, c, &args, sizeof(args));
+            }
+            l = l->next;
+        }
     }
 }
 
