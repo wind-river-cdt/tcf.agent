@@ -211,7 +211,11 @@ static void write_context(OutputStream * out, Context * ctx) {
         json_write_boolean(out, 1);
     }
 
+#ifdef RM_TERMINATE
+    if (context_can_resume(ctx, RM_TERMINATE)) {
+#else
     if (has_state || ctx->mem_access != 0) {
+#endif
         write_stream(out, ',');
         json_write_string(out, "CanTerminate");
         write_stream(out, ':');
