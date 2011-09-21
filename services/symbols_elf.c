@@ -282,7 +282,8 @@ static int get_num_prop(ObjectInfo * obj, int at, U8_T * res) {
     PropertyValue v;
 
     if (!set_trap(&trap)) return 0;
-    read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, 0, obj, at, &v);
+    /* XXX : fle : check if cast is not an error */
+    read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, 0, obj, (U2_T) at, &v);
     *res = get_numeric_property_value(&v);
     clear_trap(&trap);
     return 1;
