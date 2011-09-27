@@ -1721,7 +1721,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
                 buf_len = n;
             }
             n = 0;
-            i = obj->mChildren;
+            i = sym->base->obj->mChildren;
             while (i != NULL) {
                 if (i->mTag == TAG_formal_parameter || i->mTag == TAG_unspecified_parameters) {
                     Symbol * x = NULL;
