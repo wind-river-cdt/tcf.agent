@@ -281,7 +281,7 @@ extern int getegid(void);
 #include <e32def.h>
 #include <unistd.h>
 
-#include <framework/link.h>
+#include <tcf/framework/link.h>
 
 #define MAX_PATH _POSIX_PATH_MAX
 #define FILE_PATH_SIZE _POSIX_PATH_MAX

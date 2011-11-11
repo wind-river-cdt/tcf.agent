@@ -20,8 +20,8 @@
 #ifndef D_outputbuf
 #define D_outputbuf
 
-#include <config.h>
-#include <framework/link.h>
+#include <tcf/config.h>
+#include <tcf/framework/link.h>
 
 typedef struct OutputQueue OutputQueue;
 typedef struct OutputBuffer OutputBuffer;

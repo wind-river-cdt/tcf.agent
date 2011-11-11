@@ -17,10 +17,10 @@
  * Local memory heap manager.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <string.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
 
 void * loc_alloc(size_t size) {
     void * p;

@@ -17,17 +17,17 @@
  * Implements peer server management.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stddef.h>
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/tcf.h>
-#include <framework/peer.h>
-#include <framework/myalloc.h>
-#include <framework/events.h>
-#include <framework/protocol.h>
-#include <framework/trace.h>
+#include <tcf/framework/tcf.h>
+#include <tcf/framework/peer.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/trace.h>
 
 typedef struct PeersListener {
     peer_server_listener fnp;

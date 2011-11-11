@@ -17,7 +17,7 @@
  * TCF Registers - CPU registers access service.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Registers
 
@@ -25,14 +25,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-#include <framework/myalloc.h>
-#include <framework/protocol.h>
-#include <framework/context.h>
-#include <framework/json.h>
-#include <framework/cache.h>
-#include <framework/exceptions.h>
-#include <services/stacktrace.h>
-#include <services/registers.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/cache.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/registers.h>
 
 static const char * REGISTERS = "Registers";
 

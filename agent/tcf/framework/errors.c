@@ -17,21 +17,21 @@
  * This module defines agent error codes in addition to system codes defined in errno.h
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <time.h>
-#include <framework/mdep-inet.h>
-#include <framework/errors.h>
-#include <framework/events.h>
-#include <framework/exceptions.h>
-#include <framework/streams.h>
-#include <framework/myalloc.h>
-#include <framework/json.h>
-#include <framework/trace.h>
+#include <tcf/framework/mdep-inet.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/streams.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/trace.h>
 
 #define ERR_MESSAGE_MIN         (STD_ERR_BASE + 100)
 #if MEM_USAGE_FACTOR <= 2

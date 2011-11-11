@@ -20,10 +20,10 @@
 #ifndef D_discovery
 #define D_discovery
 
-#include <config.h>
-#include <framework/protocol.h>
-#include <framework/channel.h>
-#include <framework/link.h>
+#include <tcf/config.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/link.h>
 
 #define DISCOVERY_TCF_PORT      1534
 

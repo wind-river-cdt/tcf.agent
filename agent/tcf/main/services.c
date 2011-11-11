@@ -17,31 +17,31 @@
  * Services initialization code.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
-#include <framework/proxy.h>
-#include <framework/plugins.h>
-#include <services/discovery.h>
-#include <services/runctrl.h>
-#include <services/breakpoints.h>
-#include <services/memoryservice.h>
-#include <services/memorymap.h>
-#include <services/registers.h>
-#include <services/stacktrace.h>
-#include <services/symbols.h>
-#include <services/linenumbers.h>
-#include <services/processes.h>
-#include <services/filesystem.h>
-#include <services/sysmon.h>
-#include <services/diagnostics.h>
-#include <services/expressions.h>
-#include <services/streamsservice.h>
-#include <services/pathmap.h>
-#include <services/tcf_elf.h>
-#include <services/terminals.h>
-#include <main/services.h>
+#include <tcf/framework/proxy.h>
+#include <tcf/framework/plugins.h>
+#include <tcf/services/discovery.h>
+#include <tcf/services/runctrl.h>
+#include <tcf/services/breakpoints.h>
+#include <tcf/services/memoryservice.h>
+#include <tcf/services/memorymap.h>
+#include <tcf/services/registers.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/symbols.h>
+#include <tcf/services/linenumbers.h>
+#include <tcf/services/processes.h>
+#include <tcf/services/filesystem.h>
+#include <tcf/services/sysmon.h>
+#include <tcf/services/diagnostics.h>
+#include <tcf/services/expressions.h>
+#include <tcf/services/streamsservice.h>
+#include <tcf/services/pathmap.h>
+#include <tcf/services/tcf_elf.h>
+#include <tcf/services/terminals.h>
+#include <tcf/main/services.h>
 
-#include <main/services-ext.h>
+#include <tcf/main/services-ext.h>
 
 void ini_services(Protocol * proto, TCFBroadcastGroup * bcg) {
 #if SERVICE_Locator

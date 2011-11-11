@@ -99,7 +99,7 @@
 #ifndef D_cache
 #define D_cache
 
-#include <framework/channel.h>
+#include <tcf/framework/channel.h>
 
 typedef void CacheClient(void *);
 

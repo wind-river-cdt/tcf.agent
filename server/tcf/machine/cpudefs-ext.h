@@ -13,7 +13,7 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
-#include <services/context-proxy.h>
+#include <tcf/services/context-proxy.h>
 
 RegisterDefinition * get_reg_by_id(Context * ctx, unsigned id, RegisterIdScope * scope) {
     RegisterDefinition * defs = get_reg_definitions(ctx);

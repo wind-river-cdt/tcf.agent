@@ -17,11 +17,11 @@
 #ifndef D_vm
 #define D_vm
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_DebugContext
 
-#include <framework/context.h>
+#include <tcf/framework/context.h>
 
 typedef struct VMState {
     /* Evaluation context */

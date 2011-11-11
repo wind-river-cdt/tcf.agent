@@ -20,7 +20,7 @@
 #ifndef D_cpudefs
 #define D_cpudefs
 
-#include <config.h>
+#include <tcf/config.h>
 
 typedef struct Context Context;
 

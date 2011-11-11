@@ -17,20 +17,20 @@
  * This module contains definitions of target CPU registers and stack frames.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_DebugContext
 
 #include <stddef.h>
 #include <stdio.h>
 #include <assert.h>
-#include <framework/cpudefs.h>
-#include <framework/errors.h>
-#include <framework/context.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <services/symbols.h>
-#include <machine/cpudefs-ext.h>
+#include <tcf/framework/cpudefs.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/symbols.h>
+#include <tcf/machine/cpudefs-ext.h>
 
 int read_reg_value(StackFrame * frame, RegisterDefinition * reg_def, uint64_t * value) {
     uint8_t buf[8];

@@ -17,23 +17,23 @@
  * Implements auto-discovery and Locator service.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #include <stddef.h>
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/protocol.h>
-#include <framework/channel.h>
-#include <framework/proxy.h>
-#include <framework/myalloc.h>
-#include <framework/events.h>
-#include <framework/trace.h>
-#include <framework/exceptions.h>
-#include <framework/json.h>
-#include <framework/peer.h>
-#include <services/discovery.h>
-#include <services/discovery_udp.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/proxy.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/peer.h>
+#include <tcf/services/discovery.h>
+#include <tcf/services/discovery_udp.h>
 
 #if SERVICE_Locator
 

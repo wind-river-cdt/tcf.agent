@@ -20,19 +20,19 @@
  * machine instruction addresses in the executable object.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_LineNumbersProxy
 
 #include <assert.h>
 #include <stdio.h>
-#include <framework/context.h>
-#include <framework/cache.h>
-#include <framework/json.h>
-#include <framework/events.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <services/linenumbers.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/cache.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/linenumbers.h>
 
 #define HASH_SIZE (16 * MEM_USAGE_FACTOR - 1)
 

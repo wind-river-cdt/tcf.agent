@@ -17,20 +17,20 @@
  * TCF Memory - memory access service.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Memory
 
 #include <assert.h>
-#include <framework/protocol.h>
-#include <framework/context.h>
-#include <framework/json.h>
-#include <framework/exceptions.h>
-#include <framework/myalloc.h>
-#include <framework/channel.h>
-#include <framework/trace.h>
-#include <services/memoryservice.h>
-#include <services/runctrl.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/trace.h>
+#include <tcf/services/memoryservice.h>
+#include <tcf/services/runctrl.h>
 
 static const char * MEMORY = "Memory";
 

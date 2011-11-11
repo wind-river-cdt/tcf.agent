@@ -20,9 +20,9 @@
 #ifndef D_channel
 #define D_channel
 
-#include <framework/streams.h>
-#include <framework/link.h>
-#include <framework/peer.h>
+#include <tcf/framework/streams.h>
+#include <tcf/framework/link.h>
+#include <tcf/framework/peer.h>
 
 struct Protocol;
 typedef struct TCFBroadcastGroup TCFBroadcastGroup;

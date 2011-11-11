@@ -20,31 +20,31 @@
  * when a program's execution should be interrupted.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Breakpoints
 
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <framework/channel.h>
-#include <framework/protocol.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/context.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/cache.h>
-#include <framework/json.h>
-#include <framework/link.h>
-#include <services/symbols.h>
-#include <services/runctrl.h>
-#include <services/breakpoints.h>
-#include <services/expressions.h>
-#include <services/linenumbers.h>
-#include <services/stacktrace.h>
-#include <services/memorymap.h>
-#include <services/pathmap.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/cache.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/link.h>
+#include <tcf/services/symbols.h>
+#include <tcf/services/runctrl.h>
+#include <tcf/services/breakpoints.h>
+#include <tcf/services/expressions.h>
+#include <tcf/services/linenumbers.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/memorymap.h>
+#include <tcf/services/pathmap.h>
 
 typedef struct BreakpointRef BreakpointRef;
 typedef struct InstructionRef InstructionRef;

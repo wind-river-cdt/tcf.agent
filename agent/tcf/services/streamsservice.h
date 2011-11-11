@@ -20,7 +20,7 @@
 #ifndef D_streamsservice
 #define D_streamsservice
 
-#include <framework/protocol.h>
+#include <tcf/framework/protocol.h>
 
 typedef struct VirtualStream VirtualStream;
 

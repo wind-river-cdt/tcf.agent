@@ -17,7 +17,7 @@
  * Symbols service - Windows version
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Symbols && !ENABLE_SymbolsProxy && defined(WIN32) && !ENABLE_ELF
 
@@ -26,17 +26,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <wchar.h>
-#include <framework/errors.h>
-#include <framework/events.h>
-#include <framework/myalloc.h>
-#include <framework/trace.h>
-#include <services/symbols.h>
-#include <services/stacktrace.h>
-#include <services/memorymap.h>
-#include <system/Windows/windbgcache.h>
-#include <system/Windows/context-win32.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/trace.h>
+#include <tcf/services/symbols.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/memorymap.h>
+#include <tcf/system/Windows/windbgcache.h>
+#include <tcf/system/Windows/context-win32.h>
 #if ENABLE_RCBP_TEST
-#  include <main/test.h>
+#  include <tcf/main/test.h>
 #endif
 
 #ifndef MAX_SYM_NAME
@@ -98,7 +98,7 @@ struct Symbol {
     ContextAddress address;
 };
 
-#include <services/symbols_alloc.h>
+#include <tcf/services/symbols_alloc.h>
 
 typedef struct SymbolCacheEntry {
     struct SymbolCacheEntry * next;

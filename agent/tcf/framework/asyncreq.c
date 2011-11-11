@@ -18,7 +18,7 @@
 #  define _GNU_SOURCE
 #endif
 
-#include <config.h>
+#include <tcf/config.h>
 #include <assert.h>
 #include <stddef.h>
 #if defined(WIN32)
@@ -26,14 +26,14 @@
 #else
 #  include <sys/wait.h>
 #endif
-#include <framework/mdep-threads.h>
-#include <framework/mdep-inet.h>
-#include <framework/myalloc.h>
-#include <framework/trace.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/link.h>
-#include <framework/asyncreq.h>
+#include <tcf/framework/mdep-threads.h>
+#include <tcf/framework/mdep-inet.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/link.h>
+#include <tcf/framework/asyncreq.h>
 
 #define MAX_WORKER_THREADS 32
 

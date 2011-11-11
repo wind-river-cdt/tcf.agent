@@ -20,8 +20,8 @@
 #ifndef D_symbols
 #define D_symbols
 
-#include <framework/context.h>
-#include <framework/protocol.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/protocol.h>
 
 /*
  * Symbol information can change at any time as result of target background activities.

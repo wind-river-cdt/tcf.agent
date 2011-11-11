@@ -20,17 +20,17 @@
  * agent code portable between Linux, Windows, VxWorks and potentially other OSes.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
-#include <framework/mdep-threads.h>
-#include <framework/mdep-inet.h>
-#include <framework/errors.h>
-#include <framework/myalloc.h>
+#include <tcf/framework/mdep-threads.h>
+#include <tcf/framework/mdep-inet.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/myalloc.h>
 
 pthread_attr_t pthread_create_attr;
 int utf8_locale = 0;
@@ -720,7 +720,7 @@ int loc_clock_gettime(int clock_id, struct timespec * now) {
  * Some of the dynamic IP interface scanning routines are unreliable, so
  * include a workaround to manually set the desired interface from outside.
  */
-#include <framework/ip_ifc.h>
+#include <tcf/framework/ip_ifc.h>
 
 static ip_ifc_info* gSelectedIPInterface;
 

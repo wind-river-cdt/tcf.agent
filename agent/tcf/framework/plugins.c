@@ -25,7 +25,7 @@
 #  define _GNU_SOURCE
 #endif
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_Plugins
 
@@ -36,9 +36,9 @@
 #include <dlfcn.h>
 #include <errno.h>
 
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <framework/plugins.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/plugins.h>
 
 #define _QUOTEME(x)     #x
 #define QUOTE(x)      _QUOTEME(x)

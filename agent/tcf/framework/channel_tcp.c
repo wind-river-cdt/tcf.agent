@@ -23,7 +23,7 @@
 #  define _GNU_SOURCE
 #endif
 
-#include <config.h>
+#include <tcf/config.h>
 #include <fcntl.h>
 #include <stddef.h>
 #include <errno.h>
@@ -47,23 +47,23 @@
 #else
    typedef void SSL;
 #endif
-#include <framework/mdep-inet.h>
-#include <framework/tcf.h>
-#include <framework/channel.h>
-#include <framework/channel_tcp.h>
-#include <framework/myalloc.h>
-#include <framework/protocol.h>
-#include <framework/errors.h>
-#include <framework/events.h>
-#include <framework/exceptions.h>
-#include <framework/trace.h>
-#include <framework/json.h>
-#include <framework/peer.h>
-#include <framework/ip_ifc.h>
-#include <framework/asyncreq.h>
-#include <framework/inputbuf.h>
-#include <framework/outputbuf.h>
-#include <services/discovery.h>
+#include <tcf/framework/mdep-inet.h>
+#include <tcf/framework/tcf.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/channel_tcp.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/peer.h>
+#include <tcf/framework/ip_ifc.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/inputbuf.h>
+#include <tcf/framework/outputbuf.h>
+#include <tcf/services/discovery.h>
 
 #ifndef MSG_MORE
 #define MSG_MORE 0

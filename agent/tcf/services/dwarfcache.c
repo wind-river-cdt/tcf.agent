@@ -19,18 +19,18 @@
  * Functions in this module use exceptions to report errors, see exceptions.h
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_ELF && ENABLE_DebugContext
 
 #include <assert.h>
-#include <framework/exceptions.h>
-#include <framework/myalloc.h>
-#include <services/dwarf.h>
-#include <services/dwarfio.h>
-#include <services/dwarfcache.h>
-#include <services/dwarfexpr.h>
-#include <services/stacktrace.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/services/dwarf.h>
+#include <tcf/services/dwarfio.h>
+#include <tcf/services/dwarfcache.h>
+#include <tcf/services/dwarfexpr.h>
+#include <tcf/services/stacktrace.h>
 
 #define OBJ_HASH(Cache,ID)            (((U4_T)(ID) + ((U4_T)(ID) >> 8)) % Cache->mObjectHashSize)
 

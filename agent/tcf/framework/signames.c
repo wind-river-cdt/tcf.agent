@@ -17,10 +17,10 @@
  * This module provides POSIX signal names and descriptions.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #include <signal.h>
-#include <framework/signames.h>
+#include <tcf/framework/signames.h>
 
 #if defined(WIN32)
 

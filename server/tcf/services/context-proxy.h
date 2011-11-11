@@ -20,8 +20,8 @@
 #ifndef D_context_proxy
 #define D_context_proxy
 
-#include <config.h>
-#include <framework/channel.h>
+#include <tcf/config.h>
+#include <tcf/framework/channel.h>
 
 struct RegisterData {
     uint8_t * data;

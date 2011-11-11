@@ -20,7 +20,7 @@
 #ifndef D_filesystem
 #define D_filesystem
 
-#include <framework/protocol.h>
+#include <tcf/framework/protocol.h>
 /*
  * Initialize file system service.
  */

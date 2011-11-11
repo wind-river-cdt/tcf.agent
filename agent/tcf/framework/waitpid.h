@@ -20,7 +20,7 @@
 #ifndef D_waitpid
 #define D_waitpid
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if (ENABLE_DebugContext && !ENABLE_ContextProxy) || SERVICE_Processes || SERVICE_Terminals
 

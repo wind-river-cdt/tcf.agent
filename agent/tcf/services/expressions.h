@@ -20,10 +20,10 @@
 #ifndef D_expressions
 #define D_expressions
 
-#include <config.h>
-#include <framework/protocol.h>
-#include <framework/context.h>
-#include <services/symbols.h>
+#include <tcf/config.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/context.h>
+#include <tcf/services/symbols.h>
 
 #if SERVICE_Expressions
 

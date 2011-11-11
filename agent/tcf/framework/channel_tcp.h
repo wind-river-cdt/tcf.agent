@@ -20,7 +20,7 @@
 #ifndef D_channel_tcp
 #define D_channel_tcp
 
-#include <framework/channel.h>
+#include <tcf/framework/channel.h>
 
 /*
  * Start TCP (Internet) channel listener.

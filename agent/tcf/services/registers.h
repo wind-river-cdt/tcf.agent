@@ -20,12 +20,12 @@
 #ifndef D_registers
 #define D_registers
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Registers
 
-#include <framework/protocol.h>
-#include <framework/cpudefs.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/cpudefs.h>
 
 /*
  * Notify clients about register value change.

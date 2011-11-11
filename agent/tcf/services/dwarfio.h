@@ -21,11 +21,11 @@
 #ifndef D_dwarfio
 #define D_dwarfio
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_ELF
 
-#include <services/tcf_elf.h>
+#include <tcf/services/tcf_elf.h>
 
 typedef struct DIO_UnitDescriptor {
     ELF_Section * mSection;

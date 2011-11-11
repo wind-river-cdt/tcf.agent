@@ -25,23 +25,23 @@
 #  define _GNU_SOURCE
 #endif
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stddef.h>
 #include <errno.h>
 #include <assert.h>
 #include <ctype.h>
 #include <string.h>
-#include <framework/tcf.h>
-#include <framework/channel.h>
-#include <framework/channel_tcp.h>
-#include <framework/channel_pipe.h>
-#include <framework/protocol.h>
-#include <framework/myalloc.h>
-#include <framework/events.h>
-#include <framework/exceptions.h>
-#include <framework/trace.h>
-#include <framework/link.h>
-#include <framework/json.h>
+#include <tcf/framework/tcf.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/channel_tcp.h>
+#include <tcf/framework/channel_pipe.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/link.h>
+#include <tcf/framework/json.h>
 
 #define BCAST_MAGIC 0x1463e328
 

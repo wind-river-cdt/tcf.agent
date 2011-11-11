@@ -20,10 +20,10 @@
 #ifndef D_context
 #define D_context
 
-#include <config.h>
-#include <framework/cpudefs.h>
-#include <framework/errors.h>
-#include <framework/link.h>
+#include <tcf/config.h>
+#include <tcf/framework/cpudefs.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/link.h>
 
 extern LINK context_root;
 

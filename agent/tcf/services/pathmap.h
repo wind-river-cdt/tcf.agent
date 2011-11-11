@@ -21,9 +21,9 @@
 #ifndef D_pathmap
 #define D_pathmap
 
-#include <config.h>
-#include <framework/context.h>
-#include <framework/protocol.h>
+#include <tcf/config.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/protocol.h>
 
 /*
  * Convert a file name to canonic form that is suitable for file name comparisons.

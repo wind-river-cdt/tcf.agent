@@ -21,8 +21,8 @@
 #ifndef D_diagnostics
 #define D_diagnostics
 
-#include <framework/protocol.h>
-#include <framework/context.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/context.h>
 
 extern int is_test_process(Context * ctx);
 

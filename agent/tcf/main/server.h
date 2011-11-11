@@ -20,8 +20,8 @@
 #ifndef D_server
 #define D_server
 
-#include <config.h>
-#include <framework/protocol.h>
+#include <tcf/config.h>
+#include <tcf/framework/protocol.h>
 
 /*
  * Create and start TCF server listening on the port that is described by 'url'.

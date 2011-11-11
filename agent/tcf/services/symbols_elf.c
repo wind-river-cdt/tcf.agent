@@ -17,7 +17,7 @@
  * Symbols service - ELF version.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Symbols && !ENABLE_SymbolsProxy && ENABLE_ELF
 
@@ -30,19 +30,19 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <framework/errors.h>
-#include <framework/myalloc.h>
-#include <framework/events.h>
-#include <framework/exceptions.h>
-#include <services/tcf_elf.h>
-#include <services/dwarf.h>
-#include <services/dwarfcache.h>
-#include <services/dwarfexpr.h>
-#include <services/dwarfframe.h>
-#include <services/stacktrace.h>
-#include <services/symbols.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/tcf_elf.h>
+#include <tcf/services/dwarf.h>
+#include <tcf/services/dwarfcache.h>
+#include <tcf/services/dwarfexpr.h>
+#include <tcf/services/dwarfframe.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/symbols.h>
 #if ENABLE_RCBP_TEST
-#  include <main/test.h>
+#  include <tcf/main/test.h>
 #endif
 
 struct Symbol {
@@ -66,7 +66,7 @@ struct Symbol {
 
 #define is_cardinal_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base == NULL)
 
-#include <services/symbols_alloc.h>
+#include <tcf/services/symbols_alloc.h>
 
 static Context * sym_ctx;
 static int sym_frame;

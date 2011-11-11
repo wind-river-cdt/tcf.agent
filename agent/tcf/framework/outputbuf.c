@@ -17,13 +17,13 @@
  * Utility module that implements an abstarct output queue.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/outputbuf.h>
-#include <framework/myalloc.h>
-#include <framework/trace.h>
-#include <framework/errors.h>
+#include <tcf/framework/outputbuf.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/errors.h>
 
 #define link2buf(A) ((OutputBuffer *)((char *)(A) - offsetof(OutputBuffer, link)))
 

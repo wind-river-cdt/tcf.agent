@@ -17,11 +17,11 @@
  * Server initialization code.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <main/server.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/main/server.h>
 
 static Protocol * proto;
 static TCFBroadcastGroup * bcg;

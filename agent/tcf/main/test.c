@@ -17,7 +17,7 @@
  * Agent self-testing service.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_RCBP_TEST
 
@@ -26,14 +26,14 @@
 #include <errno.h>
 #include <signal.h>
 #include <assert.h>
-#include <framework/mdep-threads.h>
-#include <framework/myalloc.h>
-#include <framework/trace.h>
-#include <framework/errors.h>
-#include <services/diagnostics.h>
-#include <main/test.h>
+#include <tcf/framework/mdep-threads.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/errors.h>
+#include <tcf/services/diagnostics.h>
+#include <tcf/main/test.h>
 #if defined(WIN32)
-#  include <system/Windows/context-win32.h>
+#  include <tcf/system/Windows/context-win32.h>
 #endif
 
 #ifdef __cplusplus

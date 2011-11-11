@@ -31,15 +31,15 @@
  * Only main thread is allowed to use exceptions.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
-#include <framework/exceptions.h>
-#include <framework/myalloc.h>
-#include <framework/events.h>
-#include <framework/trace.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/trace.h>
 
 static Trap * chain = NULL;
 

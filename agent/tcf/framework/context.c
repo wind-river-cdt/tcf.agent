@@ -17,11 +17,11 @@
  * This module handles process/thread OS contexts and their state machine.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #include <assert.h>
-#include <framework/context.h>
-#include <framework/myalloc.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/myalloc.h>
 
 typedef struct Listener {
     ContextEventListener * func;

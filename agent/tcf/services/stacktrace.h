@@ -20,8 +20,8 @@
 #ifndef D_stacktrace
 #define D_stacktrace
 
-#include <framework/protocol.h>
-#include <framework/context.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/context.h>
 
 #if SERVICE_StackTrace || ENABLE_ContextProxy
 

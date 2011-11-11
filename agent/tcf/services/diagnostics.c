@@ -18,28 +18,28 @@
  * This service is used for framework and agents testing.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <signal.h>
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include <framework/protocol.h>
-#include <framework/json.h>
-#include <framework/exceptions.h>
-#include <framework/context.h>
-#include <framework/myalloc.h>
-#include <framework/cache.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/cache.h>
 #if ENABLE_Symbols
-#  include <services/symbols.h>
+#  include <tcf/services/symbols.h>
 #endif
 #if SERVICE_Streams
-#  include <services/streamsservice.h>
+#  include <tcf/services/streamsservice.h>
 #endif
 #if ENABLE_RCBP_TEST
-#  include <main/test.h>
-#  include <services/runctrl.h>
+#  include <tcf/main/test.h>
+#  include <tcf/services/runctrl.h>
 #endif
-#include <services/diagnostics.h>
+#include <tcf/services/diagnostics.h>
 
 static const char * DIAGNOSTICS = "Diagnostics";
 

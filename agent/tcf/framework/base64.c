@@ -20,11 +20,11 @@
  * Also TCF version of the encoding does not allow characters outside of the BASE64 alphabet.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <assert.h>
-#include <framework/base64.h>
-#include <framework/exceptions.h>
-#include <framework/errors.h>
+#include <tcf/framework/base64.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/errors.h>
 
 static const char int2char[] = {
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',

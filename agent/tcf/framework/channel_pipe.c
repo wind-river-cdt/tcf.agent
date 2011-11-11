@@ -17,26 +17,26 @@
  * Implements input and output stream over named pipe transport.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(WIN32)
 
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
-#include <framework/channel.h>
-#include <framework/channel_pipe.h>
-#include <framework/myalloc.h>
-#include <framework/protocol.h>
-#include <framework/errors.h>
-#include <framework/events.h>
-#include <framework/exceptions.h>
-#include <framework/trace.h>
-#include <framework/json.h>
-#include <framework/peer.h>
-#include <framework/asyncreq.h>
-#include <framework/inputbuf.h>
-#include <framework/outputbuf.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/channel_pipe.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/peer.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/inputbuf.h>
+#include <tcf/framework/outputbuf.h>
 
 #define BUF_SIZE (128 * MEM_USAGE_FACTOR)
 #define CHANNEL_MAGIC 0x52376532
@@ -757,8 +757,8 @@ ChannelServer * channel_pipe_server(PeerServer * ps) {
 
 #else
 /* Pipes are not supported */
-#include <framework/errors.h>
-#include <framework/channel_pipe.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/channel_pipe.h>
 
 void channel_pipe_connect(PeerServer * server, ChannelConnectCallBack callback, void * callback_args) {
     callback(callback_args, ERR_UNSUPPORTED, NULL);

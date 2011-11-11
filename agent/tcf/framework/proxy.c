@@ -18,15 +18,15 @@
  * This service intended to be used when a client has no direct access to a target.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/proxy.h>
-#include <framework/protocol.h>
-#include <framework/trace.h>
-#include <framework/errors.h>
-#include <framework/exceptions.h>
-#include <framework/myalloc.h>
+#include <tcf/framework/proxy.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/myalloc.h>
 
 typedef struct Proxy {
     Channel * c;

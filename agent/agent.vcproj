@@ -45,7 +45,7 @@
 				AdditionalOptions="/Oy-"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".;system/Windows;machine/x86_64"
+				AdditionalIncludeDirectories=".;tcf/system/Windows;tcf/machine/x86_64"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -134,7 +134,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;system/Windows;machine/x86_64"
+				AdditionalIncludeDirectories=".;tcf/system/Windows;tcf/machine/x86_64"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				RuntimeLibrary="1"
@@ -204,219 +204,219 @@
 			Name="framework"
 			>
 			<File
-				RelativePath=".\framework\asyncreq.c"
+				RelativePath=".\tcf\framework\asyncreq.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\asyncreq.h"
+				RelativePath=".\tcf\framework\asyncreq.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\base64.c"
+				RelativePath=".\tcf\framework\base64.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\base64.h"
+				RelativePath=".\tcf\framework\base64.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\cache.c"
+				RelativePath=".\tcf\framework\cache.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\cache.h"
+				RelativePath=".\tcf\framework\cache.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\channel.c"
+				RelativePath=".\tcf\framework\channel.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\channel.h"
+				RelativePath=".\tcf\framework\channel.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\channel_pipe.c"
+				RelativePath=".\tcf\framework\channel_pipe.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\channel_pipe.h"
+				RelativePath=".\tcf\framework\channel_pipe.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\channel_tcp.c"
+				RelativePath=".\tcf\framework\channel_tcp.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\channel_tcp.h"
+				RelativePath=".\tcf\framework\channel_tcp.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\context.c"
+				RelativePath=".\tcf\framework\context.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\context.h"
+				RelativePath=".\tcf\framework\context.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\cpudefs.c"
+				RelativePath=".\tcf\framework\cpudefs.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\cpudefs.h"
+				RelativePath=".\tcf\framework\cpudefs.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\errors.c"
+				RelativePath=".\tcf\framework\errors.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\errors.h"
+				RelativePath=".\tcf\framework\errors.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\events.c"
+				RelativePath=".\tcf\framework\events.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\events.h"
+				RelativePath=".\tcf\framework\events.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\exceptions.c"
+				RelativePath=".\tcf\framework\exceptions.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\exceptions.h"
+				RelativePath=".\tcf\framework\exceptions.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\inputbuf.c"
+				RelativePath=".\tcf\framework\inputbuf.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\inputbuf.h"
+				RelativePath=".\tcf\framework\inputbuf.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\ip_ifc.c"
+				RelativePath=".\tcf\framework\ip_ifc.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\ip_ifc.h"
+				RelativePath=".\tcf\framework\ip_ifc.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\json.c"
+				RelativePath=".\tcf\framework\json.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\json.h"
+				RelativePath=".\tcf\framework\json.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\link.h"
+				RelativePath=".\tcf\framework\link.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\mdep-inet.h"
+				RelativePath=".\tcf\framework\mdep-inet.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\mdep-threads.h"
+				RelativePath=".\tcf\framework\mdep-threads.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\mdep.c"
+				RelativePath=".\tcf\framework\mdep.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\mdep.h"
+				RelativePath=".\tcf\framework\mdep.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\myalloc.c"
+				RelativePath=".\tcf\framework\myalloc.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\myalloc.h"
+				RelativePath=".\tcf\framework\myalloc.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\outputbuf.c"
+				RelativePath=".\tcf\framework\outputbuf.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\outputbuf.h"
+				RelativePath=".\tcf\framework\outputbuf.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\peer.c"
+				RelativePath=".\tcf\framework\peer.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\peer.h"
+				RelativePath=".\tcf\framework\peer.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\plugins.c"
+				RelativePath=".\tcf\framework\plugins.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\plugins.h"
+				RelativePath=".\tcf\framework\plugins.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\protocol.c"
+				RelativePath=".\tcf\framework\protocol.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\protocol.h"
+				RelativePath=".\tcf\framework\protocol.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\proxy.c"
+				RelativePath=".\tcf\framework\proxy.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\proxy.h"
+				RelativePath=".\tcf\framework\proxy.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\signames.c"
+				RelativePath=".\tcf\framework\signames.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\signames.h"
+				RelativePath=".\tcf\framework\signames.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\streams.c"
+				RelativePath=".\tcf\framework\streams.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\streams.h"
+				RelativePath=".\tcf\framework\streams.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\tcf.h"
+				RelativePath=".\tcf\framework\tcf.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\trace.c"
+				RelativePath=".\tcf\framework\trace.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\trace.h"
+				RelativePath=".\tcf\framework\trace.h"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\waitpid.c"
+				RelativePath=".\tcf\framework\waitpid.c"
 				>
 			</File>
 			<File
-				RelativePath=".\framework\waitpid.h"
+				RelativePath=".\tcf\framework\waitpid.h"
 				>
 			</File>
 		</Filter>
@@ -424,235 +424,235 @@
 			Name="services"
 			>
 			<File
-				RelativePath=".\services\breakpoints.c"
+				RelativePath=".\tcf\services\breakpoints.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\breakpoints.h"
+				RelativePath=".\tcf\services\breakpoints.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\diagnostics.c"
+				RelativePath=".\tcf\services\diagnostics.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\diagnostics.h"
+				RelativePath=".\tcf\services\diagnostics.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\discovery.c"
+				RelativePath=".\tcf\services\discovery.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\discovery.h"
+				RelativePath=".\tcf\services\discovery.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\discovery_udp.c"
+				RelativePath=".\tcf\services\discovery_udp.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\discovery_udp.h"
+				RelativePath=".\tcf\services\discovery_udp.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarf.h"
+				RelativePath=".\tcf\services\dwarf.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfcache.c"
+				RelativePath=".\tcf\services\dwarfcache.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfcache.h"
+				RelativePath=".\tcf\services\dwarfcache.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfexpr.c"
+				RelativePath=".\tcf\services\dwarfexpr.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfexpr.h"
+				RelativePath=".\tcf\services\dwarfexpr.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfframe.c"
+				RelativePath=".\tcf\services\dwarfframe.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfframe.h"
+				RelativePath=".\tcf\services\dwarfframe.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfio.c"
+				RelativePath=".\tcf\services\dwarfio.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfio.h"
+				RelativePath=".\tcf\services\dwarfio.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfreloc.c"
+				RelativePath=".\tcf\services\dwarfreloc.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\dwarfreloc.h"
+				RelativePath=".\tcf\services\dwarfreloc.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\expressions.c"
+				RelativePath=".\tcf\services\expressions.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\expressions.h"
+				RelativePath=".\tcf\services\expressions.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\filesystem.c"
+				RelativePath=".\tcf\services\filesystem.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\filesystem.h"
+				RelativePath=".\tcf\services\filesystem.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\linenumbers.c"
+				RelativePath=".\tcf\services\linenumbers.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\linenumbers.h"
+				RelativePath=".\tcf\services\linenumbers.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\linenumbers_elf.c"
+				RelativePath=".\tcf\services\linenumbers_elf.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\linenumbers_proxy.c"
+				RelativePath=".\tcf\services\linenumbers_proxy.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\linenumbers_win32.c"
+				RelativePath=".\tcf\services\linenumbers_win32.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\memorymap.c"
+				RelativePath=".\tcf\services\memorymap.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\memorymap.h"
+				RelativePath=".\tcf\services\memorymap.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\memoryservice.c"
+				RelativePath=".\tcf\services\memoryservice.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\memoryservice.h"
+				RelativePath=".\tcf\services\memoryservice.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\pathmap.c"
+				RelativePath=".\tcf\services\pathmap.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\pathmap.h"
+				RelativePath=".\tcf\services\pathmap.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\processes.c"
+				RelativePath=".\tcf\services\processes.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\processes.h"
+				RelativePath=".\tcf\services\processes.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\registers.c"
+				RelativePath=".\tcf\services\registers.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\registers.h"
+				RelativePath=".\tcf\services\registers.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\runctrl.c"
+				RelativePath=".\tcf\services\runctrl.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\runctrl.h"
+				RelativePath=".\tcf\services\runctrl.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\stacktrace.c"
+				RelativePath=".\tcf\services\stacktrace.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\stacktrace.h"
+				RelativePath=".\tcf\services\stacktrace.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\streamsservice.c"
+				RelativePath=".\tcf\services\streamsservice.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\streamsservice.h"
+				RelativePath=".\tcf\services\streamsservice.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\symbols.c"
+				RelativePath=".\tcf\services\symbols.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\symbols.h"
+				RelativePath=".\tcf\services\symbols.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\symbols_alloc.h"
+				RelativePath=".\tcf\services\symbols_alloc.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\symbols_elf.c"
+				RelativePath=".\tcf\services\symbols_elf.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\symbols_proxy.c"
+				RelativePath=".\tcf\services\symbols_proxy.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\symbols_win32.c"
+				RelativePath=".\tcf\services\symbols_win32.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\sysmon.c"
+				RelativePath=".\tcf\services\sysmon.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\sysmon.h"
+				RelativePath=".\tcf\services\sysmon.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\tcf_elf.c"
+				RelativePath=".\tcf\services\tcf_elf.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\tcf_elf.h"
+				RelativePath=".\tcf\services\tcf_elf.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\terminals.c"
+				RelativePath=".\tcf\services\terminals.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\terminals.h"
+				RelativePath=".\tcf\services\terminals.h"
 				>
 			</File>
 			<File
-				RelativePath=".\services\vm.c"
+				RelativePath=".\tcf\services\vm.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\vm.h"
+				RelativePath=".\tcf\services\vm.h"
 				>
 			</File>
 		</Filter>
@@ -660,39 +660,19 @@
 			Name="main"
 			>
 			<File
-				RelativePath=".\main\cmdline.c"
+				RelativePath=".\tcf\main\cmdline.c"
 				>
 			</File>
 			<File
-				RelativePath=".\main\cmdline.h"
+				RelativePath=".\tcf\main\cmdline.h"
 				>
 			</File>
 			<File
-				RelativePath=".\main\main.c"
+				RelativePath=".\tcf\main\main.c"
 				>
 			</File>
 			<File
-				RelativePath=".\main\main_client.c"
-				>
-				<FileConfiguration
-					Name="Release|Win32"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug|Win32"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-					/>
-				</FileConfiguration>
-			</File>
-			<File
-				RelativePath=".\main\main_log.c"
+				RelativePath=".\tcf\main\main_client.c"
 				>
 				<FileConfiguration
 					Name="Release|Win32"
@@ -712,7 +692,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\main\main_lua.c"
+				RelativePath=".\tcf\main\main_log.c"
 				>
 				<FileConfiguration
 					Name="Release|Win32"
@@ -732,7 +712,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\main\main_reg.c"
+				RelativePath=".\tcf\main\main_lua.c"
 				>
 				<FileConfiguration
 					Name="Release|Win32"
@@ -752,7 +732,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\main\main_va.c"
+				RelativePath=".\tcf\main\main_reg.c"
 				>
 				<FileConfiguration
 					Name="Release|Win32"
@@ -772,31 +752,51 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\main\server.c"
+				RelativePath=".\tcf\main\main_va.c"
+				>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\tcf\main\server.c"
 				>
 			</File>
 			<File
-				RelativePath=".\main\server.h"
+				RelativePath=".\tcf\main\server.h"
 				>
 			</File>
 			<File
-				RelativePath=".\main\services-ext.h"
+				RelativePath=".\tcf\main\services-ext.h"
 				>
 			</File>
 			<File
-				RelativePath=".\main\services.c"
+				RelativePath=".\tcf\main\services.c"
 				>
 			</File>
 			<File
-				RelativePath=".\main\services.h"
+				RelativePath=".\tcf\main\services.h"
 				>
 			</File>
 			<File
-				RelativePath=".\main\test.c"
+				RelativePath=".\tcf\main\test.c"
 				>
 			</File>
 			<File
-				RelativePath=".\main\test.h"
+				RelativePath=".\tcf\main\test.h"
 				>
 			</File>
 		</Filter>
@@ -804,38 +804,38 @@
 			Name="system"
 			>
 			<File
-				RelativePath=".\system\pid-hash.h"
+				RelativePath=".\tcf\system\pid-hash.h"
 				>
 			</File>
 			<Filter
 				Name="Windows"
 				>
 				<File
-					RelativePath=".\system\Windows\context-win32.c"
+					RelativePath=".\tcf\system\Windows\context-win32.c"
 					>
 				</File>
 				<File
-					RelativePath=".\system\Windows\context-win32.h"
+					RelativePath=".\tcf\system\Windows\context-win32.h"
 					>
 				</File>
 				<File
-					RelativePath=".\system\Windows\pthreads-win32.c"
+					RelativePath=".\tcf\system\Windows\pthreads-win32.c"
 					>
 				</File>
 				<File
-					RelativePath=".\system\Windows\pthreads-win32.h"
+					RelativePath=".\tcf\system\Windows\pthreads-win32.h"
 					>
 				</File>
 				<File
-					RelativePath=".\system\Windows\regset.h"
+					RelativePath=".\tcf\system\Windows\regset.h"
 					>
 				</File>
 				<File
-					RelativePath=".\system\Windows\windbgcache.c"
+					RelativePath=".\tcf\system\Windows\windbgcache.c"
 					>
 				</File>
 				<File
-					RelativePath=".\system\Windows\windbgcache.h"
+					RelativePath=".\tcf\system\Windows\windbgcache.h"
 					>
 				</File>
 			</Filter>
@@ -846,7 +846,7 @@
 					Name="Linux"
 					>
 					<File
-						RelativePath=".\system\GNU\Linux\context-linux.c"
+						RelativePath=".\tcf\system\GNU\Linux\context-linux.c"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
@@ -866,7 +866,7 @@
 						</FileConfiguration>
 					</File>
 					<File
-						RelativePath=".\system\GNU\Linux\regset.h"
+						RelativePath=".\tcf\system\GNU\Linux\regset.h"
 						>
 					</File>
 				</Filter>
@@ -875,7 +875,7 @@
 				Name="Darwin"
 				>
 				<File
-					RelativePath=".\system\Darwin\context-darwin.c"
+					RelativePath=".\tcf\system\Darwin\context-darwin.c"
 					>
 					<FileConfiguration
 						Name="Release|Win32"
@@ -895,7 +895,7 @@
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath=".\system\Darwin\regset.h"
+					RelativePath=".\tcf\system\Darwin\regset.h"
 					>
 				</File>
 			</Filter>
@@ -903,7 +903,7 @@
 				Name="FreeBSD"
 				>
 				<File
-					RelativePath=".\system\FreeBSD\context-freebsd.c"
+					RelativePath=".\tcf\system\FreeBSD\context-freebsd.c"
 					>
 					<FileConfiguration
 						Name="Release|Win32"
@@ -923,7 +923,7 @@
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath=".\system\FreeBSD\regset.h"
+					RelativePath=".\tcf\system\FreeBSD\regset.h"
 					>
 				</File>
 			</Filter>
@@ -931,7 +931,7 @@
 				Name="VxWorks"
 				>
 				<File
-					RelativePath=".\system\VxWorks\context-vxworks.c"
+					RelativePath=".\tcf\system\VxWorks\context-vxworks.c"
 					>
 					<FileConfiguration
 						Name="Release|Win32"
@@ -951,11 +951,11 @@
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath=".\system\VxWorks\context-vxworks.h"
+					RelativePath=".\tcf\system\VxWorks\context-vxworks.h"
 					>
 				</File>
 				<File
-					RelativePath=".\system\VxWorks\regset.h"
+					RelativePath=".\tcf\system\VxWorks\regset.h"
 					>
 				</File>
 			</Filter>
@@ -963,7 +963,7 @@
 				Name="Cygwin"
 				>
 				<File
-					RelativePath=".\system\Cygwin\regset.h"
+					RelativePath=".\tcf\system\Cygwin\regset.h"
 					>
 				</File>
 			</Filter>
@@ -971,7 +971,7 @@
 				Name="Msys"
 				>
 				<File
-					RelativePath=".\system\Msys\regset.h"
+					RelativePath=".\tcf\system\Msys\regset.h"
 					>
 				</File>
 			</Filter>
@@ -980,20 +980,20 @@
 			Name="machine"
 			>
 			<File
-				RelativePath=".\machine\cpudefs-ext.h"
+				RelativePath=".\tcf\machine\cpudefs-ext.h"
 				>
 			</File>
 			<Filter
 				Name="x86_64"
 				>
 				<File
-					RelativePath=".\machine\x86_64\cpudefs-mdep.h"
+					RelativePath=".\tcf\machine\x86_64\cpudefs-mdep.h"
 					>
 				</File>
 			</Filter>
 		</Filter>
 		<File
-			RelativePath=".\config.h"
+			RelativePath=".\tcf\config.h"
 			>
 		</File>
 	</Files>

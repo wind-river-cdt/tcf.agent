@@ -13,17 +13,17 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_DebugContext
 
 #include <errno.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <services/stacktrace.h>
-#include <services/dwarf.h>
-#include <services/vm.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/dwarf.h>
+#include <tcf/services/vm.h>
 
 #define check_e_stack(n) { if (state->stk_pos < n) inv_dwarf("Invalid DWARF expression stack"); }
 

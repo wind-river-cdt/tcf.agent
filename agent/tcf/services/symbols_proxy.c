@@ -19,22 +19,22 @@
 
 /* TODO: need to cleanup symbols cache from data that not used for long time */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_SymbolsProxy
 
 #include <assert.h>
 #include <stdio.h>
-#include <framework/context.h>
-#include <framework/cache.h>
-#include <framework/json.h>
-#include <framework/events.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <services/stacktrace.h>
-#include <services/symbols.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/cache.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/symbols.h>
 #if ENABLE_RCBP_TEST
-#  include <main/test.h>
+#  include <tcf/main/test.h>
 #endif
 
 #define HASH_SIZE (4 * MEM_USAGE_FACTOR - 1)
@@ -166,7 +166,7 @@ struct Symbol {
     SymInfoCache * cache;
 };
 
-#include <services/symbols_alloc.h>
+#include <tcf/services/symbols_alloc.h>
 
 static LINK root;
 

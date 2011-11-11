@@ -22,12 +22,12 @@
 #ifndef D_dwarfframe
 #define D_dwarfframe
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_ELF && ENABLE_DebugContext
 
-#include <framework/context.h>
-#include <services/dwarfcache.h>
+#include <tcf/framework/context.h>
+#include <tcf/services/dwarfcache.h>
 
 /*
  * Lookup stack tracing information in ELF file, in .debug_frame and .eh_frame sections.

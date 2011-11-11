@@ -17,22 +17,22 @@
  * This module implements DWARF expressions evaluation.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_ELF && ENABLE_DebugContext
 
 #include <assert.h>
 #include <stdio.h>
-#include <framework/events.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <services/dwarf.h>
-#include <services/dwarfio.h>
-#include <services/dwarfexpr.h>
-#include <services/stacktrace.h>
-#include <services/vm.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/services/dwarf.h>
+#include <tcf/services/dwarfio.h>
+#include <tcf/services/dwarfexpr.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/vm.h>
 
 typedef struct ValuePieces {
     U4_T mCnt;

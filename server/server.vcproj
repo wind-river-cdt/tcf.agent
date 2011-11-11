@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;.."
+				AdditionalIncludeDirectories=".;../agent"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -119,7 +119,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories=".;.."
+				AdditionalIncludeDirectories=".;../agent"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -179,143 +179,143 @@
 			Name="services"
 			>
 			<File
-				RelativePath=".\services\context-proxy.c"
+				RelativePath=".\tcf\services\context-proxy.c"
 				>
 			</File>
 			<File
-				RelativePath=".\services\context-proxy.h"
+				RelativePath=".\tcf\services\context-proxy.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\diagnostics.c"
+				RelativePath="..\agent\tcf\services\diagnostics.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\diagnostics.h"
+				RelativePath="..\agent\tcf\services\diagnostics.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\discovery.c"
+				RelativePath="..\agent\tcf\services\discovery.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\discovery.h"
+				RelativePath="..\agent\tcf\services\discovery.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\discovery_udp.c"
+				RelativePath="..\agent\tcf\services\discovery_udp.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\discovery_udp.h"
+				RelativePath="..\agent\tcf\services\discovery_udp.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarf.h"
+				RelativePath="..\agent\tcf\services\dwarf.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfcache.c"
+				RelativePath="..\agent\tcf\services\dwarfcache.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfcache.h"
+				RelativePath="..\agent\tcf\services\dwarfcache.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfexpr.c"
+				RelativePath="..\agent\tcf\services\dwarfexpr.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfexpr.h"
+				RelativePath="..\agent\tcf\services\dwarfexpr.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfframe.c"
+				RelativePath="..\agent\tcf\services\dwarfframe.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfframe.h"
+				RelativePath="..\agent\tcf\services\dwarfframe.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfio.c"
+				RelativePath="..\agent\tcf\services\dwarfio.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfio.h"
+				RelativePath="..\agent\tcf\services\dwarfio.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfreloc.c"
+				RelativePath="..\agent\tcf\services\dwarfreloc.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\dwarfreloc.h"
+				RelativePath="..\agent\tcf\services\dwarfreloc.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\filesystem.c"
+				RelativePath="..\agent\tcf\services\filesystem.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\filesystem.h"
+				RelativePath="..\agent\tcf\services\filesystem.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\linenumbers.c"
+				RelativePath="..\agent\tcf\services\linenumbers.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\linenumbers.h"
+				RelativePath="..\agent\tcf\services\linenumbers.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\linenumbers_elf.c"
+				RelativePath="..\agent\tcf\services\linenumbers_elf.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\memorymap.c"
+				RelativePath="..\agent\tcf\services\memorymap.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\memorymap.h"
+				RelativePath="..\agent\tcf\services\memorymap.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\pathmap.c"
+				RelativePath="..\agent\tcf\services\pathmap.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\pathmap.h"
+				RelativePath="..\agent\tcf\services\pathmap.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\symbols.c"
+				RelativePath="..\agent\tcf\services\symbols.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\symbols.h"
+				RelativePath="..\agent\tcf\services\symbols.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\symbols_elf.c"
+				RelativePath="..\agent\tcf\services\symbols_elf.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\tcf_elf.c"
+				RelativePath="..\agent\tcf\services\tcf_elf.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\tcf_elf.h"
+				RelativePath="..\agent\tcf\services\tcf_elf.h"
 				>
 			</File>
 			<File
-				RelativePath="..\services\vm.c"
+				RelativePath="..\agent\tcf\services\vm.c"
 				>
 			</File>
 			<File
-				RelativePath="..\services\vm.h"
+				RelativePath="..\agent\tcf\services\vm.h"
 				>
 			</File>
 		</Filter>
@@ -323,23 +323,23 @@
 			Name="main"
 			>
 			<File
-				RelativePath="..\main\main.c"
+				RelativePath="..\agent\tcf\main\main.c"
 				>
 			</File>
 			<File
-				RelativePath=".\main\server.c"
+				RelativePath=".\tcf\main\server.c"
 				>
 			</File>
 			<File
-				RelativePath="..\main\server.h"
+				RelativePath="..\agent\tcf\main\server.h"
 				>
 			</File>
 			<File
-				RelativePath="..\main\services.c"
+				RelativePath="..\agent\tcf\main\services.c"
 				>
 			</File>
 			<File
-				RelativePath="..\main\services.h"
+				RelativePath="..\agent\tcf\main\services.h"
 				>
 			</File>
 		</Filter>
@@ -347,195 +347,195 @@
 			Name="framework"
 			>
 			<File
-				RelativePath="..\framework\asyncreq.c"
+				RelativePath="..\agent\tcf\framework\asyncreq.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\asyncreq.h"
+				RelativePath="..\agent\tcf\framework\asyncreq.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\base64.c"
+				RelativePath="..\agent\tcf\framework\base64.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\base64.h"
+				RelativePath="..\agent\tcf\framework\base64.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\cache.c"
+				RelativePath="..\agent\tcf\framework\cache.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\cache.h"
+				RelativePath="..\agent\tcf\framework\cache.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\channel.c"
+				RelativePath="..\agent\tcf\framework\channel.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\channel.h"
+				RelativePath="..\agent\tcf\framework\channel.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\channel_pipe.c"
+				RelativePath="..\agent\tcf\framework\channel_pipe.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\channel_pipe.h"
+				RelativePath="..\agent\tcf\framework\channel_pipe.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\channel_tcp.c"
+				RelativePath="..\agent\tcf\framework\channel_tcp.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\channel_tcp.h"
+				RelativePath="..\agent\tcf\framework\channel_tcp.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\context.c"
+				RelativePath="..\agent\tcf\framework\context.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\context.h"
+				RelativePath="..\agent\tcf\framework\context.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\cpudefs.c"
+				RelativePath="..\agent\tcf\framework\cpudefs.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\cpudefs.h"
+				RelativePath="..\agent\tcf\framework\cpudefs.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\errors.c"
+				RelativePath="..\agent\tcf\framework\errors.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\errors.h"
+				RelativePath="..\agent\tcf\framework\errors.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\events.c"
+				RelativePath="..\agent\tcf\framework\events.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\events.h"
+				RelativePath="..\agent\tcf\framework\events.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\exceptions.c"
+				RelativePath="..\agent\tcf\framework\exceptions.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\exceptions.h"
+				RelativePath="..\agent\tcf\framework\exceptions.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\inputbuf.c"
+				RelativePath="..\agent\tcf\framework\inputbuf.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\inputbuf.h"
+				RelativePath="..\agent\tcf\framework\inputbuf.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\ip_ifc.c"
+				RelativePath="..\agent\tcf\framework\ip_ifc.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\ip_ifc.h"
+				RelativePath="..\agent\tcf\framework\ip_ifc.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\json.c"
+				RelativePath="..\agent\tcf\framework\json.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\json.h"
+				RelativePath="..\agent\tcf\framework\json.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\link.h"
+				RelativePath="..\agent\tcf\framework\link.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\mdep.c"
+				RelativePath="..\agent\tcf\framework\mdep.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\mdep.h"
+				RelativePath="..\agent\tcf\framework\mdep.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\myalloc.c"
+				RelativePath="..\agent\tcf\framework\myalloc.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\myalloc.h"
+				RelativePath="..\agent\tcf\framework\myalloc.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\outputbuf.c"
+				RelativePath="..\agent\tcf\framework\outputbuf.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\outputbuf.h"
+				RelativePath="..\agent\tcf\framework\outputbuf.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\peer.c"
+				RelativePath="..\agent\tcf\framework\peer.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\peer.h"
+				RelativePath="..\agent\tcf\framework\peer.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\plugins.h"
+				RelativePath="..\agent\tcf\framework\plugins.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\protocol.c"
+				RelativePath="..\agent\tcf\framework\protocol.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\protocol.h"
+				RelativePath="..\agent\tcf\framework\protocol.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\proxy.c"
+				RelativePath="..\agent\tcf\framework\proxy.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\proxy.h"
+				RelativePath="..\agent\tcf\framework\proxy.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\signames.h"
+				RelativePath="..\agent\tcf\framework\signames.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\streams.c"
+				RelativePath="..\agent\tcf\framework\streams.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\streams.h"
+				RelativePath="..\agent\tcf\framework\streams.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\tcf.h"
+				RelativePath="..\agent\tcf\framework\tcf.h"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\trace.c"
+				RelativePath="..\agent\tcf\framework\trace.c"
 				>
 			</File>
 			<File
-				RelativePath="..\framework\trace.h"
+				RelativePath="..\agent\tcf\framework\trace.h"
 				>
 			</File>
 		</Filter>
@@ -543,11 +543,11 @@
 			Name="machine"
 			>
 			<File
-				RelativePath=".\machine\cpudefs-ext.h"
+				RelativePath=".\tcf\machine\cpudefs-ext.h"
 				>
 			</File>
 			<File
-				RelativePath="..\machine\elf-mdep.h"
+				RelativePath="..\agent\tcf\machine\elf-mdep.h"
 				>
 			</File>
 		</Filter>
@@ -558,13 +558,13 @@
 				Name="Windows"
 				>
 				<File
-					RelativePath="..\system\Windows\pthreads-win32.c"
+					RelativePath="..\agent\tcf\system\Windows\pthreads-win32.c"
 					>
 				</File>
 			</Filter>
 		</Filter>
 		<File
-			RelativePath=".\config.h"
+			RelativePath=".\tcf\config.h"
 			>
 		</File>
 	</Files>

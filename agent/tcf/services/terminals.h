@@ -21,8 +21,8 @@
 #ifndef TERMINALS_H_
 #define TERMINALS_H_
 
-#include <config.h>
-#include <framework/protocol.h>
+#include <tcf/config.h>
+#include <tcf/framework/protocol.h>
 
 extern void ini_terminals_service(Protocol * proto);
 

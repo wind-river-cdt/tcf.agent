@@ -20,8 +20,8 @@
 #ifndef D_services
 #define D_services
 
-#include <config.h>
-#include <framework/protocol.h>
+#include <tcf/config.h>
+#include <tcf/framework/protocol.h>
 
 extern void ini_services(Protocol * proto, TCFBroadcastGroup * bcg);
 

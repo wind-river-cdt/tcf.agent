@@ -21,8 +21,8 @@
 #ifndef D_input_buf
 #define D_input_buf
 
-#include <config.h>
-#include <framework/streams.h>
+#include <tcf/config.h>
+#include <tcf/framework/streams.h>
 
 typedef struct InputBuf InputBuf;
 

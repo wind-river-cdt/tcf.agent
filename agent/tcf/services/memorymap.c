@@ -17,19 +17,19 @@
  * This module holds execution context memory maps.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_MemoryMap
 
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
-#include <framework/myalloc.h>
-#include <framework/trace.h>
-#include <framework/json.h>
-#include <framework/events.h>
-#include <framework/exceptions.h>
-#include <services/memorymap.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/memorymap.h>
 
 typedef struct Listener {
     MemoryMapEventListener * listener;

@@ -19,19 +19,19 @@
  * All it does is running TCF UDP auto-discovery protocol.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
-#include <framework/asyncreq.h>
-#include <framework/events.h>
-#include <framework/trace.h>
-#include <framework/channel.h>
-#include <framework/protocol.h>
-#include <framework/proxy.h>
-#include <services/discovery.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/proxy.h>
+#include <tcf/services/discovery.h>
 
 static const char * progname;
 

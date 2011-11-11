@@ -18,14 +18,14 @@
  * Implements input buffer used by unbuffered channel transports.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stddef.h>
 #include <errno.h>
 #include <assert.h>
-#include <framework/exceptions.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <framework/inputbuf.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/inputbuf.h>
 
 static void ibuf_new_message(InputBuf * ibuf) {
     ibuf->message_count++;

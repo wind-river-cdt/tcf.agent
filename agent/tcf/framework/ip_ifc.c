@@ -17,17 +17,17 @@
  * Implements IP interface list.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stddef.h>
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/mdep-inet.h>
-#include <framework/ip_ifc.h>
-#include <framework/myalloc.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
+#include <tcf/framework/mdep-inet.h>
+#include <tcf/framework/ip_ifc.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
 
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
 

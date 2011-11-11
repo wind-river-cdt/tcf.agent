@@ -24,7 +24,7 @@
 #ifndef D_plugins
 #define D_plugins
 
-#include <framework/protocol.h>
+#include <tcf/framework/protocol.h>
 
 extern const char *plugins_path;
 

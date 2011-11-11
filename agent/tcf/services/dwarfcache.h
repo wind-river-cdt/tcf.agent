@@ -24,13 +24,13 @@
 #ifndef D_dwarfcache
 #define D_dwarfcache
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_ELF && ENABLE_DebugContext
 
-#include <services/tcf_elf.h>
-#include <services/dwarfio.h>
-#include <framework/errors.h>
+#include <tcf/services/tcf_elf.h>
+#include <tcf/services/dwarfio.h>
+#include <tcf/framework/errors.h>
 
 typedef struct FileInfo FileInfo;
 typedef struct ObjectInfo ObjectInfo;

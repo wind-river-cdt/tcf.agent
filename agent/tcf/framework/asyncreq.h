@@ -27,8 +27,8 @@
 #  include <select.h>
 #endif
 #include <time.h>
-#include <framework/link.h>
-#include <framework/events.h>
+#include <tcf/framework/link.h>
+#include <tcf/framework/events.h>
 
 enum {
     AsyncReqRead,                       /* File read */

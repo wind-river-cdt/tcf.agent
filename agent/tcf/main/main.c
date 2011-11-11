@@ -17,24 +17,24 @@
  * Agent main module.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
 #include <signal.h>
-#include <framework/asyncreq.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/channel_tcp.h>
-#include <framework/plugins.h>
-#include <services/discovery.h>
-#include <main/test.h>
-#include <main/cmdline.h>
-#include <main/services.h>
-#include <main/server.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/channel_tcp.h>
+#include <tcf/framework/plugins.h>
+#include <tcf/services/discovery.h>
+#include <tcf/main/test.h>
+#include <tcf/main/cmdline.h>
+#include <tcf/main/services.h>
+#include <tcf/main/server.h>
 
 static const char * progname;
 

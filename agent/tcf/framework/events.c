@@ -26,15 +26,15 @@
  * while allows for high level of concurrency.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <time.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/mdep-threads.h>
-#include <framework/myalloc.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/events.h>
+#include <tcf/framework/mdep-threads.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/events.h>
 
 typedef struct event_node event_node;
 

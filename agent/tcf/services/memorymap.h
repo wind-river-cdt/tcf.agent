@@ -19,9 +19,9 @@
 #ifndef D_memorymap
 #define D_memorymap
 
-#include <config.h>
-#include <framework/context.h>
-#include <framework/protocol.h>
+#include <tcf/config.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/protocol.h>
 
 #if SERVICE_MemoryMap
 

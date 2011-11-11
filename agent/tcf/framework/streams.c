@@ -17,11 +17,11 @@
  * Abstract byte stream. Bytes in the stream can be divided into groups - messages.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <stddef.h>
 #include <string.h>
-#include <framework/myalloc.h>
-#include <framework/streams.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/streams.h>
 
 int (read_stream)(InputStream * inp) {
     return (inp->cur < inp->end) ? *inp->cur++ : inp->read(inp);

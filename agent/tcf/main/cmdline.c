@@ -18,7 +18,7 @@
  * Command line interpreter.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_Cmdline
 
@@ -27,16 +27,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#include <framework/mdep-threads.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/myalloc.h>
-#include <framework/peer.h>
-#include <framework/protocol.h>
-#include <framework/trace.h>
-#include <framework/channel.h>
-#include <framework/plugins.h>
-#include <main/cmdline.h>
+#include <tcf/framework/mdep-threads.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/peer.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/plugins.h>
+#include <tcf/main/cmdline.h>
 
 struct CmdDesc {
     char * cmd;

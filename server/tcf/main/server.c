@@ -17,16 +17,16 @@
  * Server initialization code.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/proxy.h>
-#include <services/linenumbers.h>
-#include <services/symbols.h>
-#include <services/pathmap.h>
-#include <services/context-proxy.h>
-#include <main/server.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/proxy.h>
+#include <tcf/services/linenumbers.h>
+#include <tcf/services/symbols.h>
+#include <tcf/services/pathmap.h>
+#include <tcf/services/context-proxy.h>
+#include <tcf/main/server.h>
 
 static Protocol * proto;
 static TCFBroadcastGroup * bcg;

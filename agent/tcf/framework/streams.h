@@ -22,7 +22,7 @@
 #ifndef D_streams
 #define D_streams
 
-#include <config.h>
+#include <tcf/config.h>
 
 /*
  * MARKER_EOM - end of message

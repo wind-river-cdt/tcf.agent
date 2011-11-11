@@ -14,17 +14,17 @@
  *******************************************************************************/
 
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Symbols
 
-#include <framework/channel.h>
-#include <framework/json.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/cache.h>
-#include <services/stacktrace.h>
-#include <services/symbols.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/cache.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/symbols.h>
 
 static const char * SYMBOLS = "Symbols";
 

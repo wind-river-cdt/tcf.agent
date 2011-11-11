@@ -20,21 +20,21 @@
  * machine instruction addresses in the executable object.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_LineNumbers
 
 #include <errno.h>
 #include <assert.h>
 #include <stdio.h>
-#include <framework/context.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/cache.h>
-#include <framework/json.h>
-#include <framework/protocol.h>
-#include <framework/trace.h>
-#include <services/linenumbers.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/cache.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/trace.h>
+#include <tcf/services/linenumbers.h>
 
 #define MAX_AREA_CNT 256
 

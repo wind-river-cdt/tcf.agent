@@ -21,7 +21,7 @@
 #ifndef D_config
 #define D_config
 
-#include <framework/mdep.h>
+#include <tcf/framework/mdep.h>
 
 #if defined(WIN32)
 #  define TARGET_WINDOWS    1

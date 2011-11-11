@@ -17,18 +17,18 @@
  * This module provides notifications of process/thread exited or stopped.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if (ENABLE_DebugContext && !ENABLE_ContextProxy) || SERVICE_Processes || SERVICE_Terminals
 
 #include <assert.h>
 #include <errno.h>
-#include <framework/errors.h>
-#include <framework/myalloc.h>
-#include <framework/events.h>
-#include <framework/trace.h>
-#include <framework/asyncreq.h>
-#include <framework/waitpid.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/waitpid.h>
 
 typedef struct WaitPIDListenerInfo {
     WaitPIDListener * listener;

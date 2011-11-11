@@ -17,7 +17,7 @@
  * This module handles process/thread OS contexts and their state machine.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(_WRS_KERNEL)
 
@@ -27,16 +27,16 @@
 #include <assert.h>
 #include <errno.h>
 #include <signal.h>
-#include <framework/mdep-threads.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <framework/waitpid.h>
-#include <framework/signames.h>
-#include <services/breakpoints.h>
-#include <services/memorymap.h>
-#include <system/VxWorks/context-vxworks.h>
+#include <tcf/framework/mdep-threads.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/waitpid.h>
+#include <tcf/framework/signames.h>
+#include <tcf/services/breakpoints.h>
+#include <tcf/services/memorymap.h>
+#include <tcf/system/VxWorks/context-vxworks.h>
 
 /* TODO: VxWorks RTP support */
 
@@ -61,7 +61,7 @@ static size_t context_extension_offset = 0;
 
 #define EXT(ctx) ((ContextExtensionVxWorks *)((char *)(ctx) + context_extension_offset))
 
-#include <system/pid-hash.h>
+#include <tcf/system/pid-hash.h>
 
 #define EVENT_HOOK_BREAKPOINT   2
 #define EVENT_HOOK_STEP_DONE    3

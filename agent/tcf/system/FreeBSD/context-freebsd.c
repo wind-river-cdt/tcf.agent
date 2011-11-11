@@ -17,7 +17,7 @@
  * This module handles process/thread OS contexts and their state machine.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(__FreeBSD__)
 
@@ -29,15 +29,15 @@
 #include <signal.h>
 #include <sched.h>
 #include <sys/ptrace.h>
-#include <framework/context.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <framework/waitpid.h>
-#include <framework/signames.h>
-#include <services/breakpoints.h>
-#include <system/FreeBSD/regset.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/waitpid.h>
+#include <tcf/framework/signames.h>
+#include <tcf/services/breakpoints.h>
+#include <tcf/system/FreeBSD/regset.h>
 
 #define PTRACE_TRACEME    PT_TRACE_ME
 #define PTRACE_ATTACH     PT_ATTACH
@@ -72,7 +72,7 @@ static size_t context_extension_offset = 0;
 
 #define EXT(ctx) ((ContextExtensionBSD *)((char *)(ctx) + context_extension_offset))
 
-#include <system/pid-hash.h>
+#include <tcf/system/pid-hash.h>
 
 static LINK pending_list;
 

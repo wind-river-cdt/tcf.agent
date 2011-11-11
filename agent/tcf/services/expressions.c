@@ -23,7 +23,7 @@
  *    where X is symbol ID as returned by symbols service.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Expressions
 
@@ -32,17 +32,17 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/json.h>
-#include <framework/cache.h>
-#include <framework/context.h>
-#include <services/symbols.h>
-#include <services/stacktrace.h>
-#include <services/expressions.h>
-#include <services/memoryservice.h>
-#include <services/registers.h>
-#include <main/test.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/cache.h>
+#include <tcf/framework/context.h>
+#include <tcf/services/symbols.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/expressions.h>
+#include <tcf/services/memoryservice.h>
+#include <tcf/services/registers.h>
+#include <tcf/main/test.h>
 
 #define STR_POOL_SIZE (64 * MEM_USAGE_FACTOR)
 

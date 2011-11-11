@@ -27,7 +27,7 @@
 #  define _GNU_SOURCE
 #endif
 
-#include <config.h>
+#include <tcf/config.h>
 #ifdef ENABLE_STREAM_MACROS
 #undef ENABLE_STREAM_MACROS
 #endif
@@ -36,10 +36,10 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
-#include <framework/json.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/base64.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/base64.h>
 
 #define ENCODING_BINARY     0
 #define ENCODING_BASE64     1

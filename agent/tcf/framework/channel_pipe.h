@@ -20,7 +20,7 @@
 #ifndef D_channel_pipe
 #define D_channel_pipe
 
-#include <framework/channel.h>
+#include <tcf/framework/channel.h>
 
 /*
  * Start named pipe channel listener.

@@ -22,7 +22,7 @@
 
 #if ENABLE_Cmdline
 
-#include <framework/protocol.h>
+#include <tcf/framework/protocol.h>
 
 extern void cmdline_suspend(void);
 extern void cmdline_resume(void);

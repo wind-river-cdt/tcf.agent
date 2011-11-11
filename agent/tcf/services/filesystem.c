@@ -21,7 +21,7 @@
 #  define _GNU_SOURCE
 #endif
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_FileSystem
 
@@ -45,16 +45,16 @@
 #if defined(_WRS_KERNEL)
 #  include <ioLib.h>
 #endif
-#include <framework/myalloc.h>
-#include <framework/asyncreq.h>
-#include <framework/streams.h>
-#include <framework/channel.h>
-#include <framework/link.h>
-#include <framework/trace.h>
-#include <framework/json.h>
-#include <framework/exceptions.h>
-#include <framework/protocol.h>
-#include <services/filesystem.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/streams.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/link.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/services/filesystem.h>
 
 #define BUF_SIZE (128 * MEM_USAGE_FACTOR)
 

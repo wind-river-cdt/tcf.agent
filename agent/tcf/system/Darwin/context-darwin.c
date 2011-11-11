@@ -17,7 +17,7 @@
  * This module handles process/thread OS contexts and their state machine.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(__APPLE__)
 
@@ -31,15 +31,15 @@
 #include <sys/syscall.h>
 #include <sys/ptrace.h>
 #include <mach/thread_status.h>
-#include <framework/context.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <framework/waitpid.h>
-#include <framework/signames.h>
-#include <services/breakpoints.h>
-#include <system/Darwin/regset.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/waitpid.h>
+#include <tcf/framework/signames.h>
+#include <tcf/services/breakpoints.h>
+#include <tcf/system/Darwin/regset.h>
 
 #define WORD_SIZE   4
 
@@ -65,7 +65,7 @@ static size_t context_extension_offset = 0;
 
 #define EXT(ctx) ((ContextExtensionDarwin *)((char *)(ctx) + context_extension_offset))
 
-#include <system/pid-hash.h>
+#include <tcf/system/pid-hash.h>
 
 static LINK pending_list;
 

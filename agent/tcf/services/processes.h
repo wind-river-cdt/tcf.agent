@@ -24,7 +24,7 @@
 #ifndef D_processes
 #define D_processes
 
-#include <framework/protocol.h>
+#include <tcf/framework/protocol.h>
 
 typedef struct ChildProcess ChildProcess;
 

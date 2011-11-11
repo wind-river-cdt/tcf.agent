@@ -18,11 +18,11 @@
  * The service manages file path mapping rules.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 #include <assert.h>
-#include <framework/mdep-inet.h>
-#include <framework/myalloc.h>
-#include <services/pathmap.h>
+#include <tcf/framework/mdep-inet.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/services/pathmap.h>
 
 char * canonic_path_map_file_name(const char * fnm) {
     static char * buf = NULL;
@@ -68,9 +68,9 @@ char * canonic_path_map_file_name(const char * fnm) {
 
 #include <stdio.h>
 #include <sys/stat.h>
-#include <framework/json.h>
-#include <framework/events.h>
-#include <framework/exceptions.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/exceptions.h>
 
 typedef struct Listener Listener;
 typedef struct PathMap PathMap;

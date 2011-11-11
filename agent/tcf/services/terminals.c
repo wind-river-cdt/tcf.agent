@@ -18,7 +18,7 @@
  * TCF Terminals service implementation.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Terminals
 
@@ -29,18 +29,18 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <assert.h>
-#include <framework/myalloc.h>
-#include <framework/protocol.h>
-#include <framework/trace.h>
-#include <framework/context.h>
-#include <framework/json.h>
-#include <framework/asyncreq.h>
-#include <framework/exceptions.h>
-#include <framework/waitpid.h>
-#include <framework/signames.h>
-#include <services/streamsservice.h>
-#include <services/processes.h>
-#include <services/terminals.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/waitpid.h>
+#include <tcf/framework/signames.h>
+#include <tcf/services/streamsservice.h>
+#include <tcf/services/processes.h>
+#include <tcf/services/terminals.h>
 
 #ifndef TERMINALS_NO_LOGIN
 #define TERMINALS_NO_LOGIN 1

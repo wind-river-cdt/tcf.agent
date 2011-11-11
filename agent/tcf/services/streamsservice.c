@@ -17,20 +17,20 @@
  * TCF Streams - generic streams service.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_Streams
 
 #include <assert.h>
 #include <string.h>
-#include <framework/channel.h>
-#include <framework/exceptions.h>
-#include <framework/json.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/events.h>
-#include <framework/myalloc.h>
-#include <services/streamsservice.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/services/streamsservice.h>
 
 static const char * STREAMS = "Streams";
 

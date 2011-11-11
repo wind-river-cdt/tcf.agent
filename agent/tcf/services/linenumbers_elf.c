@@ -20,27 +20,27 @@
  * machine instruction addresses in the executable object.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if SERVICE_LineNumbers && !ENABLE_LineNumbersProxy && ENABLE_ELF
 
 #include <errno.h>
 #include <assert.h>
 #include <stdio.h>
-#include <framework/context.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <framework/cache.h>
-#include <framework/trace.h>
-#include <framework/json.h>
-#include <framework/protocol.h>
-#include <services/linenumbers.h>
-#include <services/tcf_elf.h>
-#include <services/dwarfio.h>
-#include <services/dwarf.h>
-#include <services/dwarfcache.h>
-#include <services/stacktrace.h>
-#include <services/pathmap.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/framework/cache.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/json.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/services/linenumbers.h>
+#include <tcf/services/tcf_elf.h>
+#include <tcf/services/dwarfio.h>
+#include <tcf/services/dwarf.h>
+#include <tcf/services/dwarfcache.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/pathmap.h>
 
 static int is_absolute_path(char * fnm) {
     if (fnm[0] == '/') return 1;

@@ -20,8 +20,8 @@
 #ifndef D_context_vxworks
 #define D_context_vxworks
 
-#include <config.h>
-#include <framework/context.h>
+#include <tcf/config.h>
+#include <tcf/framework/context.h>
 
 extern int get_context_task_id(Context * ctx);
 

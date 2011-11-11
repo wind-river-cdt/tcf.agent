@@ -13,14 +13,14 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(WIN32) && !defined(DISABLE_PTHREADS_WIN32)
 
 #include <assert.h>
-#include <framework/myalloc.h>
-#include <framework/errors.h>
-#include <system/Windows/pthreads-win32.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/errors.h>
+#include <tcf/system/Windows/pthreads-win32.h>
 
 /*********************************************************************
     Support of pthreads on Windows is implemented according to

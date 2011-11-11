@@ -19,13 +19,13 @@
  * Functions in this module use exceptions to report errors, see exceptions.h
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_ELF
 
 #include <assert.h>
-#include <framework/exceptions.h>
-#include <services/dwarfreloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/dwarfreloc.h>
 
 static ELF_Section * section = NULL;
 static ELF_Section * relocs = NULL;
@@ -46,7 +46,7 @@ typedef struct ElfRelocateFunc {
     void (*func)(void);
 } ElfRelocateFunc;
 
-#include <machine/elf-mdep.h>
+#include <tcf/machine/elf-mdep.h>
 
 static void relocate(void * r) {
     ElfRelocateFunc * func;

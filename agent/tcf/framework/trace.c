@@ -13,8 +13,8 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
-#include <config.h>
-#include <framework/trace.h>
+#include <tcf/config.h>
+#include <tcf/framework/trace.h>
 
 int log_mode = LOG_EVENTS | LOG_CHILD | LOG_WAITPID | LOG_CONTEXT | LOG_PROTOCOL;
 
@@ -25,7 +25,7 @@ int log_mode = LOG_EVENTS | LOG_CHILD | LOG_WAITPID | LOG_CONTEXT | LOG_PROTOCOL
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <framework/mdep-threads.h>
+#include <tcf/framework/mdep-threads.h>
 
 #if defined(WIN32)
 #elif defined(_WRS_KERNEL)

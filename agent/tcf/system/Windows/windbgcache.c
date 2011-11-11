@@ -18,7 +18,7 @@
  * Current implementation delegates all its job to DBGHELP.DLL.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(WIN32) && !ENABLE_ELF
 #  define ENABLE_PE_Symbols ((SERVICE_LineNumbers && !ENABLE_LineNumbersProxy) || (SERVICE_Symbols && !ENABLE_SymbolsProxy))
@@ -33,11 +33,11 @@
 #include <assert.h>
 #include <stdio.h>
 #include <wchar.h>
-#include <system/Windows/windbgcache.h>
-#include <system/Windows/context-win32.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <services/memorymap.h>
+#include <tcf/system/Windows/windbgcache.h>
+#include <tcf/system/Windows/context-win32.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/services/memorymap.h>
 
 static HINSTANCE dbghelp_dll = NULL;
 

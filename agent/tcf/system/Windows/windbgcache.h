@@ -20,7 +20,7 @@
 #ifndef D_windbgcache
 #define D_windbgcache
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(WIN32)
 

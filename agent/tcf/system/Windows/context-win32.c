@@ -17,7 +17,7 @@
  * This module handles process/thread OS contexts and their state machine.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if defined(WIN32)
 
@@ -27,19 +27,19 @@
 #include <assert.h>
 #include <errno.h>
 #include <signal.h>
-#include <framework/context.h>
-#include <framework/events.h>
-#include <framework/errors.h>
-#include <framework/trace.h>
-#include <framework/myalloc.h>
-#include <framework/waitpid.h>
-#include <framework/signames.h>
-#include <services/breakpoints.h>
-#include <services/memorymap.h>
-#include <services/runctrl.h>
-#include <system/Windows/context-win32.h>
-#include <system/Windows/regset.h>
-#include <system/Windows/windbgcache.h>
+#include <tcf/framework/context.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/errors.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/waitpid.h>
+#include <tcf/framework/signames.h>
+#include <tcf/services/breakpoints.h>
+#include <tcf/services/memorymap.h>
+#include <tcf/services/runctrl.h>
+#include <tcf/system/Windows/context-win32.h>
+#include <tcf/system/Windows/regset.h>
+#include <tcf/system/Windows/windbgcache.h>
 
 #if !defined(USE_HW_BPS)
 #  define USE_HW_BPS 1
@@ -123,7 +123,7 @@ static unsigned exception_handler_cnt = 0;
 
 static MemoryErrorInfo mem_err_info;
 
-#include <system/pid-hash.h>
+#include <tcf/system/pid-hash.h>
 
 #define EXCEPTION_DEBUGGER_IO 0x406D1388
 

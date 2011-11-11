@@ -17,7 +17,7 @@
  * Agent main module.
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,15 +38,15 @@ extern "C" {
 }
 #endif
 
-#include <framework/asyncreq.h>
-#include <framework/events.h>
-#include <framework/trace.h>
-#include <framework/channel.h>
-#include <framework/protocol.h>
-#include <framework/proxy.h>
-#include <framework/myalloc.h>
-#include <framework/errors.h>
-#include <services/discovery.h>
+#include <tcf/framework/asyncreq.h>
+#include <tcf/framework/events.h>
+#include <tcf/framework/trace.h>
+#include <tcf/framework/channel.h>
+#include <tcf/framework/protocol.h>
+#include <tcf/framework/proxy.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/errors.h>
+#include <tcf/services/discovery.h>
 
 static const char * progname;
 static lua_State *luastate;

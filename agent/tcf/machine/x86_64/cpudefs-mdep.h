@@ -23,7 +23,7 @@
 #    define eip pc
 #    undef BREAK_INST
 #  endif
-#  include <system/VxWorks/context-vxworks.h>
+#  include <tcf/system/VxWorks/context-vxworks.h>
 #endif
 
 #if defined(__i386__) || defined(__x86_64__)

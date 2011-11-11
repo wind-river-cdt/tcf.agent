@@ -19,17 +19,17 @@
  * Functions in this module use exceptions to report errors, see exceptions.h
  */
 
-#include <config.h>
+#include <tcf/config.h>
 
 #if ENABLE_ELF
 
 #include <assert.h>
 #include <string.h>
-#include <framework/myalloc.h>
-#include <framework/exceptions.h>
-#include <services/dwarfio.h>
-#include <services/dwarfreloc.h>
-#include <services/dwarf.h>
+#include <tcf/framework/myalloc.h>
+#include <tcf/framework/exceptions.h>
+#include <tcf/services/dwarfio.h>
+#include <tcf/services/dwarfreloc.h>
+#include <tcf/services/dwarf.h>
 
 #define ABBREV_TABLE_SIZE  (4 * MEM_USAGE_FACTOR - 1)
 
