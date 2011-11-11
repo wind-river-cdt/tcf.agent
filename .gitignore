@@ -2,20 +2,20 @@
 *~
 \#*\#
 
-# .
-*.ncb
-*.opt
-*.plg
-*.user
-*.suo
-obj
+# agent
+agent/*.ncb
+agent/*.opt
+agent/*.plg
+agent/*.user
+agent/*.suo
+agent/obj
 
 # cmake/
-cmake/msvc-debug
-cmake/msvc-release
-cmake/gcc-release
-cmake/build-gcc-debug.sh
-cmake/gcc-debug
+agent/cmake/msvc-debug
+agent/cmake/msvc-release
+agent/cmake/gcc-release
+agent/cmake/build-gcc-debug.sh
+agent/cmake/gcc-debug
 
 # server/
 server/obj
