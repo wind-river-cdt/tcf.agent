@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -36,7 +36,13 @@
 #include <tcf/main/services.h>
 #include <tcf/main/server.h>
 
+#ifndef ENABLE_SignalHandlers
+#  define ENABLE_SignalHandlers 1
+#endif
+
 static const char * progname;
+
+#if ENABLE_SignalHandlers
 
 static void shutdown_event(void * args) {
     discovery_stop();
@@ -67,6 +73,8 @@ static BOOL CtrlHandler(DWORD ctrl) {
     return FALSE;
 }
 #endif
+
+#endif /* ENABLE_SignalHandlers */
 
 #if !defined(_WRS_KERNEL)
 static const char * help_text[] = {
@@ -234,14 +242,15 @@ int main(int argc, char ** argv) {
     }
     discovery_start();
 
+#if ENABLE_SignalHandlers
     signal(SIGABRT, signal_handler);
     signal(SIGILL, signal_handler);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
-
 #if defined(WIN32)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
 #endif
+#endif /* ENABLE_SignalHandlers */
 
     /* Process events - must run on the initial thread since ptrace()
      * returns ECHILD otherwise, thinking we are not the owner. */
