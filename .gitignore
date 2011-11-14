@@ -20,9 +20,27 @@ agent/cmake/gcc-debug
 # server/
 server/obj
 server/*.ncb
+server/*.opt
+server/*.plt
 server/*.suo
 server/*.user
 
 # examples/daytime/
 examples/daytime/obj
+
+# tests/mem-leaks/
+tests/mem-leaks/obj
+tests/mem-leaks/*.ncb
+tests/mem-leaks/*.opt
+tests/mem-leaks/*.plt
+tests/mem-leaks/*.suo
+tests/mem-leaks/*.user
+
+# tests/test-dwarf/
+tests/test-dwarf/obj
+tests/test-dwarf/*.ncb
+tests/test-dwarf/*.opt
+tests/test-dwarf/*.plt
+tests/test-dwarf/*.suo
+tests/test-dwarf/*.user
 
