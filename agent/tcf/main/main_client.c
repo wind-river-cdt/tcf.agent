@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -14,7 +14,7 @@
  *******************************************************************************/
 
 /*
- * Agent main module.
+ * TCF client main module.
  */
 
 #include <tcf/config.h>
@@ -54,12 +54,14 @@ int main(int argc, char ** argv) {
 #endif
     int c;
     int ind;
+#if ENABLE_Cmdline
     int keep_alive = 0;
     int mode = 1; /* interactive */
     const char * host_name = "localhost";
     const char * command = NULL;
-    const char * log_name = "-";
     const char * script_name = NULL;
+#endif
+    const char * log_name = "-";
 
     log_mode = 0;
 
@@ -86,9 +88,11 @@ int main(int argc, char ** argv) {
         s++;
         while ((c = *s++) != '\0') {
             switch (c) {
+#if ENABLE_Cmdline
             case 'd':
                 keep_alive = 1;
                 break;
+#endif
 
             case 'l':
             case 'L':
@@ -114,6 +118,7 @@ int main(int argc, char ** argv) {
                     log_name = s;
                     break;
 
+#if ENABLE_Cmdline
                 case 'S':
                     script_name = s;
                     mode = 0;
@@ -128,6 +133,7 @@ int main(int argc, char ** argv) {
                     command = s;
                     mode = 2;
                     break;
+#endif
 
 #if ENABLE_Plugins
                 case 'P':
@@ -149,10 +155,12 @@ int main(int argc, char ** argv) {
         }
     }
 
+#if ENABLE_Cmdline
     if (script_name != NULL && command != NULL) {
         fprintf(stderr, "%s: error: illegal option -S and -c are mutually exclusive\n", progname);
         exit(1);
     }
+#endif
 
     open_log_file(log_name);
 
@@ -166,16 +174,12 @@ int main(int argc, char ** argv) {
     if (script_name != NULL) open_script_file(script_name);
     if (command != NULL) set_single_command(keep_alive, host_name, command);
     ini_cmdline_handler(mode, proto);
-#else
-    if (script_name != NULL) fprintf(stderr, "Warning: This version does not support script file as input.\n");
 #endif
 
 #if ENABLE_Plugins
     plugins_load(proto, NULL);
 #endif
 
-    /* Process events - must run on the initial thread since ptrace()
-     * returns ECHILD otherwise, thinking we are not the owner. */
     run_event_loop();
     return 0;
 }
