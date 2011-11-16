@@ -19,6 +19,6 @@
  */
 
 #if defined(__FreeBSD__)
-#  include <tcf/machine/reg.h>
+#  include <machine/reg.h>
    typedef struct reg REG_SET;
 #endif
