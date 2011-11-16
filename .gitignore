@@ -9,6 +9,7 @@ agent/*.plg
 agent/*.user
 agent/*.suo
 agent/obj
+agent/vc++
 
 # cmake/
 agent/cmake/msvc-debug
