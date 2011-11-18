@@ -89,6 +89,7 @@ static int text_pos = 0;
 static int text_len = 0;
 static int text_ch = 0;
 static int text_sy = 0;
+static int sy_pos = 0;
 static Value text_val;
 
 /* Host endianness */
@@ -178,7 +179,7 @@ static void error(int no, const char * fmt, ...) {
     size_t l = 0;
 
     va_start(ap, fmt);
-    l = snprintf(buf, sizeof(buf), "At col %d: ", text_pos);
+    l = snprintf(buf, sizeof(buf), "At col %d: ", sy_pos);
     vsnprintf(buf + l, sizeof(buf) - l, fmt, ap);
     va_end(ap);
     str_exception(no, buf);
@@ -292,6 +293,7 @@ static int is_name_character(int ch) {
 static void next_sy(void) {
     for (;;) {
         int ch = text_ch;
+        sy_pos = text_pos - 1;
         next_ch();
         switch (ch) {
         case 0:
@@ -1403,7 +1405,7 @@ static void op_sizeof(int mode, Value * v) {
     int p = text_sy == '(';
 
     if (p) next_sy();
-    pos = text_pos - 2;
+    pos = sy_pos;
     if (type_name(mode, &type)) {
         if (mode != MODE_SKIP) {
             ContextAddress type_size = 0;
@@ -1540,7 +1542,7 @@ static void lazy_unary_expression(int mode, Value * v) {
         Symbol * type = NULL;
         int type_class = TYPE_CLASS_UNKNOWN;
         ContextAddress type_size = 0;
-        int pos = text_pos - 2;
+        int pos = sy_pos;
 
         assert(text[pos] == '(');
         next_sy();
