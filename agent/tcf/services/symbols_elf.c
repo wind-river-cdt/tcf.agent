@@ -64,13 +64,52 @@ struct Symbol {
     Symbol * base;
 };
 
+#define is_array_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base != NULL)
 #define is_cardinal_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base == NULL)
+#define is_constant_pseudo_symbol(s) (s->sym_class == SYM_CLASS_VALUE && s->obj == NULL && s->base != NULL)
 
 #include <tcf/services/symbols_alloc.h>
 
 static Context * sym_ctx;
 static int sym_frame;
 static ContextAddress sym_ip;
+
+typedef long ConstantValueType;
+
+static struct ConstantPseudoSymbol {
+    const char * name;
+    const char * type;
+    ConstantValueType value;
+} constant_pseudo_symbols[] = {
+    { "false", "bool", 0 },
+    { "true", "bool", 1 },
+    { NULL, NULL, 0 },
+};
+
+static struct BaseTypeAlias {
+    const char * name;
+    const char * alias;
+} base_types_aliases[] = {
+    { "int", "signed int" },
+    { "signed", "int" },
+    { "signed int", "int" },
+    { "unsigned", "unsigned int" },
+    { "short", "short int" },
+    { "signed short", "short int" },
+    { "signed short int", "short int" },
+    { "unsigned short", "unsigned short int" },
+    { "long", "long int" },
+    { "signed long", "long int" },
+    { "signed long int", "long int" },
+    { "unsigned long", "unsigned long int" },
+    { "long long", "long long int" },
+    { "signed long long", "long long int" },
+    { "signed long long int", "long long int" },
+    { "unsigned long long", "unsigned long long int" },
+    { "char", "signed char" },
+    { "char", "unsigned char" },
+    { NULL, NULL }
+};
 
 static int get_sym_context(Context * ctx, int frame, ContextAddress addr) {
     if (frame == STACK_NO_FRAME) {
@@ -592,29 +631,32 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name
     if (error == 0 && !found && sym_ip != 0) {
         Trap trap;
         if (set_trap(&trap)) {
-            const char * s = NULL;
-            if (strcmp(name, "signed") == 0) s = "int";
-            else if (strcmp(name, "signed int") == 0) s = "int";
-            else if (strcmp(name, "unsigned") == 0) s = "unsigned int";
-            else if (strcmp(name, "short") == 0) s = "short int";
-            else if (strcmp(name, "signed short") == 0) s = "short int";
-            else if (strcmp(name, "signed short int") == 0) s = "short int";
-            else if (strcmp(name, "unsigned short") == 0) s = "unsigned short int";
-            else if (strcmp(name, "long") == 0) s = "long int";
-            else if (strcmp(name, "signed long") == 0) s = "long int";
-            else if (strcmp(name, "signed long int") == 0) s = "long int";
-            else if (strcmp(name, "unsigned long") == 0) s = "unsigned long int";
-            else if (strcmp(name, "long long") == 0) s = "long long int";
-            else if (strcmp(name, "signed long long") == 0) s = "long long int";
-            else if (strcmp(name, "signed long long int") == 0) s = "long long int";
-            else if (strcmp(name, "unsigned long long") == 0) s = "unsigned long long int";
-            else if (strcmp(name, "char") == 0) s = "signed char";
-            if (s != NULL) {
-                found = find_in_dwarf(s, res);
-                if (!found) {
-                    s = NULL;
-                    if (strcmp(name, "char") == 0) s = "unsigned char";
-                    if (s != NULL) found = find_in_dwarf(s, res);
+            unsigned i = 0;
+            while (base_types_aliases[i].name) {
+                if (strcmp(name, base_types_aliases[i].name) == 0) {
+                    found = find_in_dwarf(base_types_aliases[i].alias, res);
+                    if (found) break;
+                }
+                i++;
+            }
+            if (!found) {
+                i = 0;
+                while (constant_pseudo_symbols[i].name) {
+                    if (strcmp(name, constant_pseudo_symbols[i].name) == 0) {
+                        Symbol * type = NULL;
+                        found = find_in_dwarf(constant_pseudo_symbols[i].type, &type);
+                        if (found) {
+                            Symbol * sym = alloc_symbol();
+                            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+                            sym->frame = STACK_NO_FRAME;
+                            sym->sym_class = SYM_CLASS_VALUE;
+                            sym->base = type;
+                            sym->length = i;
+                            *res = sym;
+                            break;
+                        }
+                    }
+                    i++;
                 }
             }
             clear_trap(&trap);
@@ -910,7 +952,7 @@ const char * symbol2id(const Symbol * sym) {
         char base[256];
         assert(sym->ctx == sym->base->ctx);
         assert(sym->frame == STACK_NO_FRAME);
-        assert(sym->sym_class == SYM_CLASS_TYPE);
+        assert(sym->sym_class == SYM_CLASS_TYPE || sym->sym_class == SYM_CLASS_VALUE);
         strcpy(base, symbol2id(sym->base));
         snprintf(id, sizeof(id), "@P%"PRIX64".%s", (uint64_t)sym->length, base);
     }
@@ -1149,7 +1191,9 @@ void ini_symbols_lib(void) {
 static int unpack(const Symbol * sym) {
     ELF_File * file = NULL;
     assert(sym->base == NULL);
+    assert(!is_array_type_pseudo_symbol(sym));
     assert(!is_cardinal_type_pseudo_symbol(sym));
+    assert(!is_constant_pseudo_symbol(sym));
     if (get_sym_context(sym->ctx, sym->frame, 0) < 0) return -1;
     if (sym->obj != NULL) file = sym->obj->mCompUnit->mFile;
     if (sym->tbl != NULL) file = sym->tbl->file;
@@ -1228,8 +1272,12 @@ int get_symbol_class(const Symbol * sym, int * sym_class) {
 int get_symbol_type(const Symbol * sym, Symbol ** type) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym)) {
+    if (sym->sym_class == SYM_CLASS_TYPE) {
         *type = (Symbol *)sym;
+        return 0;
+    }
+    if (is_constant_pseudo_symbol(sym)) {
+        *type = sym->base;
         return 0;
     }
     if (sym->sym_class == SYM_CLASS_FUNCTION) {
@@ -1259,7 +1307,8 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
     U8_T x;
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (is_constant_pseudo_symbol(sym)) return get_symbol_type_class(sym->base, type_class);
+    if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) *type_class = TYPE_CLASS_FUNCTION;
         else if (sym->length > 0) *type_class = TYPE_CLASS_ARRAY;
         else *type_class = TYPE_CLASS_POINTER;
@@ -1408,8 +1457,11 @@ int get_symbol_update_policy(const Symbol * sym, char ** id, int * policy) {
 
 int get_symbol_name(const Symbol * sym, char ** name) {
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_array_type_pseudo_symbol(sym) || is_cardinal_type_pseudo_symbol(sym)) {
         *name = NULL;
+    }
+    else if (is_constant_pseudo_symbol(sym)) {
+        *name = (char *)constant_pseudo_symbols[(int)sym->length].name;
     }
     else if (sym->obj != NULL) {
         *name = sym->obj->mName;
@@ -1428,7 +1480,8 @@ int get_symbol_name(const Symbol * sym, char ** name) {
 int get_symbol_size(const Symbol * sym, ContextAddress * size) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (is_constant_pseudo_symbol(sym)) return get_symbol_size(sym->base, size);
+    if (is_array_type_pseudo_symbol(sym)) {
         if (sym->length > 0) {
             if (get_symbol_size(sym->base, size)) return -1;
             *size *= sym->length;
@@ -1550,7 +1603,7 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
 int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
             if (sym->base->obj != NULL && sym->base->obj->mType != NULL) {
                 if (unpack(sym->base) < 0) return -1;
@@ -1565,7 +1618,7 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
         *base_type = sym->base;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -1604,7 +1657,7 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
 int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
             errno = ERR_INV_CONTEXT;
             return -1;
@@ -1612,7 +1665,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
         alloc_cardinal_type_pseudo_symbol(sym->ctx, context_word_size(sym->ctx), index_type);
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -1637,7 +1690,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
 int get_symbol_length(const Symbol * sym, ContextAddress * length) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
             errno = ERR_INV_CONTEXT;
             return -1;
@@ -1645,7 +1698,7 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
         *length = sym->length == 0 ? 1 : sym->length;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -1673,7 +1726,7 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
 int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
             errno = ERR_INV_CONTEXT;
             return -1;
@@ -1681,7 +1734,7 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
         *value = 0;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -1710,7 +1763,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     static int buf_len = 0;
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (is_array_type_pseudo_symbol(sym)) {
         obj = sym->base->obj;
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
             if (obj == NULL) {
@@ -1746,7 +1799,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
         *count = 0;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
         *children = NULL;
         *count = 0;
         return 0;
@@ -1778,7 +1831,9 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
 int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_array_type_pseudo_symbol(sym) ||
+        is_cardinal_type_pseudo_symbol(sym) ||
+        is_constant_pseudo_symbol(sym)) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -1796,7 +1851,18 @@ int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
 int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big_endian) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym) || sym->var) {
+    if (is_constant_pseudo_symbol(sym)) {
+        ContextAddress sym_size = 0;
+        if (get_symbol_size(sym, &sym_size) < 0) return -1;
+        *size = (size_t)sym_size;
+        *big_endian = big_endian_host();
+        *value = &constant_pseudo_symbols[(int)sym->length].value;
+        if (*big_endian && *size < sizeof(ConstantValueType)) {
+            *value = (char *)(*value) + (sizeof(ConstantValueType) - *size);
+        }
+        return 0;
+    }
+    if (is_array_type_pseudo_symbol(sym) || is_cardinal_type_pseudo_symbol(sym) || sym->var) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -1962,7 +2028,9 @@ static int calc_member_offset(ObjectInfo * type, ObjectInfo * member, ContextAdd
 int get_symbol_address(const Symbol * sym, ContextAddress * address) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_array_type_pseudo_symbol(sym) ||
+        is_cardinal_type_pseudo_symbol(sym) ||
+        is_constant_pseudo_symbol(sym)) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -2031,7 +2099,10 @@ int get_symbol_address(const Symbol * sym, ContextAddress * address) {
 int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, RegisterDefinition ** reg) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym) || sym->has_address) {
+    if (is_array_type_pseudo_symbol(sym) ||
+        is_cardinal_type_pseudo_symbol(sym) ||
+        is_constant_pseudo_symbol(sym) ||
+        sym->has_address) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
