@@ -797,7 +797,9 @@ int tkill(pid_t pid, int signal) {
 
 void ini_mdep(void) {
     setlocale(LC_ALL, "");
+#ifdef CODESET
     utf8_locale = (strcmp(nl_langinfo(CODESET), "UTF-8") == 0);
+#endif
     signal(SIGPIPE, SIG_IGN);
     pthread_attr_init(&pthread_create_attr);
     pthread_attr_setstacksize(&pthread_create_attr, 0x8000);
@@ -1189,7 +1191,7 @@ size_t strlcat(char * dst, const char * src, size_t size) {
 
 #endif
 
-#if defined(__linux__) && !defined(__UCLIBC__)
+#if defined(__linux__) && !defined(__UCLIBC__) && !defined(ANDROID)
 
 #include <uuid/uuid.h>
 
