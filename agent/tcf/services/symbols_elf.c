@@ -376,6 +376,29 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
     return 0;
 }
 
+/* If 'sym' represents a declaration, replace it with definition - if possible */
+static void find_definition(Symbol * sym) {
+    U8_T v = 0;
+    ObjectInfo * obj = NULL;
+    UnitAddressRange * range = NULL;
+    if (sym->obj == NULL) return;
+    if (sym->obj->mTag != TAG_member) return;
+    if (!get_num_prop(sym->obj, AT_external, &v) || !v) return;
+    range = elf_find_unit(sym_ctx, sym_ip, sym_ip, NULL);
+    if (range != NULL) {
+        obj = range->mUnit->mObject->mChildren;
+        while (obj != NULL) {
+            if (obj->mTag == TAG_variable) {
+                if (get_num_prop(obj, AT_specification_v2, &v) && v == sym->obj->mID) {
+                    sym->obj = obj;
+                    return;
+                }
+            }
+            obj = obj->mSibling;
+        }
+    }
+}
+
 static int find_in_object_tree(ObjectInfo * list, ContextAddress rt_offs, ContextAddress ip, const char * name, Symbol ** sym) {
     Symbol * sym_imp = NULL;  /* Imported from a namespace */
     Symbol * sym_enu = NULL;  /* Enumeration constant */
@@ -436,6 +459,7 @@ static int find_in_object_tree(ObjectInfo * list, ContextAddress rt_offs, Contex
     if (*sym == NULL) *sym = sym_this;
     if (*sym == NULL) *sym = sym_enu;
     if (*sym == NULL) *sym = sym_imp;
+    if (*sym != NULL && sym_ip != 0) find_definition(*sym);
     return *sym != NULL;
 }
 
@@ -1464,6 +1488,17 @@ int get_symbol_name(const Symbol * sym, char ** name) {
         *name = (char *)constant_pseudo_symbols[(int)sym->length].name;
     }
     else if (sym->obj != NULL) {
+        if (sym->obj->mName == NULL) {
+            U8_T v = 0;
+            if (unpack(sym) < 0) return -1;
+            if (get_num_prop(sym->obj, AT_specification_v2, &v)) {
+                ObjectInfo * spec = find_object(get_dwarf_cache(sym->obj->mCompUnit->mFile), v);
+                if (spec != NULL) {
+                    *name = sym->obj->mName;
+                    return 0;
+                }
+            }
+        }
         *name = sym->obj->mName;
     }
     else if (sym->tbl != NULL) {

@@ -37,8 +37,24 @@
 #endif
 
 #ifdef __cplusplus
+
+bool tcf_cpp_test_bool = false;
+
+class tcf_cpp_test_class {
+public:
+    static int s_int;
+};
+
+class tcf_cpp_test_class_extension : tcf_cpp_test_class {
+public:
+    int f_int;
+};
+
+int tcf_cpp_test_class::s_int = 0;
+
 extern "C" {
-#endif
+
+#endif /* __cplusplus */
 
 typedef enum test_enum {
     enum_val1 = 1,

@@ -851,7 +851,7 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
     case FORM_REF4      :
     case FORM_REF8      :
     case FORM_REF_UDATA :
-        if (Attr == AT_import) {
+        if (Attr == AT_import || Attr == AT_specification_v2) {
             Value->mValue = gop_gFormData;
         }
         else {
