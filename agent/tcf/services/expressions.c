@@ -752,6 +752,27 @@ static int identifier(Value * scope, char * name, Value * v) {
     return -1;
 }
 
+static int qualified_name(int mode, Value * scope, Value * v) {
+    Value x;
+    int sym_class = 0;
+    for (;;) {
+        if (text_sy != SY_NAME) error(ERR_INV_EXPRESSION, "Identifier expected");
+        if (mode != MODE_SKIP) {
+            sym_class = identifier(scope, (char *)text_val.value, v);
+            if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
+        }
+        else {
+            memset(v, 0, sizeof(Value));
+        }
+        next_sy();
+        if (text_sy != SY_SCOPE) break;
+        next_sy();
+        scope = &x;
+        x = *v;
+    }
+    return sym_class;
+}
+
 static int64_t to_int(int mode, Value * v);
 #define TYPE_EXPR_LENGTH 64
 
@@ -823,6 +844,12 @@ static int type_name(int mode, Symbol ** type) {
     }
     while (text_sy == SY_NAME);
     sym_class = identifier(NULL, name, &v);
+    if (sym_class < 0) return 0;
+    if (text_sy == SY_SCOPE) {
+        Value scope = v;
+        next_sy();
+        sym_class = qualified_name(mode, &scope, &v);
+    }
     if (sym_class != SYM_CLASS_TYPE) {
         if (is_struct || is_class) {
             error(ERR_INV_EXPRESSION, "Type '%s' not found", name);
@@ -1064,27 +1091,6 @@ static int to_boolean(int mode, Value * v) {
 }
 
 static void expression(int mode, Value * v);
-
-static int qualified_name(int mode, Value * scope, Value * v) {
-    Value x;
-    int sym_class = 0;
-    for (;;) {
-        if (text_sy != SY_NAME) error(ERR_INV_EXPRESSION, "Identifier expected");
-        if (mode != MODE_SKIP) {
-            int sym_class = identifier(scope, (char *)text_val.value, v);
-            if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
-        }
-        else {
-            memset(v, 0, sizeof(Value));
-        }
-        next_sy();
-        if (text_sy != SY_SCOPE) break;
-        next_sy();
-        scope = &x;
-        x = *v;
-    }
-    return sym_class;
-}
 
 static void primary_expression(int mode, Value * v) {
     if (text_sy == '(') {
