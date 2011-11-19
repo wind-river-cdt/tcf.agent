@@ -43,6 +43,7 @@ bool tcf_cpp_test_bool = false;
 class tcf_cpp_test_class {
 public:
     static int s_int;
+    class tcf_cpp_test_class_nested;
 };
 
 class tcf_cpp_test_class_extension : tcf_cpp_test_class {
@@ -50,7 +51,15 @@ public:
     int f_int;
 };
 
-int tcf_cpp_test_class::s_int = 0;
+class tcf_cpp_test_class::tcf_cpp_test_class_nested {
+public:
+    static int s_int;
+    int f_int;
+};
+
+int tcf_cpp_test_class::s_int = 1;
+int tcf_cpp_test_class::tcf_cpp_test_class_nested::s_int = 2;
+tcf_cpp_test_class_extension * tcf_cpp_text_ce = (tcf_cpp_test_class_extension *)3;
 
 extern "C" {
 

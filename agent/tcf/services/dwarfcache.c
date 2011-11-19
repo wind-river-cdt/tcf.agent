@@ -26,6 +26,7 @@
 #include <assert.h>
 #include <tcf/framework/exceptions.h>
 #include <tcf/framework/myalloc.h>
+#include <tcf/framework/trace.h>
 #include <tcf/services/dwarf.h>
 #include <tcf/services/dwarfio.h>
 #include <tcf/services/dwarfcache.h>
@@ -376,10 +377,12 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         }
         else {
             if (Spec != NULL) {
+                Info->mFlags |= Spec->mFlags;
                 if (Info->mName == NULL) Info->mName = Spec->mName;
                 if (Info->mType == NULL) Info->mType = Spec->mType;
             }
             if (AOrg != NULL) {
+                Info->mFlags |= AOrg->mFlags;
                 if (Info->mName == NULL) Info->mName = AOrg->mName;
                 if (Info->mType == NULL) Info->mType = AOrg->mType;
             }
@@ -440,10 +443,14 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_specification_v2:
         dio_ChkRef(Form);
         Spec = add_object_info(dio_gFormData);
+        Info->mFlags |= DOIF_specification;
+        if (Spec->mTag == 0) trace(LOG_ALWAYS, "Invalid AT_specification in %s", sDebugSection->file->name);
         break;
     case AT_abstract_origin:
         dio_ChkRef(Form);
         AOrg = add_object_info(dio_gFormData);
+        Info->mFlags |= DOIF_abstract_origin;
+        if (AOrg->mTag == 0) trace(LOG_ALWAYS, "Invalid AT_abstract_origin in %s", sDebugSection->file->name);
         break;
     case AT_low_pc:
         dio_ChkAddr(Form);
@@ -452,6 +459,18 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_high_pc:
         dio_ChkAddr(Form);
         Info->u.mAddr.mHighPC = (ContextAddress)dio_gFormData;
+        break;
+    case AT_external:
+        dio_ChkFlag(Form);
+        if (dio_gFormData) Info->mFlags |= DOIF_external;
+        break;
+    case AT_artificial:
+        dio_ChkFlag(Form);
+        if (dio_gFormData) Info->mFlags |= DOIF_artificial;
+        break;
+    case AT_declaration:
+        dio_ChkFlag(Form);
+        if (dio_gFormData) Info->mFlags |= DOIF_declaration;
         break;
     }
     if (Tag == TAG_compile_unit) {

@@ -66,6 +66,7 @@ typedef uint32_t SYM_FLAGS;
 #define SYM_FLAG_OPTIONAL       0x04000
 #define SYM_FLAG_EXTERNAL       0x08000
 #define SYM_FLAG_VARARG         0x10000
+#define SYM_FLAG_ARTIFICIAL     0x20000
 
 /* Symbol properties update policies */
 #define UPDATE_ON_MEMORY_MAP_CHANGES 0

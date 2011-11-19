@@ -262,7 +262,9 @@ static void object2symbol(ObjectInfo * obj, Symbol ** res) {
     }
     sym->frame = STACK_NO_FRAME;
     sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_PROCESS);
-    if (sym_frame != STACK_NO_FRAME && is_frame_based_object(sym)) {
+    if (sym->sym_class != SYM_CLASS_FUNCTION &&
+        sym_frame != STACK_NO_FRAME &&
+        is_frame_based_object(sym)) {
         sym->frame = sym_frame;
         sym->ctx = sym_ctx;
     }
@@ -377,26 +379,24 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
 }
 
 /* If 'sym' represents a declaration, replace it with definition - if possible */
-static void find_definition(Symbol * sym) {
-    U8_T v = 0;
-    ObjectInfo * obj = NULL;
+static ObjectInfo * find_definition(ObjectInfo * decl) {
     UnitAddressRange * range = NULL;
-    if (sym->obj == NULL) return;
-    if (sym->obj->mTag != TAG_member) return;
-    if (!get_num_prop(sym->obj, AT_external, &v) || !v) return;
+    if (decl == NULL) return NULL;
+    if (!(decl->mFlags & DOIF_declaration)) return decl;
     range = elf_find_unit(sym_ctx, sym_ip, sym_ip, NULL);
     if (range != NULL) {
-        obj = range->mUnit->mObject->mChildren;
+        ObjectInfo * obj = range->mUnit->mObject->mChildren;
         while (obj != NULL) {
-            if (obj->mTag == TAG_variable) {
-                if (get_num_prop(obj, AT_specification_v2, &v) && v == sym->obj->mID) {
-                    sym->obj = obj;
-                    return;
+            if (obj->mFlags & DOIF_specification) {
+                U8_T v = 0;
+                if (get_num_prop(obj, AT_specification_v2, &v) && v == decl->mID) {
+                    return obj;
                 }
             }
             obj = obj->mSibling;
         }
     }
+    return decl;
 }
 
 static int find_in_object_tree(ObjectInfo * list, ContextAddress rt_offs, ContextAddress ip, const char * name, Symbol ** sym) {
@@ -407,12 +407,11 @@ static int find_in_object_tree(ObjectInfo * list, ContextAddress rt_offs, Contex
     Symbol * sym_this = NULL; /* Found in 'this' reference */
     ObjectInfo * obj = list;
     while (obj != NULL) {
-        if (obj->mName != NULL) {
-            U8_T v = 0;
+        if (obj->mName != NULL && !(obj->mFlags & DOIF_specification)) {
             if (strcmp(obj->mName, name) == 0) {
                 object2symbol(obj, &sym_cur);
             }
-            if (sym_frame != STACK_NO_FRAME && strcmp(obj->mName, "this") == 0 && get_num_prop(obj, AT_artificial, &v) && v != 0) {
+            if (sym_frame != STACK_NO_FRAME && (obj->mFlags & DOIF_artificial) && strcmp(obj->mName, "this") == 0) {
                 ObjectInfo * type = get_original_type(obj);
                 if ((type->mTag == TAG_pointer_type || type->mTag == TAG_mod_pointer) && type->mType != NULL) {
                     type = get_original_type(type->mType);
@@ -459,7 +458,7 @@ static int find_in_object_tree(ObjectInfo * list, ContextAddress rt_offs, Contex
     if (*sym == NULL) *sym = sym_this;
     if (*sym == NULL) *sym = sym_enu;
     if (*sym == NULL) *sym = sym_imp;
-    if (*sym != NULL && sym_ip != 0) find_definition(*sym);
+    if (*sym != NULL && sym_ip != 0) (*sym)->obj = find_definition((*sym)->obj);
     return *sym != NULL;
 }
 
@@ -1272,9 +1271,8 @@ static void alloc_cardinal_type_pseudo_symbol(Context * ctx, unsigned size, Symb
 }
 
 static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
-    U8_T v = 0;
     int found = 0;
-    if (get_num_prop(obj, AT_external, &v) && v != 0) {
+    if (obj->mFlags & DOIF_external) {
         Trap trap;
         if (set_trap(&trap)) {
             PropertyValue p;
@@ -1322,7 +1320,7 @@ int get_symbol_type(const Symbol * sym, Symbol ** type) {
         *type = (Symbol *)sym;
     }
     else {
-        object2symbol(obj, type);
+        object2symbol(find_definition(obj), type);
     }
     return 0;
 }
@@ -1488,17 +1486,6 @@ int get_symbol_name(const Symbol * sym, char ** name) {
         *name = (char *)constant_pseudo_symbols[(int)sym->length].name;
     }
     else if (sym->obj != NULL) {
-        if (sym->obj->mName == NULL) {
-            U8_T v = 0;
-            if (unpack(sym) < 0) return -1;
-            if (get_num_prop(sym->obj, AT_specification_v2, &v)) {
-                ObjectInfo * spec = find_object(get_dwarf_cache(sym->obj->mCompUnit->mFile), v);
-                if (spec != NULL) {
-                    *name = sym->obj->mName;
-                    return 0;
-                }
-            }
-        }
         *name = sym->obj->mName;
     }
     else if (sym->tbl != NULL) {
@@ -1563,7 +1550,7 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
             }
             while (!ok && obj->mType != NULL) {
                 if (!is_modified_type(obj) && obj->mTag != TAG_enumeration_type) break;
-                obj = obj->mType;
+                obj = find_definition(obj->mType);
                 if (sym->dimension == 0) ok = get_num_prop(obj, AT_byte_size, &sz);
             }
             if (!ok && obj->mTag == TAG_array_type) {
@@ -2169,6 +2156,8 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
     if (unpack(sym) < 0) return -1;
     i = obj;
     while (i != NULL) {
+        if (i->mFlags & DOIF_external) *flags |= SYM_FLAG_EXTERNAL;
+        if (i->mFlags & DOIF_artificial) *flags |= SYM_FLAG_ARTIFICIAL;
         switch (i->mTag) {
         case TAG_subrange_type:
             *flags |= SYM_FLAG_SUBRANGE_TYPE;
@@ -2227,9 +2216,6 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
             if (i->mTag == TAG_formal_parameter) {
                 *flags |= SYM_FLAG_PARAMETER;
                 if (get_num_prop(i, AT_is_optional, &v) && v != 0) *flags |= SYM_FLAG_OPTIONAL;
-            }
-            if (i->mTag == TAG_variable && get_num_prop(obj, AT_external, &v) && v != 0) {
-                *flags |= SYM_FLAG_EXTERNAL;
             }
             if (get_num_prop(i, AT_endianity, &v)) {
                 if (v == DW_END_big) *flags |= SYM_FLAG_BIG_ENDIAN;

@@ -62,6 +62,12 @@ struct FileInfo {
 #define TAG_mod_pointer   0x2002
 #define TAG_mod_reference 0x2003
 
+#define DOIF_declaration        0x0001
+#define DOIF_external           0x0002
+#define DOIF_artificial         0x0004
+#define DOIF_specification      0x0008
+#define DOIF_abstract_origin    0x0010
+
 struct ObjectInfo {
     ObjectInfo * mHashNext;
     ObjectInfo * mSibling;
@@ -70,6 +76,7 @@ struct ObjectInfo {
 
     U8_T mID; /* Link-time debug information entry address: address of .debug_info section + offset in the section */
     U2_T mTag;
+    U2_T mFlags;
     CompUnit * mCompUnit;
     ObjectInfo * mType;
     char * mName;

@@ -199,11 +199,14 @@ static void loc_var_func(void * args, Symbol * sym) {
     void * value = NULL;
     size_t value_size = 0;
     int value_big_endian = 0;
+    char * name = NULL;
 
     if (get_symbol_flags(sym, &flags) < 0) {
         error("get_symbol_flags");
     }
-
+    if (get_symbol_name(sym, &name) < 0) {
+        error("get_symbol_name");
+    }
     if (get_symbol_address(sym, &addr) < 0) {
         int err = errno;
         if ((get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
@@ -215,14 +218,29 @@ static void loc_var_func(void * args, Symbol * sym) {
             error("get_symbol_address");
         }
     }
-    if (get_symbol_size(sym, &size) < 0) {
-        error("get_symbol_size");
-    }
     if (get_symbol_class(sym, &symbol_class) < 0) {
         error("get_symbol_class");
     }
     if (get_symbol_type(sym, &type) < 0) {
         error("get_symbol_type");
+    }
+    if (get_symbol_size(sym, &size) < 0) {
+        int ok = 0;
+        if (name == NULL && type != NULL) {
+            char * type_name;
+            int type_flags;
+            if (get_symbol_name(type, &type_name) < 0) {
+                error("get_symbol_name");
+            }
+            if (get_symbol_flags(type, &type_flags) < 0) {
+                error("get_symbol_flags");
+            }
+            if (type_name != NULL && strcmp(type_name, "exception") == 0 && (type_flags & SYM_FLAG_CLASS_TYPE)) {
+                /* GCC does not tell size of std::exception class */
+                ok = 1;
+            }
+        }
+        if (!ok) error("get_symbol_size");
     }
     if (type != NULL) {
         if (get_symbol_type_class(sym, &type_class) < 0) {
