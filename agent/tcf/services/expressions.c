@@ -21,6 +21,8 @@
  *    where X is object name that can contain any characters.
  * 2. Symbol IDs in expressions: ${X}
  *    where X is symbol ID as returned by symbols service.
+ * 3. CPU registers: $X
+ *    where X is a register name, e.g. $ax
  */
 
 #include <tcf/config.h>
