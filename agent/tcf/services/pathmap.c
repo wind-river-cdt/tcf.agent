@@ -351,7 +351,7 @@ char * apply_path_map(Channel * c, Context * ctx, char * fnm, int mode) {
     }
     else {
         PathMap * m = find_map(c);
-        if (m == NULL) return NULL;
+        if (m == NULL) return fnm;
         return map_file_name(ctx, m, fnm, mode);
     }
     return fnm;

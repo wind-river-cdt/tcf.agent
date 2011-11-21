@@ -992,7 +992,8 @@ static void read_memory_map_item(InputStream * inp, void * args) {
     }
     m = mem_buf + mem_buf_pos;
     memset(m, 0, sizeof(MemoryRegion));
-    if (json_read_struct(inp, read_memory_region_property, m) && m->file_name != NULL) {
+    if (json_read_struct(inp, read_memory_region_property, m) &&
+            m->file_name != NULL && m->file_name[0] != 0) {
         struct stat buf;
         char * fnm = apply_path_map(cache->peer->host, cache->ctx, m->file_name, PATH_MAP_TO_LOCAL);
         if (fnm != m->file_name) {
