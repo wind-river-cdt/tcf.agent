@@ -975,9 +975,8 @@ const char * symbol2id(const Symbol * sym) {
         char base[256];
         assert(sym->ctx == sym->base->ctx);
         assert(sym->frame == STACK_NO_FRAME);
-        assert(sym->sym_class == SYM_CLASS_TYPE || sym->sym_class == SYM_CLASS_VALUE);
         strcpy(base, symbol2id(sym->base));
-        snprintf(id, sizeof(id), "@P%"PRIX64".%s", (uint64_t)sym->length, base);
+        snprintf(id, sizeof(id), "@P%X.%"PRIX64".%s", sym->sym_class, (uint64_t)sym->length, base);
     }
     else {
         ELF_File * file = NULL;
@@ -1050,12 +1049,13 @@ int id2symbol(const char * id, Symbol ** res) {
     *res = sym;
     if (id != NULL && id[0] == '@' && id[1] == 'P') {
         p = id + 2;
+        sym->sym_class = (int)read_hex(&p);
+        if (*p == '.') p++;
         sym->length = (ContextAddress)read_hex(&p);
         if (*p == '.') p++;
         if (id2symbol(p, &sym->base)) return -1;
         sym->ctx = sym->base->ctx;
         sym->frame = STACK_NO_FRAME;
-        sym->sym_class = SYM_CLASS_TYPE;
         return 0;
     }
     else if (id != NULL && id[0] == '@' && id[1] == 'S') {
