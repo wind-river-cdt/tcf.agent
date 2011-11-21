@@ -71,11 +71,15 @@ static event_node * event_queue = NULL;
 static event_node * event_last = NULL;
 static event_node * timer_queue = NULL;
 static event_node * free_queue = NULL;
+static event_node * free_bg_queue = NULL;
+static int free_bg_size = 0;
 static EventCallBack * cancel_handler = NULL;
 static void * cancel_arg = NULL;
 static int process_events = 0;
 
 static int time_cmp(const struct timespec * tv1, const struct timespec * tv2) {
+    assert(tv1->tv_nsec < 1000000000);
+    assert(tv2->tv_nsec < 1000000000);
     if (tv1->tv_sec < tv2->tv_sec) return -1;
     if (tv1->tv_sec > tv2->tv_sec) return 1;
     if (tv1->tv_nsec < tv2->tv_nsec) return -1;
@@ -107,7 +111,15 @@ static void post_from_bg_thread(EventCallBack * handler, void * arg, unsigned lo
         check_error(pthread_mutex_unlock(&event_lock));
         return;
     }
-    ev = (event_node *)loc_alloc_zero(sizeof(event_node));
+    ev = free_bg_queue;
+    assert(ev == NULL ? free_bg_size == 0 : free_bg_size > 0);
+    if (ev != NULL) {
+        free_bg_queue = ev->next;
+        free_bg_size--;
+    }
+    else {
+        ev = (event_node *)loc_alloc(sizeof(event_node));
+    }
     if (clock_gettime(CLOCK_REALTIME, &ev->runtime)) check_error(errno);
     time_add_usec(&ev->runtime, delay);
     ev->handler = handler;
@@ -275,14 +287,23 @@ int is_dispatch_thread(void) {
 
 void ini_events_queue(void) {
     int i;
+    assert(free_queue == NULL);
+    assert(free_bg_queue == NULL);
     event_thread = current_thread;
     check_error(pthread_mutex_init(&event_lock, NULL));
     check_error(pthread_cond_init(&event_cond, NULL));
     check_error(pthread_cond_init(&cancel_cond, NULL));
     for (i = 0; i < EVENT_BUF_SIZE; i++) {
         event_node * ev = event_buf + i;
-        ev->next = free_queue;
-        free_queue = ev;
+        if (i < EVENT_BUF_SIZE / 4) {
+            ev->next = free_bg_queue;
+            free_bg_queue = ev;
+            free_bg_size++;
+        }
+        else {
+            ev->next = free_queue;
+            free_queue = ev;
+        }
     }
 }
 
@@ -303,6 +324,13 @@ void run_event_loop(void) {
 
         if (event_queue == NULL || (event_cnt & 0x3fu) == 0) {
             check_error(pthread_mutex_lock(&event_lock));
+            while (free_queue != NULL && free_bg_size < EVENT_BUF_SIZE / 4) {
+                event_node * x = free_queue;
+                free_queue = x->next;
+                x->next = free_bg_queue;
+                free_bg_queue = x;
+                free_bg_size++;
+            }
             for (;;) {
                 if (timer_queue != NULL) {
                     struct timespec timenow;
