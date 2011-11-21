@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <tcf/framework/mdep-inet.h>
 #include <tcf/framework/myalloc.h>
+#include <tcf/framework/proxy.h>
 #include <tcf/services/pathmap.h>
 
 char * canonic_path_map_file_name(const char * fnm) {
@@ -350,9 +351,22 @@ char * apply_path_map(Channel * c, Context * ctx, char * fnm, int mode) {
         }
     }
     else {
-        PathMap * m = find_map(c);
-        if (m == NULL) return fnm;
-        return map_file_name(ctx, m, fnm, mode);
+        PathMap * m = NULL;
+#if ENABLE_ContextProxy
+        Channel * h = proxy_get_host_channel(c);
+        if (h != NULL) {
+            m = find_map(h);
+            if (m != NULL) {
+                char * lnm = map_file_name(ctx, m, fnm, mode);
+                if (lnm != fnm) return lnm;
+            }
+        }
+#endif
+        m = find_map(c);
+        if (m != NULL) {
+            char * lnm = map_file_name(ctx, m, fnm, mode);
+            if (lnm != fnm) return lnm;
+        }
     }
     return fnm;
 }

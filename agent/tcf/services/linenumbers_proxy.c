@@ -247,9 +247,8 @@ int line_to_address(Context * ctx, char * file, int line, int column,
         cache_wait(&f->cache);
     }
     else if (f->error != NULL) {
-        char msg[FILE_PATH_SIZE + 64];
-        snprintf(msg, sizeof(msg), "Text position '%s:%d' not found", file, line);
-        exception(set_errno(set_error_report_errno(f->error), msg));
+        exception(set_fmt_errno(set_error_report_errno(f->error),
+            "Text position '%s:%d' not found", file, line));
     }
     else {
         int i;

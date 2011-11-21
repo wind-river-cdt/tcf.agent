@@ -78,7 +78,7 @@ extern void iterate_path_map_rules(Channel * channel, IteratePathMapsCallBack * 
 /*
  * Get path mapping rule attributes.
  */
-extern PathMapRuleAttribute * get_path_mapping_attributes(PathMapRule * map);
+extern PathMapRuleAttribute * get_path_mapping_attributes(PathMapRule * rule);
 
 /*
  * Create new path mapping rule with given attributes.
@@ -94,12 +94,12 @@ extern PathMapRule * create_path_mapping(PathMapRuleAttribute * attrs);
  * The function compares existing attributes with new ones,
  * and calls listeners only if attributes are different.
  */
-extern void change_path_mapping_attributes(PathMapRule * map, PathMapRuleAttribute * attrs);
+extern void change_path_mapping_attributes(PathMapRule * rule, PathMapRuleAttribute * attrs);
 
 /*
  * Delete a path mapping rule.
  */
-extern void delete_path_mapping(PathMapRule * bp);
+extern void delete_path_mapping(PathMapRule * rule);
 
 #define PATH_MAP_TO_CLIENT 1
 #define PATH_MAP_TO_LOCAL  2
