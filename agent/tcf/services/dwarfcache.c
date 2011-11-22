@@ -765,11 +765,13 @@ static void get_object_property_callback(U2_T Tag, U2_T Attr, U2_T Form) {
 U8_T get_numeric_property_value(PropertyValue * Value) {
     U8_T Res = 0;
 
-    if (Value->mPieces != NULL || Value->mRegister != NULL) {
-        str_exception(ERR_INV_CONTEXT, "Constant DWARF attribute value expected");
+    if (Value->mPieces != NULL || Value->mRegister != NULL ||
+            (Value->mAddr != NULL && Value->mForm == FORM_EXPR_VALUE)) {
+        str_exception(ERR_INV_DWARF, "Constant DWARF attribute value expected");
     }
     else if (Value->mAddr != NULL) {
         size_t i;
+        if (Value->mSize > 8) str_exception(ERR_INV_DWARF, "Invalid size of DWARF attribute value");
         for (i = 0; i < Value->mSize; i++) {
             Res = (Res << 8) | Value->mAddr[Value->mBigEndian ? i : Value->mSize - i - 1];
         }
@@ -1152,20 +1154,24 @@ static void load_line_numbers_v1(CompUnit * Unit, U4_T unit_size) {
 }
 
 static void load_line_numbers_v2(CompUnit * Unit, U8_T unit_size, int dwarf64) {
+    U2_T version = 0;
     U8_T header_pos = 0;
     U1_T opcode_base = 0;
     U1_T opcode_size[256];
     U8_T header_size = 0;
     U1_T min_instruction_length = 0;
+    U1_T max_ops_per_instruction = 1;
     U1_T is_stmt_default = 0;
     I1_T line_base = 0;
     U1_T line_range = 0;
     LineNumbersState state;
 
-    dio_ReadU2(); /* line info version */
+    version = dio_ReadU2();
+    if (version < 2 || version > 4) str_exception(ERR_INV_DWARF, "Invalid line number info version");
     header_size = dwarf64 ? dio_ReadU8() : (U8_T)dio_ReadU4();
     header_pos = dio_GetPos();
     min_instruction_length = dio_ReadU1();
+    if (version >= 4) max_ops_per_instruction = dio_ReadU1();
     is_stmt_default = dio_ReadU1() != 0;
     line_base = (I1_T)dio_ReadU1();
     line_range = dio_ReadU1();
@@ -1204,10 +1210,13 @@ static void load_line_numbers_v2(CompUnit * Unit, U8_T unit_size, int dwarf64) {
     while (dio_GetPos() < Unit->mLineInfoOffs + unit_size) {
         U1_T opcode = dio_ReadU1();
         if (opcode >= opcode_base) {
-            state.mLine += (unsigned)((int)((opcode - opcode_base) % line_range) + line_base);
-            state.mAddress += (opcode - opcode_base) / line_range * min_instruction_length;
+            unsigned op_advance = (opcode - opcode_base) / line_range;
+            state.mLine += (U4_T)((int)((opcode - opcode_base) % line_range) + line_base);
+            state.mAddress += (state.mOpIndex + op_advance) / max_ops_per_instruction * min_instruction_length;
+            state.mOpIndex = (state.mOpIndex + op_advance) % max_ops_per_instruction;
             add_state(Unit, &state);
             state.mFlags &= ~(LINE_BasicBlock | LINE_PrologueEnd | LINE_EpilogueBegin);
+            state.mDiscriminator = 0;
         }
         else if (opcode == 0) {
             U4_T op_size = dio_ReadULEB128();
@@ -1240,6 +1249,9 @@ static void load_line_numbers_v2(CompUnit * Unit, U8_T unit_size, int dwarf64) {
                     state.mAddress = (ContextAddress)dio_ReadAddress(&s);
                     if (s != Unit->mTextSection) state.mAddress = 0;
                 }
+                break;
+            case DW_LNE_set_discriminator:
+                state.mDiscriminator = dio_ReadULEB128();
                 break;
             default:
                 dio_Skip(op_size - 1);

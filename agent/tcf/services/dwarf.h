@@ -113,6 +113,10 @@
 #define FORM_REF8                   0x0014
 #define FORM_REF_UDATA              0x0015
 #define FORM_INDIRECT               0x0016
+#define FORM_SEC_OFFSET             0x0017 /* v4 */
+#define FORM_EXPRLOC                0x0018 /* v4 */
+#define FORM_FLAG_PRESENT           0x0019 /* v4 */
+#define FORM_REF_SIG8               0x0020 /* v4 */
 
 #define AT_sibling                  0x0001
 #define AT_location                 0x0002
@@ -375,6 +379,8 @@
 #define OP_call_ref                 0x9a
 #define OP_call_frame_cfa           0x9c
 #define OP_bit_piece                0x9d
+#define OP_implicit_value           0x9e /* v4 */
+#define OP_stack_value              0x9f /* v4 */
 #define OP_lo_user                  0xe0
 #define OP_hi_user                  0xff
 
@@ -490,6 +496,7 @@
 #define DW_LNE_end_sequence         1
 #define DW_LNE_set_address          2
 #define DW_LNE_define_file          3
+#define DW_LNE_set_discriminator    4 /* v4 */
 #define DW_LNE_lo_user              0x80  /* v3 */
 #define DW_LNE_hi_user              0xff  /* v3 */
 

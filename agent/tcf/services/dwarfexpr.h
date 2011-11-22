@@ -27,6 +27,9 @@
 
 #include <tcf/services/dwarfcache.h>
 
+/* PropertyValue format for expresson evaluation results */
+#define FORM_EXPR_VALUE 0x00ff
+
 extern void dwarf_evaluate_expression(U8_T base, PropertyValue * value);
 
 #endif /* ENABLE_ELF && ENABLE_DebugContext */

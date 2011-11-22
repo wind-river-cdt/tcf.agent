@@ -42,6 +42,8 @@ typedef struct VMState {
 
     /* Result */
     RegisterDefinition * reg;
+    void * value_addr;
+    size_t value_size;
     uint32_t piece_offs;
     uint32_t piece_bits;
 

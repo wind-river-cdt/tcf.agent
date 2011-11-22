@@ -199,7 +199,13 @@ int line_to_address(Context * ctx, char * file_name, int line, int column,
             h = calc_file_name_hash(fnm);
             while (file != NULL) {
                 Trap trap;
-                /* TODO: support for separate debug info files */
+                if (file->debug_info_file_name != NULL && !file->debug_info_file) {
+                    ELF_File * debug = elf_open(file->debug_info_file_name);
+                    if (debug != NULL) {
+                        debug->debug_info_file = 1;
+                        file = debug;
+                    }
+                }
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(file);
                     ObjectInfo * info = cache->mCompUnits;
@@ -223,6 +229,7 @@ int line_to_address(Context * ctx, char * file_name, int line, int column,
                 }
                 else {
                     err = trap.error;
+                    trace(LOG_ALWAYS, "Cannot load DWARF line numbers section: %s", err);
                     break;
                 }
                 file = elf_list_next(ctx);

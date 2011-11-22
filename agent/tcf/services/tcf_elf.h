@@ -407,7 +407,7 @@ struct ELF_File {
 
     int age;
     int listed;
-    int debug_info_file;
+    int debug_info_file; /* 1 means this file contains debug info only - no code */
     char * debug_info_file_name;
 };
 

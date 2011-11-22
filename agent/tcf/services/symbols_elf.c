@@ -218,6 +218,7 @@ static void object2symbol(ObjectInfo * obj, Symbol ** res) {
     sym->obj = obj;
     switch (obj->mTag) {
     case TAG_global_subroutine:
+    case TAG_inlined_subroutine:
     case TAG_subroutine:
     case TAG_subprogram:
     case TAG_entry_point:
@@ -281,6 +282,7 @@ static ObjectInfo * get_object_type(ObjectInfo * obj) {
     if (obj != NULL) {
         switch (obj->mTag) {
         case TAG_global_subroutine:
+        case TAG_inlined_subroutine:
         case TAG_subroutine:
         case TAG_subprogram:
         case TAG_entry_point:
@@ -435,11 +437,11 @@ static int find_in_object_tree(ObjectInfo * list, ContextAddress rt_offs, Contex
             find_in_object_tree(obj->mChildren, 0, 0, name, &sym_enu);
             break;
         case TAG_global_subroutine:
+        case TAG_inlined_subroutine:
         case TAG_subroutine:
         case TAG_subprogram:
         case TAG_entry_point:
         case TAG_lexical_block:
-        case TAG_inlined_subroutine:
             if (ip != 0 && check_in_range(obj, rt_offs, ip)) {
                 if (find_in_object_tree(obj->mChildren, rt_offs, ip, name, sym)) return 1;
             }
@@ -820,11 +822,11 @@ static int find_by_addr_in_unit(ObjectInfo * obj, int level, ContextAddress rt_o
     while (obj != NULL) {
         switch (obj->mTag) {
         case TAG_global_subroutine:
+        case TAG_inlined_subroutine:
         case TAG_subroutine:
         case TAG_subprogram:
         case TAG_entry_point:
         case TAG_lexical_block:
-        case TAG_inlined_subroutine:
             if (check_in_range(obj, rt_offs, addr)) {
                 object2symbol(obj, res);
                 return 1;
@@ -928,11 +930,11 @@ static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_
     while (obj != NULL) {
         switch (obj->mTag) {
         case TAG_global_subroutine:
+        case TAG_inlined_subroutine:
         case TAG_subroutine:
         case TAG_subprogram:
         case TAG_entry_point:
         case TAG_lexical_block:
-        case TAG_inlined_subroutine:
             if (check_in_range(obj, rt_offs, sym_ip)) {
                 enumerate_local_vars(obj->mChildren, level + 1, rt_offs, call_back, args);
             }
@@ -1350,6 +1352,7 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
     while (obj != NULL) {
         switch (obj->mTag) {
         case TAG_global_subroutine:
+        case TAG_inlined_subroutine:
         case TAG_subroutine:
         case TAG_subprogram:
         case TAG_entry_point:
@@ -1872,7 +1875,7 @@ int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
         *offset = (ContextAddress)v;
         return 0;
     }
-    errno = ERR_INV_CONTEXT;
+    set_errno(ERR_OTHER, "Symbol does not have a member offset");
     return -1;
 }
 
@@ -1932,6 +1935,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         }
         if (set_trap(&trap)) {
             read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, 0, obj, AT_location, &v);
+            assert(v.mForm == FORM_EXPR_VALUE);
             if (v.mPieces != NULL) {
                 U4_T n = 0;
                 U4_T bf_offs = 0;
@@ -1950,6 +1954,9 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
                         RegisterDefinition * def = piece->mRegister;
                         if (get_frame_info(v.mContext, v.mFrame, &frame) < 0) exception(errno);
                         if (read_reg_bytes(frame, def, 0, piece_size, pbf) < 0) exception(errno);
+                    }
+                    else if (piece->mValue) {
+                        memcpy(pbf, piece->mValue, piece_size);
                     }
                     else {
                         if (context_read_mem(v.mContext, piece->mAddress, pbf, piece_size) < 0) exception(errno);
@@ -1993,8 +2000,13 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
                 *size = val_size;
                 *big_endian = def->big_endian;
             }
+            else if (v.mAddr != NULL) {
+                *value = v.mAddr;
+                *size = v.mSize;
+                *big_endian = v.mBigEndian;
+            }
             else {
-                exception(ERR_INV_CONTEXT);
+                str_exception(ERR_OTHER, "Invalid object location data");
             }
             clear_trap(&trap);
             return 0;
@@ -2029,7 +2041,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         *big_endian = big_endian_host();
         return 0;
     }
-    errno = ERR_INV_CONTEXT;
+    set_errno(ERR_OTHER, "Symbol does not have a value");
     return -1;
 }
 
@@ -2120,7 +2132,7 @@ int get_symbol_address(const Symbol * sym, ContextAddress * address) {
         return syminfo2address(sym_ctx, &info, address);
     }
 
-    errno = ERR_INV_CONTEXT;
+    set_errno(ERR_OTHER, "Symbol does not have a memory address");
     return -1;
 }
 

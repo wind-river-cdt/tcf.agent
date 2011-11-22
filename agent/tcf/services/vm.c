@@ -142,6 +142,8 @@ static void set_state(VMState * s) {
     code_pos = state->code_pos;
     code_len = state->code_len;
     state->reg = NULL;
+    state->value_addr = NULL;
+    state->value_size = 0;
     state->piece_offs = 0;
     state->piece_bits = 0;
 }
@@ -549,6 +551,7 @@ static void evaluate_expression(void) {
             state->piece_offs = 0;
             if (code_pos < code_len && state->piece_bits == 0) {
                 if (state->reg) state->reg = NULL;
+                else if (state->value_addr) state->value_addr = NULL;
                 else state->stk_pos--;
             }
             break;
@@ -557,8 +560,34 @@ static void evaluate_expression(void) {
             state->piece_offs = read_u4leb128();
             if (code_pos < code_len && state->piece_bits == 0) {
                 if (state->reg) state->reg = NULL;
+                else if (state->value_addr) state->value_addr = NULL;
                 else state->stk_pos--;
                 state->piece_offs = 0;
+            }
+            break;
+        case OP_implicit_value:
+            state->value_size = read_u4leb128();
+            if (code_pos + state->value_size > code_len) inv_dwarf("Invalid command");
+            state->value_addr = tmp_alloc(state->value_size);
+            memcpy(state->value_addr, code + code_pos, state->value_size);
+            code_pos += state->value_size;
+            if (code_pos < code_len && code[code_pos] != OP_piece) inv_dwarf("OP_implicit_value must be last instruction");
+            break;
+        case OP_stack_value:
+            check_e_stack(1);
+            state->stk_pos--;
+            state->value_size = sizeof(uint64_t);
+            state->value_addr = tmp_alloc(state->value_size);
+            memcpy(state->value_addr, state->stk + state->stk_pos, state->value_size);
+            if (code_pos < code_len && code[code_pos] != OP_piece) inv_dwarf("OP_stack_value must be last instruction");
+            if (big_endian_host() != state->big_endian) {
+                size_t i, j, n = state->value_size >> 1;
+                char * p = (char *)state->value_addr;
+                for (i = 0, j = state->value_size - 1; i < n; i++, j--) {
+                    char x = p[i];
+                    p[i] = p[j];
+                    p[j] = x;
+                }
             }
             break;
         case OP_call2:

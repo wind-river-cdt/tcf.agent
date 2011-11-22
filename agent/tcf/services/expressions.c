@@ -593,7 +593,7 @@ static void set_value_endianness(Value * v, Symbol * sym, Symbol * type) {
 }
 
 /* Note: sym2value() does NOT set v->size if v->sym != NULL */
-static int sym2value(Symbol * sym, Value * v) {
+static int sym2value(int mode, Symbol * sym, Value * v) {
     int sym_class = 0;
     memset(v, 0, sizeof(Value));
     if (get_symbol_class(sym, &sym_class) < 0) {
@@ -624,7 +624,7 @@ static int sym2value(Symbol * sym, Value * v) {
         }
         break;
     case SYM_CLASS_REFERENCE:
-        if (get_symbol_address(sym, &v->address) < 0) {
+        if (mode == MODE_NORMAL && get_symbol_address(sym, &v->address) < 0) {
             int endianness = 0;
             size_t size = 0;
             void * value = NULL;
@@ -647,16 +647,16 @@ static int sym2value(Symbol * sym, Value * v) {
         }
         else {
             set_value_endianness(v, sym, v->type);
-            v->sym = sym;
             v->remote = 1;
         }
+        v->sym = sym;
         break;
     case SYM_CLASS_FUNCTION:
         {
             ContextAddress word = 0;
             v->type_class = TYPE_CLASS_CARDINAL;
             if (v->type != NULL) get_array_symbol(v->type, 0, &v->type);
-            if (get_symbol_address(sym, &word) < 0) {
+            if (mode == MODE_NORMAL && get_symbol_address(sym, &word) < 0) {
                 error(errno, "Cannot retrieve symbol address");
             }
             set_ctx_word_value(v, word);
@@ -671,7 +671,7 @@ static int sym2value(Symbol * sym, Value * v) {
 }
 #endif
 
-static int identifier(Value * scope, char * name, Value * v) {
+static int identifier(int mode, Value * scope, char * name, Value * v) {
     int i;
     memset(v, 0, sizeof(Value));
     if (scope == NULL) {
@@ -710,7 +710,7 @@ static int identifier(Value * scope, char * name, Value * v) {
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) error(errno, "Cannot read symbol data");
         }
         else {
-            return sym2value(sym, v);
+            return sym2value(mode, sym, v);
         }
     }
 #elif ENABLE_RCBP_TEST
@@ -733,7 +733,7 @@ static int qualified_name(int mode, Value * scope, Value * v) {
     for (;;) {
         if (text_sy != SY_NAME) error(ERR_INV_EXPRESSION, "Identifier expected");
         if (mode != MODE_SKIP) {
-            sym_class = identifier(scope, (char *)text_val.value, v);
+            sym_class = identifier(mode, scope, (char *)text_val.value, v);
             if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
         }
         else {
@@ -818,7 +818,7 @@ static int type_name(int mode, Symbol ** type) {
         next_sy();
     }
     while (text_sy == SY_NAME);
-    sym_class = identifier(NULL, name, &v);
+    sym_class = identifier(mode, NULL, name, &v);
     if (sym_class < 0) return 0;
     if (text_sy == SY_SCOPE) {
         Value scope = v;
@@ -1108,7 +1108,7 @@ static void primary_expression(int mode, Value * v) {
             if (!ok) {
                 Symbol * sym = NULL;
                 if (id2symbol(id, &sym) >= 0) {
-                    int sym_class = sym2value(sym, v);
+                    int sym_class = sym2value(mode, sym, v);
                     if (sym_class == SYM_CLASS_TYPE) error(ERR_INV_EXPRESSION, "Illegal usage of type '%s'", id);
                     ok = 1;
                 }
@@ -1224,7 +1224,7 @@ static void op_field(int mode, Value * v) {
             v->type_class = TYPE_CLASS_CARDINAL;
             get_symbol_type(sym, &v->type);
             if (v->type != NULL) get_array_symbol(v->type, 0, &v->type);
-            if (get_symbol_address(sym, &word) < 0) {
+            if (mode == MODE_NORMAL && get_symbol_address(sym, &word) < 0) {
                 error(errno, "Cannot retrieve symbol address");
             }
             set_ctx_word_value(v, word);
@@ -2618,6 +2618,14 @@ static void command_evaluate_cache_client(void * x) {
             json_write_string(&c->out, "Type");
             write_stream(&c->out, ':');
             json_write_string(&c->out, symbol2id(value.type));
+            cnt++;
+        }
+
+        if (value.sym != NULL) {
+            if (cnt > 0) write_stream(&c->out, ',');
+            json_write_string(&c->out, "Symbol");
+            write_stream(&c->out, ':');
+            json_write_string(&c->out, symbol2id(value.sym));
             cnt++;
         }
 #endif

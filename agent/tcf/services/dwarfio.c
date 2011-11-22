@@ -412,27 +412,33 @@ void dio_ReadAttribute(U2_T Attr, U2_T Form) {
         return;
     }
     switch (Form) {
-    case FORM_ADDR      : dio_ReadFormAddr(); break;
-    case FORM_REF       : dio_ReadFormRef(); break;
-    case FORM_BLOCK1    : dio_ReadFormBlock(dio_ReadU1()); break;
-    case FORM_BLOCK2    : dio_ReadFormBlock(dio_ReadU2()); break;
-    case FORM_BLOCK4    : dio_ReadFormBlock(dio_ReadU4()); break;
-    case FORM_BLOCK     : dio_ReadFormBlock(dio_ReadULEB128()); break;
-    case FORM_DATA1     : dio_ReadFormData(1, dio_ReadU1()); break;
-    case FORM_DATA2     : dio_ReadFormData(2, dio_ReadU2()); break;
-    case FORM_DATA4     : dio_ReadFormData(4, dio_ReadU4()); break;
-    case FORM_DATA8     : dio_ReadFormData(8, dio_ReadU8()); break;
-    case FORM_SDATA     : dio_ReadFormData(8, dio_ReadS8LEB128()); dio_gFormDataAddr = NULL; break;
-    case FORM_UDATA     : dio_ReadFormData(8, dio_ReadU8LEB128()); dio_gFormDataAddr = NULL; break;
-    case FORM_FLAG      : dio_ReadFormData(1, dio_ReadU1()); break;
-    case FORM_STRING    : dio_ReadFormString(); break;
-    case FORM_STRP      : dio_ReadFormStringRef(); break;
-    case FORM_REF_ADDR  : dio_ReadFormRefAddr(); break;
-    case FORM_REF1      : dio_ReadFormRelRef(dio_ReadU1()); break;
-    case FORM_REF2      : dio_ReadFormRelRef(dio_ReadU2()); break;
-    case FORM_REF4      : dio_ReadFormRelRef(dio_ReadU4()); break;
-    case FORM_REF8      : dio_ReadFormRelRef(dio_ReadU8()); break;
-    case FORM_REF_UDATA : dio_ReadFormRelRef(dio_ReadULEB128()); break;
+    case FORM_ADDR          : dio_ReadFormAddr(); break;
+    case FORM_REF           : dio_ReadFormRef(); break;
+    case FORM_BLOCK1        : dio_ReadFormBlock(dio_ReadU1()); break;
+    case FORM_BLOCK2        : dio_ReadFormBlock(dio_ReadU2()); break;
+    case FORM_BLOCK4        : dio_ReadFormBlock(dio_ReadU4()); break;
+    case FORM_BLOCK         : dio_ReadFormBlock(dio_ReadULEB128()); break;
+    case FORM_DATA1         : dio_ReadFormData(1, dio_ReadU1()); break;
+    case FORM_DATA2         : dio_ReadFormData(2, dio_ReadU2()); break;
+    case FORM_DATA4         : dio_ReadFormData(4, dio_ReadU4()); break;
+    case FORM_DATA8         : dio_ReadFormData(8, dio_ReadU8()); break;
+    case FORM_SDATA         : dio_ReadFormData(8, dio_ReadS8LEB128()); dio_gFormDataAddr = NULL; break;
+    case FORM_UDATA         : dio_ReadFormData(8, dio_ReadU8LEB128()); dio_gFormDataAddr = NULL; break;
+    case FORM_FLAG          : dio_ReadFormData(1, dio_ReadU1()); break;
+    case FORM_FLAG_PRESENT  : dio_ReadFormData(0, 1); break;
+    case FORM_STRING        : dio_ReadFormString(); break;
+    case FORM_STRP          : dio_ReadFormStringRef(); break;
+    case FORM_REF_ADDR      : dio_ReadFormRefAddr(); break;
+    case FORM_REF1          : dio_ReadFormRelRef(dio_ReadU1()); break;
+    case FORM_REF2          : dio_ReadFormRelRef(dio_ReadU2()); break;
+    case FORM_REF4          : dio_ReadFormRelRef(dio_ReadU4()); break;
+    case FORM_REF8          : dio_ReadFormRelRef(dio_ReadU8()); break;
+    case FORM_REF_UDATA     : dio_ReadFormRelRef(dio_ReadULEB128()); break;
+    case FORM_SEC_OFFSET:   if (sUnit->m64bit) dio_ReadFormData(8, dio_ReadU8());
+                            else dio_ReadFormData(4, dio_ReadU4());
+                            break;
+    case FORM_EXPRLOC       : dio_ReadFormBlock(dio_ReadULEB128()); break;
+    case FORM_REF_SIG8      : dio_ReadFormData(8, dio_ReadU8()); break;
     default: str_exception(ERR_INV_DWARF, "invalid FORM");
     }
 }
@@ -504,27 +510,31 @@ int dio_ReadEntry(DIO_EntryCallBack CallBack, U2_T TargetAttr) {
                 break;
             default:
                 switch (Form) {
-                case FORM_ADDR      : sDataPos += sAddressSize; continue;
-                case FORM_REF       : sDataPos += 4; continue;
-                case FORM_BLOCK1    : sDataPos += dio_ReadU1F(); continue;
-                case FORM_BLOCK2    : sDataPos += dio_ReadU2(); continue;
-                case FORM_BLOCK4    : sDataPos += dio_ReadU4(); continue;
-                case FORM_BLOCK     : sDataPos += dio_ReadULEB128(); continue;
-                case FORM_DATA1     : sDataPos++; continue;
-                case FORM_DATA2     : sDataPos += 2; continue;
-                case FORM_DATA4     : sDataPos += 4; continue;
-                case FORM_DATA8     : sDataPos += 8; continue;
-                case FORM_SDATA     : dio_ReadS8LEB128(); continue;
-                case FORM_UDATA     : dio_ReadU8LEB128(); continue;
-                case FORM_FLAG      : sDataPos++; continue;
-                case FORM_STRING    : dio_ReadFormString(); continue;
-                case FORM_STRP      : sDataPos += (sUnit->m64bit ? 8 : 4); continue;
-                case FORM_REF_ADDR  : sDataPos += sRefAddressSize; continue;
-                case FORM_REF1      : sDataPos++; continue;
-                case FORM_REF2      : sDataPos += 2; continue;
-                case FORM_REF4      : sDataPos += 4; continue;
-                case FORM_REF8      : sDataPos += 8; continue;
-                case FORM_REF_UDATA : dio_ReadULEB128(); continue;
+                case FORM_ADDR          : sDataPos += sAddressSize; continue;
+                case FORM_REF           : sDataPos += 4; continue;
+                case FORM_BLOCK1        : sDataPos += dio_ReadU1F(); continue;
+                case FORM_BLOCK2        : sDataPos += dio_ReadU2(); continue;
+                case FORM_BLOCK4        : sDataPos += dio_ReadU4(); continue;
+                case FORM_BLOCK         : sDataPos += dio_ReadULEB128(); continue;
+                case FORM_DATA1         : sDataPos++; continue;
+                case FORM_DATA2         : sDataPos += 2; continue;
+                case FORM_DATA4         : sDataPos += 4; continue;
+                case FORM_DATA8         : sDataPos += 8; continue;
+                case FORM_SDATA         : dio_ReadS8LEB128(); continue;
+                case FORM_UDATA         : dio_ReadU8LEB128(); continue;
+                case FORM_FLAG          : sDataPos++; continue;
+                case FORM_FLAG_PRESENT  : continue;
+                case FORM_STRING        : dio_ReadFormString(); continue;
+                case FORM_STRP          : sDataPos += (sUnit->m64bit ? 8 : 4); continue;
+                case FORM_REF_ADDR      : sDataPos += sRefAddressSize; continue;
+                case FORM_REF1          : sDataPos++; continue;
+                case FORM_REF2          : sDataPos += 2; continue;
+                case FORM_REF4          : sDataPos += 4; continue;
+                case FORM_REF8          : sDataPos += 8; continue;
+                case FORM_REF_UDATA     : dio_ReadULEB128(); continue;
+                case FORM_SEC_OFFSET    : sDataPos += (sUnit->m64bit ? 8 : 4); continue;
+                case FORM_EXPRLOC       : sDataPos += dio_ReadULEB128(); continue;
+                case FORM_REF_SIG8      : sDataPos += 8; continue;
                 }
             }
         }
@@ -694,7 +704,8 @@ static void dio_FindAbbrevTable(void) {
 
 void dio_ChkFlag(U2_T Form) {
     switch (Form) {
-    case FORM_FLAG      :
+    case FORM_FLAG          :
+    case FORM_FLAG_PRESENT  :
         return;
     }
     str_exception(ERR_INV_DWARF, "FORM_FLAG expected");

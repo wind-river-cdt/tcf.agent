@@ -130,6 +130,7 @@ struct PropertyValuePiece {
     int mBigEndian;
     ContextAddress mAddress;
     RegisterDefinition * mRegister;
+    U1_T * mValue;
     U4_T mBitOffset;
     U4_T mBitSize;
 };
@@ -164,6 +165,8 @@ struct LineNumbersState {
     U2_T mColumn;
     U1_T mFlags;
     U1_T mISA;
+    U1_T mOpIndex;
+    U1_T mDiscriminator;
 };
 
 struct CompUnit {
@@ -266,7 +269,10 @@ extern UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ContextA
  */
 extern void read_and_evaluate_dwarf_object_property(Context * ctx, int frame, U8_T base, ObjectInfo * obj, U2_T attr_tag, PropertyValue * value);
 
-/* Convert PropertyValue to a number */
+/*
+ * Convert PropertyValue to a number.
+ * Note: result of location expression evaluation can be converted only if the expression represents a memory address.
+ */
 extern U8_T get_numeric_property_value(PropertyValue * Value);
 
 /*

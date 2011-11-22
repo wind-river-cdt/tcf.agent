@@ -98,6 +98,7 @@ static ObjectInfo * get_parent_function(ObjectInfo * Info) {
     while (Info != NULL) {
         switch (Info->mTag) {
         case TAG_global_subroutine:
+        case TAG_inlined_subroutine:
         case TAG_subroutine:
         case TAG_subprogram:
         case TAG_entry_point:
@@ -204,6 +205,11 @@ static void evaluate_expression(ELF_Section * Section, U1_T * Buf, size_t Size) 
                 Piece->mRegister = sState.reg;
                 Piece->mBigEndian = sState.reg->big_endian;
             }
+            else if (sState.value_addr) {
+                Piece->mValue = (U1_T *)sState.value_addr;
+                if (sState.value_size * 8 < sState.piece_bits) str_exception(ERR_INV_DWARF, "Invalid object piece size");
+                Piece->mBigEndian = sState.big_endian;
+            }
             else {
                 Piece->mAddress = sState.stk[--sState.stk_pos];
                 Piece->mBigEndian = sState.big_endian;
@@ -304,6 +310,7 @@ void dwarf_evaluate_expression(U8_T BaseAddress, PropertyValue * v) {
         evaluate_expression(Unit->mDesc.mSection, sValue->mAddr, sValue->mSize);
     }
 
+    sValue->mForm = FORM_EXPR_VALUE;
     sValue->mAddr = NULL;
     sValue->mValue = 0;
     sValue->mSize = 0;
@@ -320,6 +327,11 @@ void dwarf_evaluate_expression(U8_T BaseAddress, PropertyValue * v) {
         sValue->mSize = sState.reg->size;
         sValue->mBigEndian = sState.reg->big_endian;
         sValue->mRegister = sState.reg;
+    }
+    else if (sState.value_addr) {
+        sValue->mAddr = (U1_T *)sState.value_addr;
+        sValue->mSize = sState.value_size;
+        sValue->mBigEndian = sState.big_endian;
     }
     else {
         sValue->mValue = sState.stk[--sState.stk_pos];
