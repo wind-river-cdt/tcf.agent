@@ -98,8 +98,6 @@ struct Symbol {
     ContextAddress address;
 };
 
-#include <tcf/services/symbols_alloc.h>
-
 typedef struct SymbolCacheEntry {
     struct SymbolCacheEntry * next;
     ULONG64 pc;
@@ -123,6 +121,14 @@ static size_t context_extension_offset = 0;
 
 static char * tmp_buf = NULL;
 static int tmp_buf_size = 0;
+
+#define SYMBOL_MAGIC 0x34875234
+
+static Symbol * alloc_symbol(void) {
+    Symbol * s = (Symbol *)tmp_alloc_zero(sizeof(Symbol));
+    s->magic = SYMBOL_MAGIC;
+    return s;
+}
 
 static int get_stack_frame(Context * ctx, int frame, ContextAddress ip, IMAGEHLP_STACK_FRAME * stack_frame) {
     memset(stack_frame, 0, sizeof(IMAGEHLP_STACK_FRAME));

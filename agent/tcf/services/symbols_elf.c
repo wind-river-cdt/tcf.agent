@@ -68,8 +68,6 @@ struct Symbol {
 #define is_cardinal_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base == NULL)
 #define is_constant_pseudo_symbol(s) (s->sym_class == SYM_CLASS_VALUE && s->obj == NULL && s->base != NULL)
 
-#include <tcf/services/symbols_alloc.h>
-
 static Context * sym_ctx;
 static int sym_frame;
 static ContextAddress sym_ip;
@@ -110,6 +108,14 @@ static struct BaseTypeAlias {
     { "char", "unsigned char" },
     { NULL, NULL }
 };
+
+#define SYMBOL_MAGIC 0x34875234
+
+static Symbol * alloc_symbol(void) {
+    Symbol * s = (Symbol *)tmp_alloc_zero(sizeof(Symbol));
+    s->magic = SYMBOL_MAGIC;
+    return s;
+}
 
 static int get_sym_context(Context * ctx, int frame, ContextAddress addr) {
     if (frame == STACK_NO_FRAME) {

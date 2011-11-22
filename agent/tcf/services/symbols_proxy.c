@@ -166,11 +166,17 @@ struct Symbol {
     SymInfoCache * cache;
 };
 
-#include <tcf/services/symbols_alloc.h>
-
 static LINK root = TCF_LIST_INIT(root);
 
 static const char * SYMBOLS = "Symbols";
+
+#define SYMBOL_MAGIC 0x34875234
+
+static Symbol * alloc_symbol(void) {
+    Symbol * s = (Symbol *)tmp_alloc_zero(sizeof(Symbol));
+    s->magic = SYMBOL_MAGIC;
+    return s;
+}
 
 static unsigned hash_sym_id(const char * id) {
     int i;

@@ -46,15 +46,6 @@
 #include <tcf/services/registers.h>
 #include <tcf/main/test.h>
 
-#define STR_POOL_SIZE (64 * MEM_USAGE_FACTOR)
-
-struct StringValue {
-    struct StringValue * next;
-    char buf[1];
-};
-
-typedef struct StringValue StringValue;
-
 #define SY_LEQ   256
 #define SY_GEQ   257
 #define SY_EQU   258
@@ -97,10 +88,6 @@ static Value text_val;
 /* Host endianness */
 static int big_endian = 0;
 
-static char str_pool[STR_POOL_SIZE];
-static int str_pool_cnt = 0;
-static StringValue * str_alloc_list = NULL;
-
 static Context * expression_context = NULL;
 static int expression_frame = STACK_NO_FRAME;
 static ContextAddress expression_addr = 0;
@@ -108,20 +95,6 @@ static ContextAddress expression_addr = 0;
 #define MAX_ID_CALLBACKS 8
 static ExpressionIdentifierCallBack * id_callbacks[MAX_ID_CALLBACKS];
 static int id_callback_cnt = 0;
-
-static void * alloc_str(size_t size) {
-    if (str_pool_cnt + size <= STR_POOL_SIZE) {
-        char * s = str_pool + str_pool_cnt;
-        str_pool_cnt += size;
-        return s;
-    }
-    else {
-        StringValue * s = (StringValue *)loc_alloc(sizeof(StringValue) + size - 1);
-        s->next = str_alloc_list;
-        str_alloc_list = s;
-        return s->buf;
-    }
-}
 
 void set_value(Value * v, void * data, size_t size, int big_endian) {
     v->sym = NULL;
@@ -131,7 +104,7 @@ void set_value(Value * v, void * data, size_t size, int big_endian) {
     v->function = 0;
     v->size = (ContextAddress)size;
     v->big_endian = big_endian;
-    v->value = alloc_str(size);
+    v->value = tmp_alloc(size);
     if (data == NULL) memset(v->value, 0, size);
     else memcpy(v->value, data, size);
 }
@@ -264,7 +237,7 @@ static void set_string_text_val(int pos, int len, int in_quotes) {
     memset(&text_val, 0, sizeof(text_val));
     text_val.type_class = TYPE_CLASS_ARRAY;
     text_val.size = len + 1;
-    text_val.value = alloc_str((size_t)text_val.size);
+    text_val.value = tmp_alloc((size_t)text_val.size);
     text_val.constant = 1;
     text_pos = pos - 1;
     next_ch();
@@ -645,7 +618,7 @@ static int sym2value(Symbol * sym, Value * v) {
             v->constant = 1;
             v->size = size;
             if (value != NULL) {
-                v->value = alloc_str(size);
+                v->value = tmp_alloc(size);
                 memcpy(v->value, value, size);
             }
         }
@@ -668,7 +641,7 @@ static int sym2value(Symbol * sym, Value * v) {
             v->big_endian = endianness;
             v->size = size;
             if (value != NULL) {
-                v->value = alloc_str(size);
+                v->value = tmp_alloc(size);
                 memcpy(v->value, value, size);
             }
         }
@@ -887,7 +860,7 @@ static void load_value(Value * v) {
     v->reg = NULL;
     if (v->remote) {
         size_t size = (size_t)v->size;
-        void * buf = alloc_str(size);
+        void * buf = tmp_alloc(size);
         assert(!v->constant);
         if (context_read_mem(expression_context, v->address, buf, size) < 0) {
             error(errno, "Can't read variable value");
@@ -925,7 +898,7 @@ static void to_host_endianness(Value * v) {
     if (v->big_endian != big_endian) {
         size_t i = 0;
         size_t n = (size_t)v->size;
-        uint8_t * buf = (uint8_t *)alloc_str(n);
+        uint8_t * buf = (uint8_t *)tmp_alloc(n);
         for (i = 0; i < n; i++) {
             buf[i] = ((uint8_t *)v->value)[n - i - 1];
         }
@@ -941,7 +914,7 @@ static int64_t to_int(int mode, Value * v) {
         v->sym = NULL;
         v->reg = NULL;
         if (v->remote) {
-            v->value = alloc_str((size_t)v->size);
+            v->value = tmp_alloc_zero((size_t)v->size);
             v->remote = 0;
         }
         return 0;
@@ -994,7 +967,7 @@ static uint64_t to_uns(int mode, Value * v) {
         v->sym = NULL;
         v->reg = NULL;
         if (v->remote) {
-            v->value = alloc_str((size_t)v->size);
+            v->value = tmp_alloc_zero((size_t)v->size);
             v->remote = 0;
         }
         return 0;
@@ -1050,7 +1023,7 @@ static double to_double(int mode, Value * v) {
         v->sym = NULL;
         v->reg = NULL;
         if (v->remote) {
-            v->value = alloc_str((size_t)v->size);
+            v->value = tmp_alloc_zero((size_t)v->size);
             v->remote = 0;
         }
         return 0;
@@ -1199,7 +1172,7 @@ static void find_field(Symbol * sym, ContextAddress offs, const char * name, Sym
             error(errno, "Cannot retrieve field name");
         }
         if (s == NULL) {
-            if (inheritance == NULL) inheritance = (Symbol **)alloc_str(sizeof(Symbol *) * count);
+            if (inheritance == NULL) inheritance = (Symbol **)tmp_alloc(sizeof(Symbol *) * count);
             inheritance[h++] = children[i];
         }
         else if (strcmp(s, name) == 0) {
@@ -1738,14 +1711,14 @@ static void additive_expression(int mode, Value * v) {
                 if (mode == MODE_TYPE) {
                     v->remote = 0;
                     v->size = 0;
-                    v->value = alloc_str((size_t)v->size);
+                    v->value = tmp_alloc_zero((size_t)v->size);
                 }
                 else {
                     char * value;
                     load_value(v);
                     load_value(&x);
                     v->size = strlen((char *)v->value) + strlen((char *)x.value) + 1;
-                    value = (char *)alloc_str((size_t)v->size);
+                    value = (char *)tmp_alloc((size_t)v->size);
                     strcpy(value, (const char *)(v->value));
                     strcat(value, (const char *)(x.value));
                     v->value = value;
@@ -2102,12 +2075,6 @@ static int evaluate_type(Context * ctx, int frame, ContextAddress addr, char * s
     expression_frame = frame;
     expression_addr = addr;
     if (!set_trap(&trap)) return -1;
-    str_pool_cnt = 0;
-    while (str_alloc_list != NULL) {
-        StringValue * str = str_alloc_list;
-        str_alloc_list = str->next;
-        loc_free(str);
-    }
     text = s;
     text_pos = 0;
     text_len = strlen(s) + 1;
@@ -2127,12 +2094,6 @@ int evaluate_expression(Context * ctx, int frame, ContextAddress addr, char * s,
     expression_addr = addr;
     if (!set_trap(&trap)) return -1;
     if (s == NULL || *s == 0) str_exception(ERR_INV_EXPRESSION, "Empty expression");
-    str_pool_cnt = 0;
-    while (str_alloc_list != NULL) {
-        StringValue * str = str_alloc_list;
-        str_alloc_list = str->next;
-        loc_free(str);
-    }
     text = s;
     text_pos = 0;
     text_len = strlen(s) + 1;

@@ -31,4 +31,11 @@ extern char * loc_strndup(const char * s, size_t len);
 
 extern void loc_free(const void * p);
 
+/*
+ * Allocate memory that can be used only during single dispatch cycle.
+ * Such blocks are freed automaticaly at the end of the cycle.
+ */
+extern void * tmp_alloc(size_t size);
+extern void * tmp_alloc_zero(size_t size);
+
 #endif /* D_myalloc */

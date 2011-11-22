@@ -18,9 +18,61 @@
  */
 
 #include <tcf/config.h>
+#include <assert.h>
 #include <string.h>
 #include <tcf/framework/trace.h>
+#include <tcf/framework/events.h>
 #include <tcf/framework/myalloc.h>
+
+#define TMP_POOL_SIZE (0x400 * MEM_USAGE_FACTOR)
+
+typedef struct TmpBuffer TmpBuffer;
+
+struct TmpBuffer {
+    TmpBuffer * next;
+    char buf[1];
+};
+
+static char tmp_pool[TMP_POOL_SIZE];
+static int tmp_pool_pos = 0;
+static TmpBuffer * tmp_alloc_list = NULL;
+static int tmp_gc_posted = 0;
+
+static void tmp_gc(void * args) {
+    tmp_gc_posted = 0;
+    while (tmp_alloc_list != NULL) {
+        TmpBuffer * buf = tmp_alloc_list;
+        tmp_alloc_list = buf->next;
+        loc_free(buf);
+    }
+    tmp_pool_pos = 0;
+}
+
+void * tmp_alloc(size_t size) {
+    void * p = NULL;
+    assert(is_dispatch_thread());
+    if (!tmp_gc_posted) {
+        post_event(tmp_gc, NULL);
+        tmp_gc_posted = 1;
+    }
+    if (tmp_pool_pos + size <= TMP_POOL_SIZE) {
+        p = tmp_pool + tmp_pool_pos;
+        tmp_pool_pos += size;
+    }
+    else {
+        TmpBuffer * s = (TmpBuffer *)loc_alloc(sizeof(TmpBuffer) + size - 1);
+        s->next = tmp_alloc_list;
+        tmp_alloc_list = s;
+        p = s->buf;
+    }
+    return p;
+}
+
+void * tmp_alloc_zero(size_t size) {
+    void * p = tmp_alloc(size);
+    memset(p, 0, size);
+    return p;
+}
 
 void * loc_alloc(size_t size) {
     void * p;

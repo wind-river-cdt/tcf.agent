@@ -608,10 +608,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\tcf\services\symbols_alloc.h"
-				>
-			</File>
-			<File
 				RelativePath=".\tcf\services\symbols_elf.c"
 				>
 			</File>
