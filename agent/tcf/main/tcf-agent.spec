@@ -24,6 +24,7 @@ which provides TCF services that can be used by local and remote clients.
 
 %prep
 rm -rf $RPM_BUILD_ROOT
+
 %setup
 
 %build
@@ -36,7 +37,9 @@ make %{make_options} install INSTALLROOT=$RPM_BUILD_ROOT SBIN=%{_sbindir} INCLUD
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 
 %post
-%{_sbindir}/tcf-agent -c
+if [ ! -r /etc/tcf/ssl/local.priv -o ! -r /etc/tcf/ssl/local.cert ] ; then
+  %{_sbindir}/tcf-agent -c
+fi
 chkconfig --add %{name}
 /sbin/service %{name} start > /dev/null 2>&1 || :
 
