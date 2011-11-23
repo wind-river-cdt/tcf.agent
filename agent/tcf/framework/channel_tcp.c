@@ -774,11 +774,26 @@ static ChannelTCP * create_channel(int sock, int en_ssl, int server, int unix_do
     if (en_ssl) {
 #if ENABLE_SSL
         if (ssl_ctx == NULL) {
+            int err = 0;
             const char * agent_id = get_agent_id();
+            unsigned char buf[SSL_MAX_SSL_SESSION_ID_LENGTH];
+            unsigned buf_pos = 0;
+
             ini_ssl();
             ssl_ctx = SSL_CTX_new(SSLv23_method());
             SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, certificate_verify_callback);
-            SSL_CTX_set_session_id_context(ssl_ctx, (unsigned char *)agent_id, strlen(agent_id));
+            while (buf_pos < sizeof(buf) && *agent_id) {
+                if (*agent_id != '-') buf[buf_pos++] = *agent_id;
+                agent_id++;
+            }
+            if (!SSL_CTX_set_session_id_context(ssl_ctx, buf, buf_pos)) err = set_ssl_errno();
+            if (err) {
+                SSL_CTX_free(ssl_ctx);
+                ssl_ctx = NULL;
+                trace(LOG_ALWAYS, "Cannot create SSL context: %s", errno_to_str(err));
+                set_errno(err, "Cannot create SSL context");
+                return NULL;
+            }
         }
 
         if (ssl_cert == NULL) {
