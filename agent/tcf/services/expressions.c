@@ -2215,32 +2215,31 @@ static int symbol_to_expression(char * expr_id, char * parent, char * sym_id, Ex
     Symbol * sym = NULL;
     Symbol * type = NULL;
     int sym_class = 0;
-    static char script[256];
-    static Expression expr;
+    size_t script_len = strlen(sym_id) + 8;
+    char * script = (char *)tmp_alloc(script_len);
+    Expression * expr = (Expression *)tmp_alloc_zero(sizeof(Expression));
 
-    memset(&expr, 0, sizeof(Expression));
-
-    strlcpy(expr.id, expr_id, sizeof(expr.id));
-    strlcpy(expr.var_id, sym_id, sizeof(expr.var_id));
-    strlcpy(expr.parent, parent, sizeof(expr.parent));
+    strlcpy(expr->id, expr_id, sizeof(expr->id));
+    strlcpy(expr->var_id, sym_id, sizeof(expr->var_id));
+    strlcpy(expr->parent, parent, sizeof(expr->parent));
 
     if (id2symbol(sym_id, &sym) < 0) return -1;
 
-    snprintf(script, sizeof(script), "${%s}", sym_id);
-    expr.script = script;
+    snprintf(script, script_len, "${%s}", sym_id);
+    expr->script = script;
 
-    get_symbol_type_class(sym, &expr.type_class);
-    get_symbol_size(sym, &expr.size);
+    get_symbol_type_class(sym, &expr->type_class);
+    get_symbol_size(sym, &expr->size);
 
     if (get_symbol_class(sym, &sym_class) == 0) {
-        expr.can_assign = sym_class == SYM_CLASS_REFERENCE;
+        expr->can_assign = sym_class == SYM_CLASS_REFERENCE;
     }
 
     if (get_symbol_type(sym, &type) == 0 && type != NULL) {
-        strlcpy(expr.type, symbol2id(type), sizeof(expr.type));
+        strlcpy(expr->type, symbol2id(type), sizeof(expr->type));
     }
 
-    *res = &expr;
+    *res = expr;
     return 0;
 #else
     errno = ERR_UNSUPPORTED;

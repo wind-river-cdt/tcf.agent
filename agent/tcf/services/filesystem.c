@@ -748,8 +748,8 @@ static void command_write(char * token, Channel * c) {
     size_t len = 0;
     JsonReadBinaryState state;
 
-    static size_t buf_size = 0;
-    static char * buf = NULL;
+    size_t buf_size = 0;
+    char * buf = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
@@ -758,14 +758,11 @@ static void command_write(char * token, Channel * c) {
 
     json_read_binary_start(&state, &c->inp);
 
+    buf_size = len + BUF_SIZE;
+    buf = (char *)tmp_alloc(buf_size);
     h = find_open_file_info(id);
     for (;;) {
-        size_t rd;
-        if (buf_size < len + BUF_SIZE) {
-            buf_size += BUF_SIZE;
-            buf = (char *)loc_realloc(buf, buf_size);
-        }
-        rd = json_read_binary_data(&state, buf + len, buf_size - len);
+        size_t rd = json_read_binary_data(&state, buf + len, buf_size - len);
         if (rd == 0) break;
         len += rd;
     }

@@ -180,15 +180,13 @@ static void ini_ssl(void) {
     {
         WCHAR fnm[MAX_PATH];
         char buf[MAX_PATH];
-        static char sbuf[MAX_PATH];
         if (SHGetFolderPathW(0, CSIDL_WINDOWS, NULL, 0, fnm) != S_OK) {
             check_error(set_errno(ERR_OTHER, "Cannot get WINDOWS folder path"));
         }
         if (!WideCharToMultiByte(CP_UTF8, 0, fnm, -1, buf, sizeof(buf), NULL, NULL)) {
             check_error(set_win32_errno(GetLastError()));
         }
-        snprintf(sbuf, sizeof(sbuf), "%s/TCF", buf);
-        tcf_dir = sbuf;
+        tcf_dir = loc_strdup2(buf, "/TCF");
     }
 #endif
 }

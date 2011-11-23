@@ -24,28 +24,43 @@
 #include <tcf/framework/events.h>
 #include <tcf/framework/myalloc.h>
 
-#define TMP_POOL_SIZE (0x400 * MEM_USAGE_FACTOR)
-
 typedef struct TmpBuffer TmpBuffer;
 
 struct TmpBuffer {
     TmpBuffer * next;
-    char buf[1];
 };
 
-static char tmp_pool[TMP_POOL_SIZE];
-static int tmp_pool_pos = 0;
+static char * tmp_pool = NULL;
+static unsigned tmp_pool_pos = 0;
+static unsigned tmp_pool_max = 0;
+static unsigned tmp_pool_avr = 0;
+static unsigned tmp_alloc_size = 0;
 static TmpBuffer * tmp_alloc_list = NULL;
 static int tmp_gc_posted = 0;
 
 static void tmp_gc(void * args) {
-    tmp_gc_posted = 0;
-    while (tmp_alloc_list != NULL) {
-        TmpBuffer * buf = tmp_alloc_list;
-        tmp_alloc_list = buf->next;
-        loc_free(buf);
+    if (tmp_alloc_list != NULL) {
+        tmp_pool_max += tmp_pool_max > tmp_alloc_size ? tmp_pool_max : tmp_alloc_size;
+        tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
+        while (tmp_alloc_list != NULL) {
+            TmpBuffer * buf = tmp_alloc_list;
+            tmp_alloc_list = buf->next;
+            loc_free(buf);
+        }
     }
+    if (tmp_pool_pos + tmp_alloc_size >= tmp_pool_avr) {
+        tmp_pool_avr = tmp_pool_pos + tmp_alloc_size;
+    }
+    else if (tmp_pool_avr > 0) {
+        tmp_pool_avr--;
+    }
+    if (tmp_pool_avr < tmp_pool_max / 4) {
+        tmp_pool_max /= 2;
+        tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
+    }
+    tmp_gc_posted = 0;
     tmp_pool_pos = 0;
+    tmp_alloc_size = 0;
 }
 
 void * tmp_alloc(size_t size) {
@@ -55,15 +70,16 @@ void * tmp_alloc(size_t size) {
         post_event(tmp_gc, NULL);
         tmp_gc_posted = 1;
     }
-    if (tmp_pool_pos + size <= TMP_POOL_SIZE) {
+    if (tmp_pool_pos + size <= tmp_pool_max) {
         p = tmp_pool + tmp_pool_pos;
-        tmp_pool_pos += size;
+        tmp_pool_pos += (size + 7) & ~7u;
     }
     else {
-        TmpBuffer * s = (TmpBuffer *)loc_alloc(sizeof(TmpBuffer) + size - 1);
-        s->next = tmp_alloc_list;
-        tmp_alloc_list = s;
-        p = s->buf;
+        TmpBuffer * buf = (TmpBuffer *)loc_alloc(sizeof(TmpBuffer) + size);
+        buf->next = tmp_alloc_list;
+        tmp_alloc_list = buf;
+        tmp_alloc_size += size;
+        p = buf + 1;
     }
     return p;
 }
