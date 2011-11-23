@@ -99,17 +99,17 @@ install: all
 	install -c $(BINDIR)/agent -m 755 $(INSTALLROOT)$(SBIN)/tcf-agent
 	install -c $(BINDIR)/client -m 755 $(INSTALLROOT)$(SBIN)/tcf-client
 	install -c tcf/main/tcf-agent.init -m 755 $(INSTALLROOT)$(INIT)/tcf-agent
-	install -c config.h -m 755 $(INSTALLROOT)$(INCLUDE)/tcf/config.h
-	install -c -t $(INSTALLROOT)$(INCLUDE)/tcf/framework -m 644 framework/*.h
-	install -c -t $(INSTALLROOT)$(INCLUDE)/tcf/services -m 644 services/*.h
+	install -c tcf/config.h -m 755 $(INSTALLROOT)$(INCLUDE)/tcf/config.h
+	install -c -t $(INSTALLROOT)$(INCLUDE)/tcf/framework -m 644 tcf/framework/*.h
+	install -c -t $(INSTALLROOT)$(INCLUDE)/tcf/services -m 644 tcf/services/*.h
 
 ALLFILES = Makefile* *.html *.sln *.vcproj *.h bin tcf
 
 tcf-agent-$(VERSION).tar.bz2: $(HFILES) $(CFILES) Makefile Makefile.inc \
-			      main/tcf-agent.spec main/tcf-agent.init
+			      tcf/main/tcf-agent.spec tcf/main/tcf-agent.init
 	rm -rf tcf-agent-$(VERSION) tcf-agent-$(VERSION).tar.bz2
 	mkdir tcf-agent-$(VERSION)
-	tar c --exclude "*.svn" $(ALLFILES) | tar x -C tcf-agent-$(VERSION)
+	tar c $(ALLFILES) | tar x -C tcf-agent-$(VERSION)
 	tar cjf tcf-agent-$(VERSION).tar.bz2 tcf-agent-$(VERSION)
 	rm -rf tcf-agent-$(VERSION)
 
