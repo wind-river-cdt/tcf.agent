@@ -30,7 +30,8 @@
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/exceptions.h>
 #include <tcf/services/symbols.h>
-#include <tcf/machine/cpudefs-ext.h>
+
+#include <tcf/framework/cpudefs-ext.h>
 
 int read_reg_value(StackFrame * frame, RegisterDefinition * reg_def, uint64_t * value) {
     uint8_t buf[8];

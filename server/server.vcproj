@@ -247,6 +247,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\agent\tcf\services\dwarfreloc-ext.h"
+				>
+			</File>
+			<File
 				RelativePath="..\agent\tcf\services\dwarfreloc.c"
 				>
 			</File>
@@ -403,6 +407,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\framework\cpudefs-ext.h"
+				>
+			</File>
+			<File
 				RelativePath="..\agent\tcf\framework\cpudefs.c"
 				>
 			</File>
@@ -540,25 +548,13 @@
 			</File>
 		</Filter>
 		<Filter
-			Name="machine"
-			>
-			<File
-				RelativePath=".\tcf\machine\cpudefs-ext.h"
-				>
-			</File>
-			<File
-				RelativePath="..\agent\tcf\machine\elf-mdep.h"
-				>
-			</File>
-		</Filter>
-		<Filter
 			Name="system"
 			>
 			<Filter
 				Name="Windows"
 				>
 				<File
-					RelativePath="..\agent\tcf\system\Windows\pthreads-win32.c"
+					RelativePath="..\agent\system\Windows\tcf\pthreads-win32.c"
 					>
 				</File>
 			</Filter>

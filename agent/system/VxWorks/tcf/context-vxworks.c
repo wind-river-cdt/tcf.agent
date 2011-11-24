@@ -36,7 +36,7 @@
 #include <tcf/framework/signames.h>
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/memorymap.h>
-#include <tcf/system/VxWorks/context-vxworks.h>
+#include <system/VxWorks/tcf/context-vxworks.h>
 
 /* TODO: VxWorks RTP support */
 
@@ -61,7 +61,7 @@ static size_t context_extension_offset = 0;
 
 #define EXT(ctx) ((ContextExtensionVxWorks *)((char *)(ctx) + context_extension_offset))
 
-#include <tcf/system/pid-hash.h>
+#include <tcf/framework/pid-hash.h>
 
 #define EVENT_HOOK_BREAKPOINT   2
 #define EVENT_HOOK_STEP_DONE    3

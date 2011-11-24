@@ -39,7 +39,7 @@
 #include <tcf/framework/waitpid.h>
 #include <tcf/framework/signames.h>
 #include <tcf/services/breakpoints.h>
-#include <tcf/system/Darwin/regset.h>
+#include <system/Darwin/tcf/regset.h>
 
 #define WORD_SIZE   4
 
@@ -65,7 +65,7 @@ static size_t context_extension_offset = 0;
 
 #define EXT(ctx) ((ContextExtensionDarwin *)((char *)(ctx) + context_extension_offset))
 
-#include <tcf/system/pid-hash.h>
+#include <tcf/framework/pid-hash.h>
 
 static LINK pending_list = TCF_LIST_INIT(pending_list);
 

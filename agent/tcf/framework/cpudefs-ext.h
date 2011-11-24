@@ -20,7 +20,7 @@
  * If it is not the case, this file needs to be substituted with alternative implementation.
  */
 
-#include <cpudefs-mdep.h>
+#include <tcf/cpudefs-mdep.h>
 
 struct RegisterData {
     REG_SET data;

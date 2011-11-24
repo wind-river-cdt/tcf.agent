@@ -45,7 +45,7 @@
 				AdditionalOptions="/Oy-"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".;tcf/system/Windows;tcf/machine/x86_64"
+				AdditionalIncludeDirectories=".;system/Windows;machine/x86_64"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -134,7 +134,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;tcf/system/Windows;tcf/machine/x86_64"
+				AdditionalIncludeDirectories=".;system/Windows;machine/x86_64"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				RuntimeLibrary="1"
@@ -260,6 +260,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\framework\cpudefs-ext.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\framework\cpudefs.c"
 				>
 			</File>
@@ -357,6 +361,10 @@
 			</File>
 			<File
 				RelativePath=".\tcf\framework\peer.h"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\framework\pid-hash.h"
 				>
 			</File>
 			<File
@@ -799,39 +807,35 @@
 		<Filter
 			Name="system"
 			>
-			<File
-				RelativePath=".\tcf\system\pid-hash.h"
-				>
-			</File>
 			<Filter
 				Name="Windows"
 				>
 				<File
-					RelativePath=".\tcf\system\Windows\context-win32.c"
+					RelativePath=".\system\Windows\tcf\context-win32.c"
 					>
 				</File>
 				<File
-					RelativePath=".\tcf\system\Windows\context-win32.h"
+					RelativePath=".\system\Windows\tcf\context-win32.h"
 					>
 				</File>
 				<File
-					RelativePath=".\tcf\system\Windows\pthreads-win32.c"
+					RelativePath=".\system\Windows\tcf\pthreads-win32.c"
 					>
 				</File>
 				<File
-					RelativePath=".\tcf\system\Windows\pthreads-win32.h"
+					RelativePath=".\system\Windows\tcf\pthreads-win32.h"
 					>
 				</File>
 				<File
-					RelativePath=".\tcf\system\Windows\regset.h"
+					RelativePath=".\system\Windows\tcf\regset.h"
 					>
 				</File>
 				<File
-					RelativePath=".\tcf\system\Windows\windbgcache.c"
+					RelativePath=".\system\Windows\tcf\windbgcache.c"
 					>
 				</File>
 				<File
-					RelativePath=".\tcf\system\Windows\windbgcache.h"
+					RelativePath=".\system\Windows\tcf\windbgcache.h"
 					>
 				</File>
 			</Filter>
@@ -842,7 +846,7 @@
 					Name="Linux"
 					>
 					<File
-						RelativePath=".\tcf\system\GNU\Linux\context-linux.c"
+						RelativePath=".\system\GNU\Linux\tcf\context-linux.c"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
@@ -862,7 +866,7 @@
 						</FileConfiguration>
 					</File>
 					<File
-						RelativePath=".\tcf\system\GNU\Linux\regset.h"
+						RelativePath=".\system\GNU\Linux\tcf\regset.h"
 						>
 					</File>
 				</Filter>
@@ -871,7 +875,7 @@
 				Name="Darwin"
 				>
 				<File
-					RelativePath=".\tcf\system\Darwin\context-darwin.c"
+					RelativePath=".\system\Darwin\tcf\context-darwin.c"
 					>
 					<FileConfiguration
 						Name="Release|Win32"
@@ -891,7 +895,7 @@
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath=".\tcf\system\Darwin\regset.h"
+					RelativePath=".\system\Darwin\tcf\regset.h"
 					>
 				</File>
 			</Filter>
@@ -899,7 +903,7 @@
 				Name="FreeBSD"
 				>
 				<File
-					RelativePath=".\tcf\system\FreeBSD\context-freebsd.c"
+					RelativePath=".\system\FreeBSD\tcf\context-freebsd.c"
 					>
 					<FileConfiguration
 						Name="Release|Win32"
@@ -919,7 +923,7 @@
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath=".\tcf\system\FreeBSD\regset.h"
+					RelativePath=".\system\FreeBSD\tcf\regset.h"
 					>
 				</File>
 			</Filter>
@@ -927,7 +931,7 @@
 				Name="VxWorks"
 				>
 				<File
-					RelativePath=".\tcf\system\VxWorks\context-vxworks.c"
+					RelativePath=".\system\VxWorks\tcf\context-vxworks.c"
 					>
 					<FileConfiguration
 						Name="Release|Win32"
@@ -947,11 +951,11 @@
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath=".\tcf\system\VxWorks\context-vxworks.h"
+					RelativePath=".\system\VxWorks\tcf\context-vxworks.h"
 					>
 				</File>
 				<File
-					RelativePath=".\tcf\system\VxWorks\regset.h"
+					RelativePath=".\system\VxWorks\tcf\regset.h"
 					>
 				</File>
 			</Filter>
@@ -959,7 +963,7 @@
 				Name="Cygwin"
 				>
 				<File
-					RelativePath=".\tcf\system\Cygwin\regset.h"
+					RelativePath=".\system\Cygwin\tcf\regset.h"
 					>
 				</File>
 			</Filter>
@@ -967,7 +971,7 @@
 				Name="Msys"
 				>
 				<File
-					RelativePath=".\tcf\system\Msys\regset.h"
+					RelativePath=".\system\Msys\tcf\regset.h"
 					>
 				</File>
 			</Filter>
@@ -975,15 +979,11 @@
 		<Filter
 			Name="machine"
 			>
-			<File
-				RelativePath=".\tcf\machine\cpudefs-ext.h"
-				>
-			</File>
 			<Filter
 				Name="x86_64"
 				>
 				<File
-					RelativePath=".\tcf\machine\x86_64\cpudefs-mdep.h"
+					RelativePath=".\machine\x86_64\tcf\cpudefs-mdep.h"
 					>
 				</File>
 			</Filter>

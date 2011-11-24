@@ -37,7 +37,7 @@
 #include <tcf/framework/waitpid.h>
 #include <tcf/framework/signames.h>
 #include <tcf/services/breakpoints.h>
-#include <tcf/system/FreeBSD/regset.h>
+#include <system/FreeBSD/tcf/regset.h>
 
 #define PTRACE_TRACEME    PT_TRACE_ME
 #define PTRACE_ATTACH     PT_ATTACH
@@ -72,7 +72,7 @@ static size_t context_extension_offset = 0;
 
 #define EXT(ctx) ((ContextExtensionBSD *)((char *)(ctx) + context_extension_offset))
 
-#include <tcf/system/pid-hash.h>
+#include <tcf/framework/pid-hash.h>
 
 static LINK pending_list = TCF_LIST_INIT(pending_list);
 

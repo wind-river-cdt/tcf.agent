@@ -46,7 +46,7 @@ typedef struct ElfRelocateFunc {
     void (*func)(void);
 } ElfRelocateFunc;
 
-#include <tcf/machine/elf-mdep.h>
+#include <tcf/services/dwarfreloc-ext.h>
 
 static void relocate(void * r) {
     ElfRelocateFunc * func;

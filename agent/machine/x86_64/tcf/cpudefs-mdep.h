@@ -28,7 +28,7 @@
 
 #if defined(__i386__) || defined(__x86_64__)
 
-#include <regset.h>
+#include <tcf/regset.h>
 
 #define REG_OFFSET(name) offsetof(REG_SET, name)
 

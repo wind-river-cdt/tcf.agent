@@ -33,8 +33,8 @@
 #include <tcf/services/symbols.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/memorymap.h>
-#include <tcf/system/Windows/windbgcache.h>
-#include <tcf/system/Windows/context-win32.h>
+#include <system/Windows/tcf/windbgcache.h>
+#include <system/Windows/tcf/context-win32.h>
 #if ENABLE_RCBP_TEST
 #  include <tcf/main/test.h>
 #endif

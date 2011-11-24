@@ -45,3 +45,10 @@ tests/test-dwarf/*.plt
 tests/test-dwarf/*.suo
 tests/test-dwarf/*.user
 
+# tests/cmd-line/
+tests/cmd-line/obj
+tests/cmd-line/*.ncb
+tests/cmd-line/*.opt
+tests/cmd-line/*.plt
+tests/cmd-line/*.suo
+tests/cmd-line/*.user

@@ -20,7 +20,7 @@
 #include <assert.h>
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/errors.h>
-#include <tcf/system/Windows/pthreads-win32.h>
+#include <system/Windows/tcf/pthreads-win32.h>
 
 /*********************************************************************
     Support of pthreads on Windows is implemented according to

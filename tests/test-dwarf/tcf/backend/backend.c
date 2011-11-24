@@ -228,7 +228,7 @@ static void loc_var_func(void * args, Symbol * sym) {
         int ok = 0;
         if (name == NULL && type != NULL) {
             char * type_name;
-            int type_flags;
+            unsigned type_flags;
             if (get_symbol_name(type, &type_name) < 0) {
                 error("get_symbol_name");
             }

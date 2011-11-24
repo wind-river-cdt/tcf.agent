@@ -31,8 +31,8 @@
 #include <tcf/framework/context.h>
 #include <tcf/framework/exceptions.h>
 #include <tcf/services/linenumbers.h>
-#include <tcf/system/Windows/windbgcache.h>
-#include <tcf/system/Windows/context-win32.h>
+#include <system/Windows/tcf/windbgcache.h>
+#include <system/Windows/tcf/context-win32.h>
 
 int line_to_address(Context * ctx, char * file, int line, int column,
                     LineNumbersCallBack * callback, void * user_args) {

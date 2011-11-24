@@ -7,8 +7,8 @@ ifndef MACHINE
   MACHINE := $(shell uname -m)
 endif
 
-INCDIRS = . tcf/system/$(OPSYS) tcf/machine/$(MACHINE)
-SRCDIRS = $(INCDIRS) tcf/system tcf/framework tcf/services tcf/main
+INCDIRS = . system/$(OPSYS) machine/$(MACHINE)
+SRCDIRS = . system/$(OPSYS)/tcf machine/$(MACHINE)/tcf tcf/framework tcf/services tcf/main
 BINDIR  = obj/$(OPSYS)/$(MACHINE)/$(CONF)
 
 MKDIR   = mkdir -p $(1)
@@ -132,18 +132,18 @@ OFILES = $(addprefix $(BINDIR)/,$(addsuffix $(EXTOBJ),$(basename $(filter-out ma
 EXECS  = $(addprefix $(BINDIR)/,agent$(EXTEXE) client$(EXTEXE) tcfreg$(EXTEXE) valueadd$(EXTEXE) tcflog$(EXTEXE))
 
 ifeq ($(OPSYS),Cygwin)
-  CFILES += tcf/system/Windows/pthreads-win32.c
-  CFILES += tcf/system/Windows/context-win32.c
+  CFILES += system/Windows/tcf/pthreads-win32.c
+  CFILES += system/Windows/tcf/context-win32.c
 endif
 
 ifeq ($(OPSYS),Msys)
-  CFILES += tcf/system/Windows/pthreads-win32.c
-  CFILES += tcf/system/Windows/context-win32.c
+  CFILES += system/Windows/tcf/pthreads-win32.c
+  CFILES += system/Windows/tcf/context-win32.c
 endif
 
 ifeq ($(OPSYS),MinGW)
-  CFILES += tcf/system/Windows/pthreads-win32.c
-  CFILES += tcf/system/Windows/context-win32.c
+  CFILES += system/Windows/tcf/pthreads-win32.c
+  CFILES += system/Windows/tcf/context-win32.c
 endif
 
 ifdef SERVICES

@@ -44,7 +44,7 @@
 #include <tcf/services/memorymap.h>
 #include <tcf/services/runctrl.h>
 #include <tcf/services/tcf_elf.h>
-#include <tcf/system/GNU/Linux/regset.h>
+#include <system/GNU/Linux/tcf/regset.h>
 
 #if !defined(PTRACE_SETOPTIONS)
 #define PTRACE_SETOPTIONS       0x4200
@@ -105,7 +105,7 @@ static size_t context_extension_offset = 0;
 
 #define EXT(ctx) ((ContextExtensionLinux *)((char *)(ctx) + context_extension_offset))
 
-#include <tcf/system/pid-hash.h>
+#include <tcf/framework/pid-hash.h>
 
 static LINK pending_list = TCF_LIST_INIT(pending_list);
 static LINK detach_list = TCF_LIST_INIT(detach_list);

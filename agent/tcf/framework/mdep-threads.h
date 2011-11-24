@@ -26,7 +26,7 @@
 #ifdef DISABLE_PTHREADS_WIN32
 #  include <pthread.h>
 #else
-#  include <tcf/system/Windows/pthreads-win32.h>
+#  include <system/Windows/tcf/pthreads-win32.h>
 #endif
 
 #elif defined(_WRS_KERNEL)

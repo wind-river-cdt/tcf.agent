@@ -33,7 +33,7 @@
 #include <tcf/services/diagnostics.h>
 #include <tcf/main/test.h>
 #if defined(WIN32)
-#  include <tcf/system/Windows/context-win32.h>
+#  include <system/Windows/tcf/context-win32.h>
 #endif
 
 #ifdef __cplusplus

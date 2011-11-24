@@ -37,9 +37,9 @@
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/memorymap.h>
 #include <tcf/services/runctrl.h>
-#include <tcf/system/Windows/context-win32.h>
-#include <tcf/system/Windows/regset.h>
-#include <tcf/system/Windows/windbgcache.h>
+#include <system/Windows/tcf/context-win32.h>
+#include <system/Windows/tcf/regset.h>
+#include <system/Windows/tcf/windbgcache.h>
 
 #if !defined(USE_HW_BPS)
 #  define USE_HW_BPS 1
@@ -123,7 +123,7 @@ static unsigned exception_handler_cnt = 0;
 
 static MemoryErrorInfo mem_err_info;
 
-#include <tcf/system/pid-hash.h>
+#include <tcf/framework/pid-hash.h>
 
 #define EXCEPTION_DEBUGGER_IO 0x406D1388
 

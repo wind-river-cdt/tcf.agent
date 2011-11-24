@@ -15,7 +15,7 @@
 
 
 #define elf_relocate elf_relocate_i386
-#include <tcf/machine/i386/elf-mdep.h>
+#include <machine/i386/tcf/dwarfreloc-mdep.h>
 #undef elf_relocate
 
 static ElfRelocateFunc elf_relocate_funcs[] = {

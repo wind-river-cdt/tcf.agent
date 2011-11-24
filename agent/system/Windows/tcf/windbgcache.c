@@ -33,8 +33,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <wchar.h>
-#include <tcf/system/Windows/windbgcache.h>
-#include <tcf/system/Windows/context-win32.h>
+#include <system/Windows/tcf/windbgcache.h>
+#include <system/Windows/tcf/context-win32.h>
 #include <tcf/framework/trace.h>
 #include <tcf/framework/myalloc.h>
 #include <tcf/services/memorymap.h>
