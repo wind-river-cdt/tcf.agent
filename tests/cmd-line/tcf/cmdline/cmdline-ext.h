@@ -13,7 +13,9 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
-#ifndef D_cmdline
-#define D_cmdline
+#ifndef D_cmdline_ext
+#define D_cmdline_ext
 
-#endif D_cmdline
+extern void ini_cmdline_extension(void);
+
+#endif /* D_cmdline_ext */

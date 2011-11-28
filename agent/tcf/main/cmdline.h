@@ -36,6 +36,10 @@ extern void ini_cmdline_handler(int mode, Protocol * proto);
 extern void set_single_command(int keep_alive, const char * host, const char * command);
 extern void open_script_file(const char * script_name);
 
+typedef int CmdLineHandler(char *);
+extern int add_cmdline_cmd(const char * cmd_name, const char * cmd_desc, CmdLineHandler * hnd);
+extern void done_cmdline_cmd(int error);
+
 #else /* ENABLE_Cmdline */
 
 #define cmdline_suspend() 0

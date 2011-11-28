@@ -410,7 +410,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\agent\tcf\main\services-ext.h"
+				RelativePath=".\tcf\main\services-ext.h"
 				>
 			</File>
 			<File
@@ -690,11 +690,11 @@
 			Name="cmdline"
 			>
 			<File
-				RelativePath=".\tcf\cmdline\cmdline.c"
+				RelativePath=".\tcf\cmdline\cmdline-ext.c"
 				>
 			</File>
 			<File
-				RelativePath=".\tcf\cmdline\cmdline.h"
+				RelativePath=".\tcf\cmdline\cmdline-ext.h"
 				>
 			</File>
 		</Filter>

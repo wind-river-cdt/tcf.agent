@@ -36,6 +36,7 @@
 #include <tcf/framework/trace.h>
 #include <tcf/framework/channel.h>
 #include <tcf/framework/plugins.h>
+#include <tcf/framework/exceptions.h>
 #include <tcf/main/cmdline.h>
 
 struct CmdDesc {
@@ -267,10 +268,19 @@ static void event_cmd_line(void * arg) {
         for (cp = 0; cp < cmd_count; ++cp) {
             len = strlen(cmds[cp].cmd);
             if (strncmp(s, cmds[cp].cmd, len) == 0 && (s[len] == 0 || isspace((int)s[len]))) {
+                Trap trap;
                 s += len;
                 while (*s && isspace((int)*s)) s++;
-                delayed = cmds[cp].hnd(s);
-                if (delayed != 1 || delayed != 0) error = delayed;
+                if (set_trap(&trap)) {
+                    delayed = cmds[cp].hnd(s);
+                    if (delayed < 0) error = errno;
+                    if (delayed > 1) error = delayed;
+                    clear_trap(&trap);
+                }
+                else {
+                    error = trap.error;
+                    fprintf(stderr, "Unhandled exception: %s\n", errno_to_str(trap.error));
+                }
                 break;
             }
         }
@@ -280,7 +290,7 @@ static void event_cmd_line(void * arg) {
             for (cp = 0; cp < cmd_count; ++cp) {
                 fprintf(stderr, "  %-10s - %s\n", cmds[cp].cmd, cmds[cp].help);
             }
-            error = 1;
+            error = ERR_INV_COMMAND;
         }
     }
     loc_free(arg);
@@ -310,7 +320,7 @@ static void cmd_done_event(void * arg) {
 }
 
 static void cmd_done(int error) {
-    last_error = error;
+    last_error = get_error_code(error);
     post_event(cmd_done_event, NULL);
 }
 
@@ -326,6 +336,8 @@ static void * interactive_handler(void * x) {
             continue;
         }
         if (mode_flag == 1) {
+            fflush(stdout);
+            fflush(stderr);
             printf("> ");
             fflush(stdout);
         }
@@ -395,16 +407,16 @@ void set_single_command(int keep_alive, const char * host, const char * command)
     single_command = loc_strdup(command);
 }
 
-static int add_cmdline_cmd(const char * cmd_name, const char * cmd_desc,
-        int (*hnd)(char *)) {
+int add_cmdline_cmd(const char * cmd_name, const char * cmd_desc, CmdLineHandler * hnd) {
     size_t i;
+
     assert(is_dispatch_thread());
-    if (!cmd_name || !cmd_desc || !hnd) return -EINVAL;
+    if (!cmd_name || !cmd_desc || !hnd) return -(errno = EINVAL);
 
     /* Check if the cmd name already exists */
-    for (i = 0; i < cmd_count; ++i)
-        if (!strcmp(cmd_name, cmds[i].cmd))
-            return -EEXIST;
+    for (i = 0; i < cmd_count; ++i) {
+        if (!strcmp(cmd_name, cmds[i].cmd)) return -(errno = EEXIST);
+    }
 
     cmds = (struct CmdDesc *)loc_realloc(cmds, ++cmd_count * sizeof(struct CmdDesc));
 
@@ -415,16 +427,20 @@ static int add_cmdline_cmd(const char * cmd_name, const char * cmd_desc,
     return 0;
 }
 
+void done_cmdline_cmd(int error) {
+    cmd_done(error);
+}
+
 #if ENABLE_Plugins
 static int add_connect_callback(PluginCallBack hnd){
     size_t i;
     assert(is_dispatch_thread());
-    if (!hnd) return -EINVAL;
+    if (!hnd) return -(errno = EINVAL);
 
     /* Check if the handle already exists */
     for (i = 0; i < connect_hnd_count; ++i)
         if (hnd == connect_hnds[i])
-            return -EEXIST;
+            return -(errno = EEXIST);
 
     connect_hnds = (PluginCallBack *)loc_realloc(connect_hnds, ++connect_hnd_count * sizeof(PluginCallBack));
     connect_hnds[connect_hnd_count - 1] = hnd;
@@ -435,12 +451,12 @@ static int add_connect_callback(PluginCallBack hnd){
 static int add_disconnect_callback(PluginCallBack hnd) {
     size_t i;
     assert(is_dispatch_thread());
-    if (!hnd) return -EINVAL;
+    if (!hnd) return -(errno = EINVAL);
 
     /* Check if the handle already exists */
     for (i = 0; i < disconnect_hnd_count; ++i)
         if (hnd == disconnect_hnds[i])
-            return -EEXIST;
+            return -(errno = EEXIST);
 
     disconnect_hnds = (PluginCallBack *)loc_realloc(disconnect_hnds, ++disconnect_hnd_count * sizeof(PluginCallBack));
     disconnect_hnds[disconnect_hnd_count - 1] = hnd;

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -13,5 +13,14 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
-#include <tcf/config.h>
-#include <tcf/cmdline/cmdline.h>
+/*
+ * Services initialization code extension point.
+ * If the agent is built with additional user-defined services,
+ * a customized version of services-ext.h file can be added to compiler headers search path.
+ */
+
+#include <tcf/cmdline/cmdline-ext.h>
+
+static void ini_ext_services(Protocol * proto, TCFBroadcastGroup * bcg) {
+    ini_cmdline_extension();
+}
