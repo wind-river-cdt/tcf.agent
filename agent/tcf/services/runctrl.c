@@ -163,7 +163,9 @@ static void write_context(OutputStream * out, Context * ctx) {
     json_write_string(out, "CanResume");
     write_stream(out, ':');
     modes = 0;
-    for (md = 0; md < RM_TERMINATE; md++) {
+    for (md = 0; md < RM_UNDEF; md++) {
+        if (md == RM_DETACH) continue;
+        if (md == RM_TERMINATE) continue;
         if (context_can_resume(ctx, md)) modes |= 1 << md;
     }
     if (!has_state) {
@@ -217,6 +219,13 @@ static void write_context(OutputStream * out, Context * ctx) {
     if (context_can_resume(ctx, RM_TERMINATE)) {
         write_stream(out, ',');
         json_write_string(out, "CanTerminate");
+        write_stream(out, ':');
+        json_write_boolean(out, 1);
+    }
+
+    if (context_can_resume(ctx, RM_DETACH)) {
+        write_stream(out, ',');
+        json_write_string(out, "CanDetach");
         write_stream(out, ':');
         json_write_boolean(out, 1);
     }
@@ -756,6 +765,63 @@ static void command_terminate(char * token, Channel * c) {
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
     if (terminate_debug_context(id2ctx(id)) != 0) err = errno;
+
+    send_simple_result(c, token, err);
+}
+
+static void detach_context_tree(Context * ctx) {
+    if (ctx->exited) return;
+    if (context_can_resume(ctx, RM_DETACH)) {
+        ContextExtensionRC * ext = EXT(ctx);
+        cancel_step_mode(ctx);
+        ctx->pending_intercept = 0;
+        ext->step_mode = RM_DETACH;
+        resume_context_tree(ctx);
+    }
+    else {
+        LINK * l = ctx->children.next;
+        while (l != &ctx->children) {
+            Context * x = cldl2ctxp(l);
+            detach_context_tree(x);
+            l = l->next;
+        }
+    }
+}
+
+static void event_detach(void * args) {
+    Context * ctx = (Context *)args;
+    detach_context_tree(ctx);
+    context_unlock(ctx);
+}
+
+int detach_debug_context(Context * ctx) {
+    int err = 0;
+    if (ctx == NULL) {
+        err = ERR_INV_CONTEXT;
+    }
+    else if (ctx->exited) {
+        err = ERR_ALREADY_EXITED;
+    }
+    else {
+        context_lock(ctx);
+        post_safe_event(ctx, event_detach, ctx);
+    }
+    if (err) {
+        errno = err;
+        return -1;
+    }
+    return 0;
+}
+
+static void command_detach(char * token, Channel * c) {
+    char id[256];
+    int err = 0;
+
+    json_read_string(&c->inp, id, sizeof(id));
+    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+
+    if (detach_debug_context(id2ctx(id)) != 0) err = errno;
 
     send_simple_result(c, token, err);
 }
@@ -1373,8 +1439,8 @@ static void sync_run_state() {
             Context * grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
             EXT(grp)->intercept_group = 0;
         }
-        else if (ext->step_mode == RM_TERMINATE) {
-            context_resume(ctx, RM_TERMINATE, 0, 0);
+        else if (ext->step_mode == RM_TERMINATE || ext->step_mode == RM_DETACH) {
+            context_resume(ctx, ext->step_mode, 0, 0);
         }
         l = l->next;
     }
@@ -1393,7 +1459,8 @@ static void sync_run_state() {
             EXT(grp)->intercept_group = 1;
             continue;
         }
-        if (ext->step_mode == RM_RESUME || ext->step_mode == RM_REVERSE_RESUME || ext->step_mode == RM_TERMINATE) {
+        if (ext->step_mode == RM_RESUME || ext->step_mode == RM_REVERSE_RESUME ||
+                ext->step_mode == RM_TERMINATE || ext->step_mode == RM_DETACH) {
             ext->step_continue_mode = ext->step_mode;
         }
         else {
@@ -1735,6 +1802,7 @@ void ini_run_ctrl_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     add_command_handler(proto, RUN_CONTROL, "resume", command_resume);
     add_command_handler(proto, RUN_CONTROL, "suspend", command_suspend);
     add_command_handler(proto, RUN_CONTROL, "terminate", command_terminate);
+    add_command_handler(proto, RUN_CONTROL, "detach", command_detach);
 }
 
 #else

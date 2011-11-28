@@ -434,15 +434,13 @@ void clone_breakpoints_on_process_fork(Context * parent, Context * child) {
 }
 
 void unplant_breakpoints(Context * ctx) {
-    Context * mem = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
     LINK * l = instructions.next;
     while (l != &instructions) {
         int i;
         BreakInstruction * bi = link_all2bi(l);
         l = l->next;
         if (!bi->planted) continue;
-        if (!bi->saved_size) continue;
-        if (bi->cb.ctx != mem) continue;
+        if (bi->cb.ctx != ctx) continue;
         remove_instruction(bi);
         for (i = 0; i < bi->ref_cnt; i++) {
             BreakpointInfo * bp = bi->refs[i].bp;

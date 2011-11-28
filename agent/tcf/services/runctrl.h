@@ -99,6 +99,13 @@ extern int is_all_stopped(Context * mem);
 extern int terminate_debug_context(Context * ctx);
 
 /*
+ * Detach debug context.
+ * Returns 0 if no errors, otherwise returns -1 and sets errno.
+ * Note: this function is asynchronous, it returns before context is detached.
+ */
+extern int detach_debug_context(Context * ctx);
+
+/*
  * Resume debug context.
  * If "ctx" is a process, resume all children.
  * 'c' - channel to access symbols info, can be NULL if the info is provided locally.

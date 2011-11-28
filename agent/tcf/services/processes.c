@@ -48,6 +48,7 @@
 #include <tcf/framework/waitpid.h>
 #include <tcf/framework/signames.h>
 #include <tcf/services/streamsservice.h>
+#include <tcf/services/runctrl.h>
 #include <tcf/services/processes.h>
 
 #if SERVICE_Processes
@@ -494,13 +495,16 @@ static void command_attach(char * token, Channel * c) {
 static void command_detach(char * token, Channel * c) {
     int err = 0;
     char id[256];
+    Context * ctx = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
-    /* TODO: implement command_detach() */
-    err = set_errno(ERR_UNSUPPORTED, "Detach is not implemented yet");
+    ctx = id2ctx(id);
+    if (ctx == NULL) err = ERR_INV_CONTEXT;
+    if (!err && ctx->exited) err = ERR_ALREADY_EXITED;
+    if (!err && detach_debug_context(ctx) < 0) err = errno;
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);

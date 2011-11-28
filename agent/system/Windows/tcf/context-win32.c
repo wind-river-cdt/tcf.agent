@@ -98,6 +98,7 @@ typedef struct DebugState {
     DWORD64             module_address;
     ContextAttachCallBack * attach_callback;
     void *              attach_data;
+    int                 detach;
 #if USE_HW_BPS
     int                 ok_to_use_hw_bp;    /* NtContinue() changes Dr6 and Dr7, so HW breakpoints should be disabled until NtContinue() is done */
     ContextBreakpoint * hw_bps[MAX_HW_BPS];
@@ -183,7 +184,7 @@ static int log_error(const char * fn, int ok) {
     return err;
 }
 
-static void event_win32_context_exited(Context * ctx);
+static void event_win32_context_exited(Context * ctx, int detach);
 
 static void get_registers(Context * ctx) {
     ContextExtensionWin32 * ext = EXT(ctx);
@@ -372,7 +373,7 @@ static void event_win32_context_started(Context * ctx) {
     send_context_started_event(ctx);
 }
 
-static void event_win32_context_exited(Context * ctx) {
+static void event_win32_context_exited(Context * ctx, int detach) {
     ContextExtensionWin32 * ext = EXT(ctx);
     LINK * l = NULL;
     trace(LOG_CONTEXT, "context: exited: ctx %#lx, id %s", ctx, ctx->id);
@@ -386,7 +387,7 @@ static void event_win32_context_exited(Context * ctx) {
         Context * c = cldl2ctxp(l);
         l = l->next;
         assert(c->parent == ctx);
-        if (!c->exited) event_win32_context_exited(c);
+        if (!c->exited) event_win32_context_exited(c, detach);
     }
     release_error_report(ext->regs_error);
     loc_free(ext->regs);
@@ -394,12 +395,14 @@ static void event_win32_context_exited(Context * ctx) {
     ext->regs = NULL;
     send_context_exited_event(ctx);
     if (ext->handle != NULL) {
-        if (ctx->mem != ctx) {
-            log_error("CloseHandle", CloseHandle(ext->handle));
-        }
-        else if (os_version.dwMajorVersion <= 5) {
-            /* Bug in Windows XP: ContinueDebugEvent() does not close exited process handle */
-            log_error("CloseHandle", CloseHandle(ext->handle));
+        if (!detach) {
+            if (ctx->mem != ctx) {
+                log_error("CloseHandle", CloseHandle(ext->handle));
+            }
+            else if (os_version.dwMajorVersion <= 5) {
+                /* Bug in Windows XP: ContinueDebugEvent() does not close exited process handle */
+                log_error("CloseHandle", CloseHandle(ext->handle));
+            }
         }
         ext->handle = NULL;
     }
@@ -778,7 +781,7 @@ static void debug_event_handler(DebugEvent * debug_event) {
         break;
     case EXIT_THREAD_DEBUG_EVENT:
         assert(prs != NULL);
-        if (ctx && !ctx->exited) event_win32_context_exited(ctx);
+        if (ctx && !ctx->exited) event_win32_context_exited(ctx, 0);
         if (debug_state->ini_thread_id == win32_event->dwThreadId) {
             debug_state->ini_thread_id = 0;
             debug_state->ini_thread_handle = NULL;
@@ -792,8 +795,8 @@ static void debug_event_handler(DebugEvent * debug_event) {
         break;
     case EXIT_PROCESS_DEBUG_EVENT:
         assert(prs != NULL);
-        if (ctx && !ctx->exited) event_win32_context_exited(ctx);
-        event_win32_context_exited(prs);
+        if (ctx && !ctx->exited) event_win32_context_exited(ctx, 0);
+        event_win32_context_exited(prs, 0);
         prs = NULL;
         if (debug_state->attach_callback != NULL) {
             int error = set_win32_errno(win32_event->u.ExitProcess.dwExitCode);
@@ -910,6 +913,15 @@ static void early_debug_event_handler(void * x) {
     post_event(continue_debug_event, debug_event);
 }
 
+static void debugger_detach_handler(void * x) {
+    DebugState * debug_state = (DebugState *)x;
+    Context * prs = context_find_from_pid(debug_state->process_id, 0);
+
+    if (prs != NULL && !prs->exited) event_win32_context_exited(prs, 1);
+
+    log_error("ReleaseSemaphore", SetEvent(debug_state->debug_event_inp));
+}
+
 static void debugger_exit_handler(void * x) {
     DebugState * debug_state = (DebugState *)x;
     Context * prs = context_find_from_pid(debug_state->process_id, 0);
@@ -921,7 +933,7 @@ static void debugger_exit_handler(void * x) {
     log_error("CloseHandle", CloseHandle(debug_state->debug_event_inp));
     log_error("CloseHandle", CloseHandle(debug_state->debug_event_out));
 
-    if (prs != NULL && !prs->exited) event_win32_context_exited(prs);
+    if (prs != NULL && !prs->exited) event_win32_context_exited(prs, 0);
 
     loc_free(debug_state);
 }
@@ -950,6 +962,15 @@ static DWORD WINAPI debugger_thread_func(LPVOID x) {
         memset(win32_event, 0, sizeof(DEBUG_EVENT));
         if (WaitForDebugEvent(win32_event, INFINITE) == 0) {
             trace(LOG_ALWAYS, "WaitForDebugEvent() error %d", GetLastError());
+            break;
+        }
+
+        if (debug_state->detach) {
+            post_event(debugger_detach_handler, debug_state);
+            WaitForSingleObject(debug_state->debug_event_inp, INFINITE);
+            if (!DebugActiveProcessStop(debug_state->process_id)) {
+                trace(LOG_ALWAYS, "DebugActiveProcessStop() error %d", GetLastError());
+            }
             break;
         }
 
@@ -1083,6 +1104,27 @@ static int context_terminate(Context * ctx) {
     return win32_terminate(ctx);
 }
 
+static int context_detach(Context * ctx) {
+    LINK * l;
+    ContextExtensionWin32 * ext = EXT(ctx);
+    DebugState * debug_state = ext->debug_state;
+    assert(ctx->parent == NULL);
+    trace(LOG_CONTEXT, "context: detach ctx %#lx id %s", ctx, ctx->id);
+    debug_state->detach = 1;
+    unplant_breakpoints(ctx);
+    for (l = ctx->children.next; l != &ctx->children; l = l->next) {
+        Context * c = cldl2ctxp(l);
+        if (!c->stopped) continue;
+        if (win32_resume(c, 0) < 0) return -1;
+    }
+    if (!debug_state->break_posted) {
+        context_lock(ctx);
+        post_event_with_delay(break_process_event, ctx, 10000);
+        debug_state->break_posted = 1;
+    }
+    return 0;
+}
+
 int context_resume(Context * ctx, int mode, ContextAddress range_start, ContextAddress range_end) {
     switch (mode) {
     case RM_RESUME:
@@ -1091,6 +1133,8 @@ int context_resume(Context * ctx, int mode, ContextAddress range_start, ContextA
         return context_single_step(ctx);
     case RM_TERMINATE:
         return context_terminate(ctx);
+    case RM_DETACH:
+        return context_detach(ctx);
     }
     errno = ERR_UNSUPPORTED;
     return -1;
@@ -1103,6 +1147,7 @@ int context_can_resume(Context * ctx, int mode) {
     case RM_STEP_INTO:
         return context_has_state(ctx);
     case RM_TERMINATE:
+    case RM_DETACH:
         return ctx != NULL && ctx->parent == NULL;
     }
     return 0;
