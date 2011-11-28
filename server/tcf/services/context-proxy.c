@@ -1529,8 +1529,24 @@ static void event_context_disposed(Context * ctx, void * args) {
     free_context_cache(c);
 }
 
+static void event_path_mapping_changed(Channel * c, void * args) {
+    LINK * x = context_root.next;
+    while (x != &context_root) {
+        Context * ctx = ctxl2ctxp(x);
+        ContextCache * p = *EXT(ctx);
+        if (p->mmap_is_valid) {
+            crear_memory_map_data(p);
+            memory_map_event_mapping_changed(ctx);
+        }
+        x = x->next;
+    }
+}
+
 void init_contexts_sys_dep(void) {
-    static ContextEventListener listener = {
+    static PathMapEventListener path_map_listener = {
+        event_path_mapping_changed,
+    };
+    static ContextEventListener context_event_listener = {
         NULL,
         event_context_exited,
         NULL,
@@ -1538,7 +1554,8 @@ void init_contexts_sys_dep(void) {
         NULL,
         event_context_disposed
     };
-    add_context_event_listener(&listener, NULL);
+    add_path_map_event_listener(&path_map_listener, NULL);
+    add_context_event_listener(&context_event_listener, NULL);
     add_channel_close_listener(channel_close_listener);
     context_extension_offset = context_extension(sizeof(ContextCache *));
 }
