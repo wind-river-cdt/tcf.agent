@@ -384,9 +384,14 @@ struct ELF_File {
     dev_t dev;
     ino_t ino;
     int64_t mtime;
+    int64_t size;
     int mtime_changed;
     ErrorReport * error;
     int fd;
+
+#if defined(WIN32)
+    HANDLE mmap_handle;
+#endif
 
     uint8_t big_endian; /* 0 - least significant first, 1 - most significat first */
     uint8_t byte_swap;  /* > 0 if file endianness not same as the agent endianness */

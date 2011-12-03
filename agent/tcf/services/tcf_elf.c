@@ -43,6 +43,7 @@
 
 #if defined(_WRS_KERNEL)
 #elif defined(WIN32)
+#  define USE_MMAP
 #else
 #  include <sys/mman.h>
 #  define USE_MMAP
@@ -93,19 +94,22 @@ static void elf_dispose(ELF_File * file) {
     if (file->sections != NULL) {
         for (n = 0; n < file->section_cnt; n++) {
             ELF_Section * s = file->sections + n;
-#ifdef USE_MMAP
-            if (s->mmap_addr != NULL) {
-                s->data = NULL;
-                munmap(s->mmap_addr, s->mmap_size);
-            }
-#endif
+#if !defined(USE_MMAP)
             loc_free(s->data);
+#elif defined(WIN32)
+            UnmapViewOfFile(s->data);
+#else
+            if (s->mmap_addr != NULL) munmap(s->mmap_addr, s->mmap_size);
+#endif
             loc_free(s->sym_addr_table);
             loc_free(s->sym_names_hash);
             loc_free(s->sym_names_next);
         }
         loc_free(file->sections);
     }
+#if defined(WIN32)
+    if (file->mmap_handle != NULL) CloseHandle(file->mmap_handle);
+#endif
     release_error_report(file->error);
     loc_free(file->pheaders);
     loc_free(file->str_pool);
@@ -339,6 +343,7 @@ static ELF_File * create_elf_cache(const char * file_name) {
     file->dev = st.st_dev;
     file->ino = st.st_ino;
     file->mtime = st.st_mtime;
+    file->size = st.st_size;
 
     if (error == 0 && (file->fd = open(file->name, O_RDONLY | O_BINARY, 0)) < 0) error = errno;
 
@@ -651,11 +656,42 @@ int elf_load(ELF_Section * s) {
     }
 
 #ifdef USE_MMAP
+#ifdef WIN32
+    {
+        ELF_File * file = s->file;
+        if (file->mmap_handle == NULL) {
+            file->mmap_handle = CreateFileMapping(
+                (HANDLE)_get_osfhandle(file->fd), NULL, PAGE_READONLY,
+                (DWORD)(file->size >> 32), (DWORD)file->size, NULL);
+            if (file->mmap_handle == NULL) {
+                trace(LOG_ALWAYS, "Cannot create file mapping object: %s",
+                    errno_to_str(set_win32_errno(GetLastError())));
+            }
+        }
+        if (file->mmap_handle != NULL) {
+            SYSTEM_INFO info;
+            U8_T offs = s->offset;
+            GetSystemInfo(&info);
+            offs -= offs % info.dwAllocationGranularity;
+            s->mmap_size = (size_t)(s->offset - offs + s->size);
+            s->mmap_addr = MapViewOfFile(file->mmap_handle, FILE_MAP_READ,
+                (DWORD)(offs >> 32), (DWORD)offs, s->mmap_size);
+            if (s->mmap_addr == NULL) {
+                trace(LOG_ALWAYS, "Cannot create file mapping view: %s",
+                    errno_to_str(set_win32_errno(GetLastError())));
+            }
+            else {
+                s->data = (char *)s->mmap_addr + (size_t)(s->offset - offs);
+                trace(LOG_ELF, "Section %s in ELF file %s is mapped to %#lx", s->name, s->file->name, s->data);
+            }
+        }
+    }
+#else
     {
         long page = sysconf(_SC_PAGE_SIZE);
         off_t offs = (off_t)s->offset;
         offs -= offs % page;
-        s->mmap_size = (size_t)(s->offset - offs) + s->size;
+        s->mmap_size = (size_t)(s->offset - offs + s->size);
         s->mmap_addr = mmap(0, s->mmap_size, PROT_READ, MAP_PRIVATE, s->file->fd, offs);
         if (s->mmap_addr == MAP_FAILED) {
             s->mmap_addr = NULL;
@@ -666,6 +702,7 @@ int elf_load(ELF_Section * s) {
             trace(LOG_ELF, "Section %s in ELF file %s is mapped to %#lx", s->name, s->file->name, s->data);
         }
     }
+#endif
 #endif
 
     if (s->data == NULL) {
