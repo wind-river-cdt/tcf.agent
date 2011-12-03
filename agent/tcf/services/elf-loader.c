@@ -263,7 +263,7 @@ ContextAddress get_tls_address(Context * ctx, ELF_File * file) {
             mod_id = get_module_id(ctx, file);
             if (elf_read_memory_word(ctx, file, vdt_addr + mod_id * 16, &mod_tls_addr) < 0)
                 str_exception(errno, "Cannot read VDT");
-            if (mod_tls_addr == 0 || mod_tls_addr == ~(U8_T)0)
+            if (mod_tls_addr == 0 || mod_tls_addr == ~(ContextAddress)0)
                 str_exception(errno, "Thread local storage is not allocated yet");
         }
         break;
