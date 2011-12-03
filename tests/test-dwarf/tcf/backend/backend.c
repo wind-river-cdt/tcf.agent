@@ -208,12 +208,14 @@ static void loc_var_func(void * args, Symbol * sym) {
         error("get_symbol_name");
     }
     if (get_symbol_address(sym, &addr) < 0) {
-        int err = errno;
         if ((get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
             (get_symbol_value(sym, &value, &value_size, &value_big_endian) < 0 || value == NULL)) {
+            int err = errno;
+            if (strncmp(errno_to_str(err), "Object location or value info not available", 43) == 0) return;
             if (strncmp(errno_to_str(err), "No object location info found", 29) == 0) return;
             if (strncmp(errno_to_str(err), "Object is not available", 23) == 0) return;
             if (strncmp(errno_to_str(err), "Object has no RT address", 24) == 0) return;
+            if (strncmp(errno_to_str(err), "Division by zero in DWARF", 25) == 0) return;
             errno = err;
             error("get_symbol_address");
         }
@@ -226,7 +228,7 @@ static void loc_var_func(void * args, Symbol * sym) {
     }
     if (get_symbol_size(sym, &size) < 0) {
         int ok = 0;
-        if (name == NULL && type != NULL) {
+        if (type != NULL) {
             char * type_name;
             unsigned type_flags;
             if (get_symbol_name(type, &type_name) < 0) {
@@ -235,7 +237,7 @@ static void loc_var_func(void * args, Symbol * sym) {
             if (get_symbol_flags(type, &type_flags) < 0) {
                 error("get_symbol_flags");
             }
-            if (type_name != NULL && strcmp(type_name, "exception") == 0 && (type_flags & SYM_FLAG_CLASS_TYPE)) {
+            if (name == NULL && type_name != NULL && strcmp(type_name, "exception") == 0 && (type_flags & SYM_FLAG_CLASS_TYPE)) {
                 /* GCC does not tell size of std::exception class */
                 ok = 1;
             }
@@ -314,6 +316,8 @@ static void next_pc(void) {
             mem_region_pos++;
             pc = 0;
             print_time(time_start, test_cnt);
+            post_event_with_delay(test, NULL, 1000000);
+            test_posted = 1;
             return;
         }
 
@@ -326,6 +330,8 @@ static void next_pc(void) {
                 mem_region_pos++;
                 pc = 0;
                 print_time(time_start, test_cnt);
+                post_event_with_delay(test, NULL, 1000000);
+                test_posted = 1;
                 return;
             }
         }
@@ -415,7 +421,7 @@ static void next_pc(void) {
             time_start = time_now;
             loaded = 0;
         }
-        else if (test_cnt >= 100000) {
+        else if (test_cnt >= 1000) {
             print_time(time_start, test_cnt);
             clock_gettime(CLOCK_REALTIME, &time_start);
             test_posted = 1;
@@ -442,7 +448,7 @@ static void next_file(void) {
 
     clock_gettime(CLOCK_REALTIME, &time_start);
 
-    f = elf_open(elf_file_name);;
+    f = elf_open(elf_file_name);
     if (f == NULL) {
         printf("Cannot open ELF: %s\n", errno_to_str(errno));
         exit(1);
@@ -520,7 +526,7 @@ static void next_file(void) {
         RegisterDefinition * r = reg_defs + j;
         r->big_endian = f->big_endian;
         r->dwarf_id = (int16_t)(j == 0 ? -1 : j - 1);
-        r->eh_frame_id = -1;
+        r->eh_frame_id = r->dwarf_id;
         r->name = reg_names[j];
         snprintf(reg_names[j], sizeof(reg_names[j]), "R%d", j);
         r->offset = reg_size;
@@ -547,15 +553,7 @@ static void test(void * args) {
     }
 }
 
-static void on_elf_file_closed(ELF_File * f) {
-    if (!test_posted) {
-        test_posted = 1;
-        post_event(test, NULL);
-    }
-}
-
-void init_contexts_sys_dep(void) {
-    const char * dir_name = "files";
+static void add_dir(const char * dir_name) {
     DIR * dir = opendir(dir_name);
     if (dir == NULL) {
         printf("Cannot open '%s' directory\n", dir_name);
@@ -567,17 +565,29 @@ void init_contexts_sys_dep(void) {
         char path[FILE_PATH_SIZE];
         struct stat st;
         if (e == NULL) break;
+        if (strcmp(e->d_name, ".") == 0) continue;
+        if (strcmp(e->d_name, "..") == 0) continue;
+        if (strcmp(e->d_name + strlen(e->d_name) - 6, ".debug") == 0) continue;
         snprintf(path, sizeof(path), "%s/%s", dir_name, e->d_name);
-        if (stat(path, &st) == 0 && !S_ISDIR(st.st_mode)) {
-            if (files_cnt >= files_max) {
-                files_max += 8;
-                files = (char **)loc_realloc(files, files_max * sizeof(char *));
+        if (stat(path, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                add_dir(path);
             }
-            files[files_cnt++] = loc_strdup(path);
+            else {
+                if (files_cnt >= files_max) {
+                    files_max += 8;
+                    files = (char **)loc_realloc(files, files_max * sizeof(char *));
+                }
+                files[files_cnt++] = loc_strdup(path);
+            }
         }
     }
     closedir(dir);
-    elf_add_close_listener(on_elf_file_closed);
+}
+
+void init_contexts_sys_dep(void) {
+    const char * dir_name = "files";
+    add_dir(dir_name);
     test_posted = 1;
     post_event(test, NULL);
 }

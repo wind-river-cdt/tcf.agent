@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -276,7 +276,11 @@ static char * get_debug_info_file_name(ELF_File * file, int * error) {
                     lnm = apply_path_map(NULL, NULL, lnm, PATH_MAP_TO_LOCAL);
 #endif
                     if (stat(lnm, &buf) == 0) return loc_strdup(lnm);
-                    return NULL;
+                    snprintf(fnm, sizeof(fnm), "%s.debug", file->name);
+#if SERVICE_PathMap
+                    lnm = apply_path_map(NULL, NULL, lnm, PATH_MAP_TO_LOCAL);
+#endif
+                    if (stat(lnm, &buf) == 0) return loc_strdup(lnm);
                 }
                 offs += desc_sz;
                 while (offs % 4 != 0) offs++;
@@ -306,7 +310,6 @@ static char * get_debug_info_file_name(ELF_File * file, int * error) {
                 lnm = apply_path_map(NULL, NULL, lnm, PATH_MAP_TO_LOCAL);
 #endif
                 if (stat(lnm, &buf) == 0) return loc_strdup(lnm);
-                return NULL;
             }
         }
     }
@@ -602,7 +605,9 @@ static ELF_File * create_elf_cache(const char * file_name) {
             }
         }
     }
-    if (error == 0) {
+    /* TODO: need a better way to detect "debuginfo" file */
+    file->debug_info_file = strcmp(file_name + strlen(file_name) - 6, ".debug") == 0;
+    if (error == 0 && !file->debug_info_file) {
         file->debug_info_file_name = get_debug_info_file_name(file, &error);
         if (file->debug_info_file_name) trace(LOG_ELF, "Debug info file found %s", file->debug_info_file_name);
     }
@@ -927,7 +932,6 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
                 if (range == NULL && file->debug_info_file_name != NULL && !file->debug_info_file) {
                     ELF_File * debug = elf_open(file->debug_info_file_name);
                     if (debug == NULL) exception(errno);
-                    debug->debug_info_file = 1;
                     if (j < debug->pheader_cnt) {
                         p = debug->pheaders + j;
                         link_addr_min = offs_min - p->offset + p->address;
@@ -951,7 +955,7 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
                     link_addr_max = addr_max - r->addr + sec->addr;
                     if (link_addr_min < sec->addr) link_addr_min = sec->addr;
                     if (link_addr_max >= sec->addr + sec->size) link_addr_max = sec->addr + sec->size;
-                    range = find_comp_unit_addr_range(get_dwarf_cache(file), link_addr_min, link_addr_max);
+                    range = find_comp_unit_addr_range(get_dwarf_cache(get_dwarf_file(file)), link_addr_min, link_addr_max);
                     if (range != NULL && range_rt_addr != NULL) {
                         *range_rt_addr = range->mAddr - sec->addr + r->addr;
                     }
@@ -1037,15 +1041,17 @@ ContextAddress elf_map_to_link_time_address(Context * ctx, ContextAddress addr, 
             unsigned j;
             if (f->pheader_cnt == 0 && f->type == ET_EXEC) {
                 *file = f;
-                for (j = 1; j < f->section_cnt; j++) {
-                    ELF_Section * s = f->sections + j;
-                    if ((s->flags & SHF_ALLOC) == 0) continue;
-                    if (s->addr <= addr && s->addr + s->size > addr) {
-                        *sec = s;
-                        return addr;
+                if (sec != NULL) {
+                    for (j = 1; j < f->section_cnt; j++) {
+                        ELF_Section * s = f->sections + j;
+                        if ((s->flags & SHF_ALLOC) == 0) continue;
+                        if (s->addr <= addr && s->addr + s->size > addr) {
+                            *sec = s;
+                            return addr;
+                        }
                     }
+                    *sec = NULL;
                 }
-                *sec = NULL;
                 return addr;
             }
             for (j = 0; j < f->pheader_cnt; j++) {
@@ -1060,149 +1066,35 @@ ContextAddress elf_map_to_link_time_address(Context * ctx, ContextAddress addr, 
                 }
                 *file = f;
                 addr = (ContextAddress)(offs - p->offset + p->address);
-                for (j = 1; j < f->section_cnt; j++) {
-                    ELF_Section * s = f->sections + j;
-                    if ((s->flags & SHF_ALLOC) == 0) continue;
-                    if (s->addr + s->size <= p->address) continue;
-                    if (s->addr >= p->address + p->mem_size) continue;
-                    if (s->addr <= addr && s->addr + s->size > addr) {
-                        *sec = s;
-                        return addr;
+                if (sec != NULL) {
+                    for (j = 1; j < f->section_cnt; j++) {
+                        ELF_Section * s = f->sections + j;
+                        if ((s->flags & SHF_ALLOC) == 0) continue;
+                        if (s->addr + s->size <= p->address) continue;
+                        if (s->addr >= p->address + p->mem_size) continue;
+                        if (s->addr <= addr && s->addr + s->size > addr) {
+                            *sec = s;
+                            return addr;
+                        }
                     }
+                    *sec = NULL;
                 }
-                *sec = NULL;
                 return addr;
             }
         }
         else {
             unsigned j;
+            *file = f;
             for (j = 1; j < f->section_cnt; j++) {
                 ELF_Section * s = f->sections + j;
                 if (strcmp(s->name, r->sect_name) == 0) {
-                    *file = f;
-                    *sec = s;
+                    if (sec != NULL) *sec = s;
                     return (ContextAddress)(addr - r->addr + s->addr);
                 }
             }
         }
     }
     return 0;
-}
-
-static int get_dynamic_tag(Context * ctx, ELF_File * file, int tag, ContextAddress * addr) {
-    unsigned i, j;
-
-    for (i = 1; i < file->section_cnt; i++) {
-        ELF_Section * sec = file->sections + i;
-        if (sec->size == 0) continue;
-        if (sec->name == NULL) continue;
-        if (strcmp(sec->name, ".dynamic") == 0) {
-            ContextAddress sec_addr = elf_map_to_run_time_address(ctx, file, sec, (ContextAddress)sec->addr);
-            if (elf_load(sec) < 0) return -1;
-            if (file->elf64) {
-                unsigned cnt = (unsigned)(sec->size / sizeof(Elf64_Dyn));
-                for (j = 0; j < cnt; j++) {
-                    Elf64_Dyn dyn = *((Elf64_Dyn *)sec->data + j);
-                    if (file->byte_swap) SWAP(dyn.d_tag);
-                    if (dyn.d_tag == DT_NULL) break;
-                    if (dyn.d_tag == tag) {
-                        if (context_read_mem(ctx, sec_addr + j * sizeof(dyn), &dyn, sizeof(dyn)) < 0) return -1;
-                        if (file->byte_swap) {
-                            SWAP(dyn.d_tag);
-                            SWAP(dyn.d_un.d_ptr);
-                        }
-                        if (dyn.d_tag != tag) continue;
-                        if (addr != NULL) *addr = (ContextAddress)dyn.d_un.d_ptr;
-                        return 0;
-                    }
-                }
-            }
-            else {
-                unsigned cnt = (unsigned)(sec->size / sizeof(Elf32_Dyn));
-                for (j = 0; j < cnt; j++) {
-                    Elf32_Dyn dyn = *((Elf32_Dyn *)sec->data + j);
-                    if (file->byte_swap) SWAP(dyn.d_tag);
-                    if (dyn.d_tag == DT_NULL) break;
-                    if (dyn.d_tag == tag) {
-                        if (context_read_mem(ctx, sec_addr + j * sizeof(dyn), &dyn, sizeof(dyn)) < 0) return -1;
-                        if (file->byte_swap) {
-                            SWAP(dyn.d_tag);
-                            SWAP(dyn.d_un.d_ptr);
-                        }
-                        if (dyn.d_tag != tag) continue;
-                        if (addr != NULL) *addr = (ContextAddress)dyn.d_un.d_ptr;
-                        return 0;
-                    }
-                }
-            }
-        }
-    }
-    errno = ENOENT;
-    return -1;
-}
-
-static int sym_name_cmp(const char * x, const char * y) {
-    while (*x && *x == *y) {
-        x++;
-        y++;
-    }
-    if (*x == 0 && *y == 0) return 0;
-    if (*x == '@' && *(x + 1) == '@' && *y == 0) return 0;
-    if (*x < *y) return -1;
-    return 1;
-}
-
-static int get_global_symbol_address(Context * ctx, ELF_File * file, const char * name, ContextAddress * addr) {
-    unsigned i, j;
-
-    for (i = 1; i < file->section_cnt; i++) {
-        ELF_Section * sec = file->sections + i;
-        if (sec->size == 0) continue;
-        if (sec->type == SHT_SYMTAB) {
-            ELF_Section * str = NULL;
-            if (sec->link == 0 || sec->link >= file->section_cnt) {
-                errno = EINVAL;
-                return -1;
-            }
-            str = file->sections + sec->link;
-            if (elf_load(sec) < 0) return -1;
-            if (elf_load(str) < 0) return -1;
-            if (file->elf64) {
-                unsigned cnt = (unsigned)(sec->size / sizeof(Elf64_Sym));
-                for (j = 0; j < cnt; j++) {
-                    Elf64_Sym sym = *((Elf64_Sym *)sec->data + j);
-                    if (ELF64_ST_BIND(sym.st_info) != STB_GLOBAL) continue;
-                    if (file->byte_swap) SWAP(sym.st_name);
-                    if (sym_name_cmp((char *)str->data + sym.st_name, name) != 0) continue;
-                    switch (ELF64_ST_TYPE(sym.st_info)) {
-                    case STT_OBJECT:
-                    case STT_FUNC:
-                        if (file->byte_swap) SWAP(sym.st_value);
-                        *addr = elf_map_to_run_time_address(ctx, file, NULL, (ContextAddress)sym.st_value);
-                        if (*addr != 0) return 0;
-                    }
-                }
-            }
-            else {
-                unsigned cnt = (unsigned)(sec->size / sizeof(Elf32_Sym));
-                for (j = 0; j < cnt; j++) {
-                    Elf32_Sym sym = *((Elf32_Sym *)sec->data + j);
-                    if (ELF32_ST_BIND(sym.st_info) != STB_GLOBAL) continue;
-                    if (file->byte_swap) SWAP(sym.st_name);
-                    if (sym_name_cmp((char *)str->data + sym.st_name, name) != 0) continue;
-                    switch (ELF32_ST_TYPE(sym.st_info)) {
-                    case STT_OBJECT:
-                    case STT_FUNC:
-                        if (file->byte_swap) SWAP(sym.st_value);
-                        *addr = elf_map_to_run_time_address(ctx, file, NULL, (ContextAddress)sym.st_value);
-                        if (*addr != 0) return 0;
-                    }
-                }
-            }
-        }
-    }
-    errno = ENOENT;
-    return -1;
 }
 
 int elf_read_memory_word(Context * ctx, ELF_File * file, ContextAddress addr, ContextAddress * word) {
@@ -1218,27 +1110,6 @@ int elf_read_memory_word(Context * ctx, ELF_File * file, ContextAddress addr, Co
     }
     *word = (ContextAddress)n;
     return 0;
-}
-
-ContextAddress elf_get_debug_structure_address(Context * ctx, ELF_File ** file_ptr) {
-    ELF_File * file = NULL;
-    ContextAddress addr = 0;
-
-    for (file = elf_list_first(ctx, 0, ~(ContextAddress)0); file != NULL; file = elf_list_next(ctx)) {
-        if (file->type != ET_EXEC) continue;
-        if (file_ptr != NULL) *file_ptr = file;
-#ifdef DT_MIPS_RLD_MAP
-        if (get_dynamic_tag(ctx, file, DT_MIPS_RLD_MAP, &addr) == 0) {
-            if (elf_read_memory_word(ctx, file, addr, &addr) < 0) continue;
-            break;
-        }
-#endif
-        if (get_dynamic_tag(ctx, file, DT_DEBUG, &addr) == 0) break;
-        if (get_global_symbol_address(ctx, file, "_r_debug", &addr) == 0) break;
-    }
-    elf_list_done(ctx);
-
-    return addr;
 }
 
 #endif /* ENABLE_DebugContext */

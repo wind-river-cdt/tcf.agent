@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;..\..\agent;..\..\agent\tcf\system\Windows;..\..\agent\tcf\machine\i386"
+				AdditionalIncludeDirectories=".;..\..\agent;..\..\agent\system\Windows;..\..\agent\machine\i386"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -116,7 +116,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories=".;..\..\agent;..\..\agent\tcf\system\Windows;..\..\agent\tcf\machine\i386"
+				AdditionalIncludeDirectories=".;..\..\agent;..\..\agent\system\Windows;..\..\agent\machine\i386"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -612,27 +612,27 @@
 				Name="Windows"
 				>
 				<File
-					RelativePath="..\..\agent\tcf\system\Windows\context-win32.c"
+					RelativePath="..\..\agent\system\Windows\tcf\context-win32.c"
 					>
 				</File>
 				<File
-					RelativePath="..\..\agent\tcf\system\Windows\context-win32.h"
+					RelativePath="..\..\agent\system\Windows\tcf\context-win32.h"
 					>
 				</File>
 				<File
-					RelativePath="..\..\agent\tcf\system\Windows\pthreads-win32.c"
+					RelativePath="..\..\agent\system\Windows\tcf\pthreads-win32.c"
 					>
 				</File>
 				<File
-					RelativePath="..\..\agent\tcf\system\Windows\regset.h"
+					RelativePath="..\..\agent\system\Windows\tcf\regset.h"
 					>
 				</File>
 				<File
-					RelativePath="..\..\agent\tcf\system\Windows\windbgcache.c"
+					RelativePath="..\..\agent\system\Windows\tcf\windbgcache.c"
 					>
 				</File>
 				<File
-					RelativePath="..\..\agent\tcf\system\Windows\windbgcache.h"
+					RelativePath="..\..\agent\system\Windows\tcf\windbgcache.h"
 					>
 				</File>
 			</Filter>

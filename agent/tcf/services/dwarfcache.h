@@ -248,6 +248,13 @@ struct DWARFCache {
     FileInfo ** mFileInfoHash;
 };
 
+/*
+ * Return ELF file that contains DWARF info for given file.
+ * On some systems, DWARF is kept in a separate file.
+ * If such file is not available, return 'file'.
+ */
+extern ELF_File * get_dwarf_file(ELF_File * file);
+
 /* Return DWARF cache for given file, create and populate the cache if needed, throw an exception if error */
 extern DWARFCache * get_dwarf_cache(ELF_File * file);
 

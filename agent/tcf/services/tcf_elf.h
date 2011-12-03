@@ -547,13 +547,6 @@ extern ContextAddress elf_map_to_link_time_address(Context * ctx, ContextAddress
  */
 extern int elf_read_memory_word(Context * ctx, ELF_File * file, ContextAddress addr, ContextAddress * word);
 
-/*
- * Return run-time address of the debug structrure that is normally pointed by DT_DEBUG entry in ".dynamic" section.
- * "file" is assigned a file that contains DT_DEBUG entry.
- * Return 0 if the structure could not be found.
- */
-extern ContextAddress elf_get_debug_structure_address(Context * ctx, ELF_File ** file);
-
 #endif
 
 /* Return symbol name hash. The hash is used to build sym_names_hash table. */

@@ -508,6 +508,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\elf-loader.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\elf-loader.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\expressions.c"
 				>
 			</File>

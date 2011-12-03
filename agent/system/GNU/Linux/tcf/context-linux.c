@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -43,6 +43,7 @@
 #include <tcf/services/expressions.h>
 #include <tcf/services/memorymap.h>
 #include <tcf/services/runctrl.h>
+#include <tcf/services/elf-loader.h>
 #include <tcf/services/tcf_elf.h>
 #include <system/GNU/Linux/tcf/regset.h>
 

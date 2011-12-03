@@ -951,7 +951,7 @@ static int set_pe_context(Context * ctx, int frame, ContextAddress ip, HANDLE pr
     return 0;
 }
 
-static int find_pe_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name, Symbol * sym) {
+static int find_pe_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char * name, Symbol * sym) {
     HANDLE process = get_context_handle(ctx->parent == NULL ? ctx : ctx->parent);
     ULONG64 buffer[(sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR) + sizeof(ULONG64) - 1) / sizeof(ULONG64)];
     SYMBOL_INFO * info = (SYMBOL_INFO *)buffer;
@@ -1013,7 +1013,7 @@ static int find_pe_symbol_by_addr(Context * ctx, int frame, ContextAddress addr,
     return -1;
 }
 
-static int find_basic_type_symbol(Context * ctx, char * name, Symbol * sym) {
+static int find_basic_type_symbol(Context * ctx, const char * name, Symbol * sym) {
     const TypeInfo * p = basic_type_info;
     while (p->name != NULL) {
         if (strcmp(p->name, name) == 0) {
@@ -1028,7 +1028,7 @@ static int find_basic_type_symbol(Context * ctx, char * name, Symbol * sym) {
     return -1;
 }
 
-int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name, Symbol ** sym) {
+int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char * name, Symbol ** sym) {
     int found = 0;
 
     *sym = alloc_symbol();
@@ -1063,7 +1063,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name
     return 0;
 }
 
-int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, char * name, Symbol ** sym) {
+int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, const char * name, Symbol ** sym) {
     errno = ERR_SYM_NOT_FOUND;
     return -1;
 }

@@ -448,7 +448,7 @@ static void validate_find(Channel * c, void * args, int error) {
     if (trap.error) exception(trap.error);
 }
 
-int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr,  char * name, Symbol ** sym) {
+int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const char * name, Symbol ** sym) {
     uint64_t ip = 0;
     LINK * l = NULL;
     SymbolsCache * syms = NULL;
@@ -544,7 +544,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr,  char * n
     return 0;
 }
 
-int find_symbol_in_scope(Context * ctx, int frame, ContextAddress addr, Symbol * scope, char * name, Symbol ** sym) {
+int find_symbol_in_scope(Context * ctx, int frame, ContextAddress addr, Symbol * scope, const char * name, Symbol ** sym) {
     uint64_t ip = 0;
     LINK * l = NULL;
     SymbolsCache * syms = NULL;

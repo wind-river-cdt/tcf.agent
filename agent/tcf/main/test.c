@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -106,12 +106,16 @@ int tcf_test_func2(void) {
     int func2_local1 = 1;
     int func2_local2 = 2;
     test_struct func2_local3 = { enum_val3, 153, NULL, 3.14f, 2.71 };
+    int * func2_local4 = NULL;
+
     func2_local3.f_struct = &func2_local3;
     tcf_test_short++;
+    errno = tcf_test_short;
+    func2_local4 = &errno;
     tcf_test_func3();
     func2_local1++;
     func2_local2 = func2_local1;
-    return func2_local2;
+    return func2_local2 + *func2_local4;
 }
 
 void tcf_test_func1(void) {
@@ -161,7 +165,7 @@ void test_proc(void) {
     }
 }
 
-int find_test_symbol(Context * ctx, char * name, void ** addr, int * sym_class) {
+int find_test_symbol(Context * ctx, const char * name, void ** addr, int * sym_class) {
     /* This code allows to run TCF diagnostic tests when symbols info is not available */
     if (is_test_process(ctx) && strncmp(name, "tcf_test_", 9) == 0) {
         *addr = NULL;

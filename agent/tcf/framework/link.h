@@ -39,10 +39,10 @@ struct LINK {
 #define list_is_empty(list) ((list)->next == (list) || (list)->next == NULL)
 
 #define list_remove(item) { \
-            LINK * l = item; \
-            l->prev->next = l->next; \
-            l->next->prev = l->prev; \
-            l->next = l->prev = l; \
+            LINK * _l_ = item; \
+            _l_->prev->next = _l_->next; \
+            _l_->next->prev = _l_->prev; \
+            _l_->next = _l_->prev = _l_; \
         }
 
 #define list_add_first(item,list) { \

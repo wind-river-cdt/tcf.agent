@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1996, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 1996, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -383,6 +383,11 @@
 #define OP_stack_value              0x9f /* v4 */
 #define OP_lo_user                  0xe0
 #define OP_hi_user                  0xff
+/* GCC extensions */
+#define OP_GNU_push_tls_address     0xe0
+#define OP_GNU_uninit               0xf0
+#define OP_GNU_encoded_addr         0xf1
+#define OP_GNU_implicit_pointer     0xf2
 
 #define FT_char                     0x0001
 #define FT_signed_char              0x0002

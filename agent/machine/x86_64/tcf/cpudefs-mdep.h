@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -26,6 +26,10 @@
 #  include <tcf/system/VxWorks/context-vxworks.h>
 #endif
 
+#if defined(_AMD64_) && !defined(__x86_64__)
+#define __x86_64__ 1
+#endif
+
 #if defined(__i386__) || defined(__x86_64__)
 
 #include <tcf/regset.h>
@@ -47,8 +51,8 @@ RegisterDefinition regs_index[] = {
     { "edi",    REG_OFFSET(Edi),      4,  7,  7 },
     { "eip",    REG_OFFSET(Eip),      4,  8,  8 },
     { "eflags", REG_OFFSET(EFlags),   4,  9,  9 },
-    { "cs",     REG_OFFSET(SegCs),    4, -1, -1 },
-    { "ss",     REG_OFFSET(SegSs),    4, -1, -1 },
+    { "cs",     REG_OFFSET(SegCs),    2, -1, -1 },
+    { "ss",     REG_OFFSET(SegSs),    2, -1, -1 },
 
     { "ax",     REG_OFFSET(Eax),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 0 },
     { "al",     REG_OFFSET(Eax),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 12 },
@@ -80,6 +84,35 @@ RegisterDefinition regs_index[] = {
     { "control", REG_OFFSET(FloatSave.ControlWord),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
     { "status",  REG_OFFSET(FloatSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
     { "tag",     REG_OFFSET(FloatSave.TagWord),      2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+
+#elif defined(WIN32) && defined(__x86_64__)
+#   define REG_SP Esp
+#   define REG_BP Ebp
+#   define REG_IP Eip
+    { "rax",    REG_OFFSET(Rax),      8,  0,  0},
+    { "rdx",    REG_OFFSET(Rdx),      8,  1,  1},
+    { "rcx",    REG_OFFSET(Rcx),      8,  2,  2},
+    { "rbx",    REG_OFFSET(Rbx),      8,  3,  3},
+    { "rsi",    REG_OFFSET(Rsi),      8,  4,  4},
+    { "rdi",    REG_OFFSET(Rdi),      8,  5,  5},
+    { "rbp",    REG_OFFSET(Rbp),      8,  6,  6},
+    { "rsp",    REG_OFFSET(Rsp),      8,  7,  7},
+    { "r8",     REG_OFFSET(R8),       8,  8,  8},
+    { "r9",     REG_OFFSET(R9),       8,  9,  9},
+    { "r10",    REG_OFFSET(R10),      8, 10, 10},
+    { "r11",    REG_OFFSET(R11),      8, 11, 11},
+    { "r12",    REG_OFFSET(R12),      8, 12, 12},
+    { "r13",    REG_OFFSET(R13),      8, 13, 13},
+    { "r14",    REG_OFFSET(R14),      8, 14, 14},
+    { "r15",    REG_OFFSET(R15),      8, 15, 15},
+    { "rip",    REG_OFFSET(Rip),      8, 16, 16},
+    { "eflags", REG_OFFSET(EFlags),   4, 49, -1},
+    { "es",     REG_OFFSET(SegEs),    2, 50, -1},
+    { "cs",     REG_OFFSET(SegCs),    2, 51, -1},
+    { "ss",     REG_OFFSET(SegSs),    2, 52, -1},
+    { "ds",     REG_OFFSET(SegDs),    2, 53, -1},
+    { "fs",     REG_OFFSET(SegFs),    2, 54, -1},
+    { "gs",     REG_OFFSET(SegGs),    2, 55, -1},
 
 #elif defined(__APPLE__) && defined(__i386__)
 #   define REG_SP __esp
@@ -156,29 +189,51 @@ RegisterDefinition regs_index[] = {
     { "r15",    REG_OFFSET(r15),      8, 15, 15},
     { "rip",    REG_OFFSET(rip),      8, 16, 16},
     { "eflags", REG_OFFSET(eflags),   4, 49, -1},
-    { "es",     REG_OFFSET(es),       4, 50, -1},
-    { "cs",     REG_OFFSET(cs),       4, 51, -1},
-    { "ss",     REG_OFFSET(ss),       4, 52, -1},
-    { "ds",     REG_OFFSET(ds),       4, 53, -1},
-    { "fs",     REG_OFFSET(fs),       4, 54, -1},
-    { "gs",     REG_OFFSET(gs),       4, 55, -1},
-    { "fs_base", REG_OFFSET(fs_base), 4, 58, -1},
-    { "gs_base", REG_OFFSET(gs_base), 4, 59, -1},
+    { "es",     REG_OFFSET(es),       2, 50, -1},
+    { "cs",     REG_OFFSET(cs),       2, 51, -1},
+    { "ss",     REG_OFFSET(ss),       2, 52, -1},
+    { "ds",     REG_OFFSET(ds),       2, 53, -1},
+    { "fs",     REG_OFFSET(fs),       2, 54, -1},
+    { "gs",     REG_OFFSET(gs),       2, 55, -1},
+    { "fs_base", REG_OFFSET(fs_base), 8, 58, -1},
+    { "gs_base", REG_OFFSET(gs_base), 8, 59, -1},
 
-#else
+#elif defined(__i386__)
 #   define REG_SP esp
 #   define REG_BP ebp
 #   define REG_IP eip
     { "eax",    REG_OFFSET(eax),      4,  0,  0},
+    { "ebx",    REG_OFFSET(ebx),      4,  3,  3},
     { "ecx",    REG_OFFSET(ecx),      4,  1,  1},
     { "edx",    REG_OFFSET(edx),      4,  2,  2},
-    { "ebx",    REG_OFFSET(ebx),      4,  3,  3},
     { "esp",    REG_OFFSET(esp),      4,  4,  4},
     { "ebp",    REG_OFFSET(ebp),      4,  5,  5},
     { "esi",    REG_OFFSET(esi),      4,  6,  6},
     { "edi",    REG_OFFSET(edi),      4,  7,  7},
     { "eip",    REG_OFFSET(eip),      4,  8,  8},
     { "eflags", REG_OFFSET(eflags),   4,  9,  9},
+    { "ds",     REG_OFFSET(xds),      2, -1, -1},
+    { "es",     REG_OFFSET(xes),      2, -1, -1},
+    { "fs",     REG_OFFSET(xfs),      2, -1, -1},
+    { "gs",     REG_OFFSET(xgs),      2, -1, -1},
+    { "cs",     REG_OFFSET(xcs),      2, -1, -1},
+    { "ss",     REG_OFFSET(xss),      2, -1, -1},
+
+    { "ax",     REG_OFFSET(eax),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 0 },
+    { "al",     REG_OFFSET(eax),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 16 },
+    { "ah",     REG_OFFSET(eax) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 16 },
+
+    { "bx",     REG_OFFSET(ebx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 1 },
+    { "bl",     REG_OFFSET(ebx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 19 },
+    { "bh",     REG_OFFSET(ebx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 19 },
+
+    { "cx",     REG_OFFSET(ecx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 2 },
+    { "cl",     REG_OFFSET(ecx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 22 },
+    { "ch",     REG_OFFSET(ecx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 22 },
+
+    { "dx",     REG_OFFSET(edx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 3 },
+    { "dl",     REG_OFFSET(edx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 25 },
+    { "dh",     REG_OFFSET(edx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 25 },
 
 #endif
 

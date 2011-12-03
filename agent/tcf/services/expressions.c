@@ -2588,7 +2588,8 @@ static void command_evaluate_cache_client(void * x) {
                 int size = (size_t)value.size - offs;
                 if (size > (int)sizeof(buf)) size = (int)sizeof(buf);
                 memset(buf, 0, size);
-                if (!err && context_read_mem(ctx, value.address + offs, buf, size) < 0) err = errno;
+                if (!err && context_read_mem(ctx, value.address + offs, buf, size) < 0)
+                    err = set_errno(errno, "Cannot read target memory");
                 json_write_binary_data(&state, buf, size);
                 offs += size;
             }

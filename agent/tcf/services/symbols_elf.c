@@ -251,6 +251,7 @@ static void object2symbol(ObjectInfo * obj, Symbol ** res) {
     case TAG_mutable_type:
     case TAG_shared_type:
     case TAG_typedef:
+    case TAG_template_type_param:
         sym->sym_class = SYM_CLASS_TYPE;
         break;
     case TAG_global_variable:
@@ -312,6 +313,7 @@ static int is_modified_type(ObjectInfo * obj) {
         case TAG_restrict_type:
         case TAG_shared_type:
         case TAG_typedef:
+        case TAG_template_type_param:
             return 1;
         }
     }
@@ -484,7 +486,7 @@ static int find_in_dwarf(const char * name, Symbol ** sym) {
     return 0;
 }
 
-static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, char * name, Symbol ** sym) {
+static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, const char * name, Symbol ** sym) {
     unsigned n = tbl->mHash[calc_symbol_name_hash(name)];
     while (n != 0) {
         U8_T id = tbl->mNext[n].mID;
@@ -516,7 +518,7 @@ static void create_symbol_names_hash(ELF_Section * tbl) {
     }
 }
 
-static int find_by_name_in_sym_table(DWARFCache * cache, char * name, Symbol ** res) {
+static int find_by_name_in_sym_table(DWARFCache * cache, const char * name, Symbol ** res) {
     unsigned m = 0;
     unsigned h = calc_symbol_name_hash(name);
     unsigned cnt = 0;
@@ -582,9 +584,10 @@ static int find_by_name_in_sym_table(DWARFCache * cache, char * name, Symbol ** 
     return cnt == 1;
 }
 
-int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name, Symbol ** res) {
+int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char * name, Symbol ** res) {
     int error = 0;
     int found = 0;
+    ELF_File * curr_file = NULL;
 
     assert(ctx != NULL);
 
@@ -619,81 +622,88 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name
 
     if (error == 0 && !found && get_sym_context(ctx, frame, ip) < 0) error = errno;
 
-    if (error == 0 && !found && sym_ip != 0) {
-        Trap trap;
-        if (set_trap(&trap)) {
-            found = find_in_dwarf(name, res);
-            clear_trap(&trap);
-        }
-        else {
-            error = trap.error;
-        }
-    }
+    if (sym_ip != 0) {
 
-    if (error == 0 && !found) {
-        ELF_File * file = elf_list_first(sym_ctx, sym_ip, sym_ip ? sym_ip : ~(ContextAddress)0);
-        if (file == NULL) error = errno;
-        while (error == 0 && file != NULL) {
+        if (error == 0 && !found) {
+            /* Search the name in current compilation unit */
             Trap trap;
             if (set_trap(&trap)) {
-                DWARFCache * cache = get_dwarf_cache(file);
-                if (cache->mPubNames.mHash != NULL) {
-                    found = find_by_name_in_pub_names(cache, &cache->mPubNames, name, res);
-                    if (!found && cache->mPubTypes.mHash != NULL) {
-                        found = find_by_name_in_pub_names(cache, &cache->mPubTypes, name, res);
+                found = find_in_dwarf(name, res);
+                clear_trap(&trap);
+            }
+            else {
+                error = trap.error;
+            }
+        }
+
+        if (error == 0 && !found) {
+            /* Search in pub names of the current file */
+            ELF_File * file = elf_list_first(sym_ctx, sym_ip, sym_ip);
+            if (file == NULL) error = errno;
+            while (error == 0 && file != NULL) {
+                Trap trap;
+                curr_file = file;
+                if (set_trap(&trap)) {
+                    DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
+                    if (cache->mPubNames.mHash != NULL) {
+                        found = find_by_name_in_pub_names(cache, &cache->mPubNames, name, res);
+                        if (!found && cache->mPubTypes.mHash != NULL) {
+                            found = find_by_name_in_pub_names(cache, &cache->mPubTypes, name, res);
+                        }
                     }
+                    if (!found) {
+                        found = find_by_name_in_sym_table(cache, name, res);
+                    }
+                    clear_trap(&trap);
+                }
+                else {
+                    error = trap.error;
+                    break;
+                }
+                if (found) break;
+                file = elf_list_next(sym_ctx);
+                if (file == NULL) error = errno;
+            }
+            elf_list_done(sym_ctx);
+        }
+
+        if (error == 0 && !found) {
+            /* Check if the name is one of well known C/C++ names */
+            Trap trap;
+            if (set_trap(&trap)) {
+                unsigned i = 0;
+                while (base_types_aliases[i].name) {
+                    if (strcmp(name, base_types_aliases[i].name) == 0) {
+                        found = find_in_dwarf(base_types_aliases[i].alias, res);
+                        if (found) break;
+                    }
+                    i++;
                 }
                 if (!found) {
-                    found = find_by_name_in_sym_table(cache, name, res);
+                    i = 0;
+                    while (constant_pseudo_symbols[i].name) {
+                        if (strcmp(name, constant_pseudo_symbols[i].name) == 0) {
+                            Symbol * type = NULL;
+                            found = find_in_dwarf(constant_pseudo_symbols[i].type, &type);
+                            if (found) {
+                                Symbol * sym = alloc_symbol();
+                                sym->ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+                                sym->frame = STACK_NO_FRAME;
+                                sym->sym_class = SYM_CLASS_VALUE;
+                                sym->base = type;
+                                sym->length = i;
+                                *res = sym;
+                                break;
+                            }
+                        }
+                        i++;
+                    }
                 }
                 clear_trap(&trap);
             }
             else {
                 error = trap.error;
-                break;
             }
-            if (found) break;
-            file = elf_list_next(sym_ctx);
-            if (file == NULL) error = errno;
-        }
-        elf_list_done(sym_ctx);
-    }
-
-    if (error == 0 && !found && sym_ip != 0) {
-        Trap trap;
-        if (set_trap(&trap)) {
-            unsigned i = 0;
-            while (base_types_aliases[i].name) {
-                if (strcmp(name, base_types_aliases[i].name) == 0) {
-                    found = find_in_dwarf(base_types_aliases[i].alias, res);
-                    if (found) break;
-                }
-                i++;
-            }
-            if (!found) {
-                i = 0;
-                while (constant_pseudo_symbols[i].name) {
-                    if (strcmp(name, constant_pseudo_symbols[i].name) == 0) {
-                        Symbol * type = NULL;
-                        found = find_in_dwarf(constant_pseudo_symbols[i].type, &type);
-                        if (found) {
-                            Symbol * sym = alloc_symbol();
-                            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
-                            sym->frame = STACK_NO_FRAME;
-                            sym->sym_class = SYM_CLASS_VALUE;
-                            sym->base = type;
-                            sym->length = i;
-                            *res = sym;
-                            break;
-                        }
-                    }
-                    i++;
-                }
-            }
-            clear_trap(&trap);
-        }
-        else {
-            error = trap.error;
         }
     }
 
@@ -714,36 +724,29 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name
     }
 #endif
 
-    if (error == 0 && !found && sym_ip == 0) {
-        /* Search all compilation units */
+    if (error == 0 && !found) {
+        /* Search in pub names of all other files */
         ELF_File * file = elf_list_first(sym_ctx, 0, ~(ContextAddress)0);
         if (file == NULL) error = errno;
         while (error == 0 && file != NULL) {
-            Trap trap;
-            if (set_trap(&trap)) {
-                unsigned i;
-                DWARFCache * cache = get_dwarf_cache(file);
-                for (i = 0; i < cache->mAddrRangesCnt; i++) {
-                    UnitAddressRange * range = cache->mAddrRanges + i;
-                    CompUnit * unit = range->mUnit;
-                    ContextAddress rt_addr = elf_map_to_run_time_address(sym_ctx, file, unit->mTextSection, range->mAddr);
-                    if (rt_addr != 0) {
-                        *res = NULL;
-                        sym_ip = rt_addr;
-                        if (find_in_object_tree(unit->mObject->mChildren, rt_addr - range->mAddr, sym_ip, name, res)) found = 1;
-                        if (!found && unit->mBaseTypes != NULL) {
-                            if (find_in_object_tree(unit->mBaseTypes->mObject->mChildren, 0, 0, name, res)) found = 1;
+            if (file != curr_file) {
+                Trap trap;
+                if (set_trap(&trap)) {
+                    DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
+                    if (cache->mPubNames.mHash != NULL) {
+                        found = find_by_name_in_pub_names(cache, &cache->mPubNames, name, res);
+                        if (!found && cache->mPubTypes.mHash != NULL) {
+                            found = find_by_name_in_pub_names(cache, &cache->mPubTypes, name, res);
                         }
-                        if (found) break;
                     }
+                    clear_trap(&trap);
                 }
-                clear_trap(&trap);
+                else {
+                    error = trap.error;
+                    break;
+                }
+                if (found) break;
             }
-            else {
-                error = trap.error;
-                break;
-            }
-            if (found) break;
             file = elf_list_next(sym_ctx);
             if (file == NULL) error = errno;
         }
@@ -762,7 +765,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name
     return 0;
 }
 
-int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, char * name, Symbol ** res) {
+int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, const char * name, Symbol ** res) {
     int error = 0;
     int found = 0;
 
@@ -775,7 +778,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
         while (error == 0 && file != NULL) {
             Trap trap;
             if (set_trap(&trap)) {
-                DWARFCache * cache = get_dwarf_cache(file);
+                DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                 UnitAddressRange * range = find_comp_unit_addr_range(cache, sym_ip, sym_ip);
                 if (range != NULL) {
                     found = find_in_object_tree(range->mUnit->mObject->mChildren, 0, 0, name, res);
@@ -1460,6 +1463,7 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
         case TAG_inheritance:
         case TAG_member:
         case TAG_constant:
+        case TAG_template_type_param:
             obj = obj->mType;
             break;
         default:
@@ -1584,6 +1588,23 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
                         ok = get_num_prop(elem_type, AT_byte_size, &sz);
                     }
                     if (ok) sz *= length;
+                }
+            }
+            if (!ok && (obj->mTag == TAG_structure_type || obj->mTag == TAG_class_type)) {
+                /* It is OK to return size 0 instead of error if the structure has no data members */
+                ObjectInfo * c = obj->mChildren;
+                sz = 0;
+                ok = 1;
+                while (ok && c != NULL) {
+                    switch (c->mTag) {
+                    case TAG_subprogram:
+                    case TAG_typedef:
+                    case TAG_template_type_param:
+                        break;
+                    default:
+                        ok = 0;
+                    }
+                    c = c->mSibling;
                 }
             }
             if (!ok && ref && ref->mTag != TAG_member && ref->mTag != TAG_inheritance) {
@@ -1901,8 +1922,6 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
     if (obj != NULL) {
         Trap trap;
         PropertyValue v;
-        static U1_T * bf = NULL;
-        static size_t bf_size = 0;
         if (set_trap(&trap)) {
             read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, 0, obj, AT_const_value, &v);
             if (v.mAddr != NULL) {
@@ -1915,10 +1934,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
             else {
                 U8_T n = v.mValue;
                 size_t i = 0;
-                if (bf_size < sizeof(v.mValue)) {
-                    bf_size = sizeof(v.mValue);
-                    bf = (U1_T *)loc_realloc(bf, bf_size);
-                }
+                U1_T * bf = (U1_T *)tmp_alloc(sizeof(v.mValue));
                 for (i = 0; i < sizeof(v.mValue); i++) {
                     bf[v.mBigEndian ? sizeof(v.mValue) - i - 1 : i] = n & 0xffu;
                     n = n >> 8;
@@ -1938,16 +1954,17 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
             assert(v.mForm == FORM_EXPR_VALUE);
             if (v.mPieces != NULL) {
                 U4_T n = 0;
+                U1_T * bf = NULL;
+                size_t bf_size = 0;
                 U4_T bf_offs = 0;
                 while (n < v.mPieceCnt) {
                     U4_T i;
-                    U1_T pbf[32];
                     PropertyValuePiece * piece = v.mPieces + n++;
                     U4_T piece_size = (piece->mBitSize + 7) / 8;
-                    if (piece_size > sizeof(pbf)) exception(ERR_BUFFER_OVERFLOW);
+                    U1_T * pbf = (U1_T *)tmp_alloc(piece_size);
                     if (bf_size < bf_offs / 8 + piece_size + 1) {
                         bf_size = bf_offs / 8 + piece_size + 1;
-                        bf = (U1_T *)loc_realloc(bf, bf_size);
+                        bf = (U1_T *)tmp_realloc(bf, bf_size);
                     }
                     if (piece->mRegister) {
                         StackFrame * frame = NULL;
@@ -1986,15 +2003,13 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
                 ContextAddress sym_size = def->size;
                 unsigned val_offs = 0;
                 unsigned val_size = 0;
+                U1_T * bf = NULL;
 
                 if (get_symbol_size(sym, &sym_size) < 0) exception(errno);
-                if (bf_size < sym_size) {
-                    bf_size = (size_t)sym_size;
-                    bf = (U1_T *)loc_realloc(bf, bf_size);
-                }
                 if (get_frame_info(v.mContext, v.mFrame, &frame) < 0) exception(errno);
                 val_size = def->size < sym_size ? (unsigned)def->size : (unsigned)sym_size;
                 if (def->big_endian) val_offs = (unsigned)def->size - val_size;
+                bf = (U1_T *)tmp_alloc(val_size);
                 if (read_reg_bytes(frame, def, val_offs, val_size, bf) < 0) exception(errno);
                 *value = bf;
                 *size = val_size;
@@ -2203,6 +2218,10 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
             break;
         case TAG_typedef:
             if (i == obj) *flags |= SYM_FLAG_TYPEDEF;
+            i = i->mType;
+            break;
+        case TAG_template_type_param:
+            if (i == obj) *flags |= SYM_FLAG_TYPE_PARAMETER;
             i = i->mType;
             break;
         case TAG_reference_type:

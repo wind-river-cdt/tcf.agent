@@ -67,6 +67,7 @@ typedef uint32_t SYM_FLAGS;
 #define SYM_FLAG_EXTERNAL       0x08000
 #define SYM_FLAG_VARARG         0x10000
 #define SYM_FLAG_ARTIFICIAL     0x20000
+#define SYM_FLAG_TYPE_PARAMETER 0x40000
 
 /* Symbol properties update policies */
 #define UPDATE_ON_MEMORY_MAP_CHANGES 0
@@ -81,14 +82,14 @@ typedef void EnumerateSymbolsCallBack(void *, Symbol *);
  * On error, returns -1 and sets errno.
  * On success returns 0.
  */
-extern int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, char * name, Symbol ** sym);
+extern int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char * name, Symbol ** sym);
 
 /*
  * Find symbol information for given symbol name in given context and visibility scope.
  * On error, returns -1 and sets errno.
  * On success returns 0.
  */
-extern int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, char * name, Symbol ** sym);
+extern int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, const char * name, Symbol ** sym);
 
 /*
  * Find symbol information for given address in given context.

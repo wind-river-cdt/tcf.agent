@@ -30,7 +30,7 @@
 #include <tcf/services/linenumbers.h>
 #include <tcf/services/memtrace.h>
 #if defined(WIN32)
-#  include <tcf/system/Windows/context-win32.h>
+#  include <system/Windows/tcf/context-win32.h>
 #endif
 
 #define USE_DEBUG_REGS  0
@@ -43,7 +43,7 @@
 #define FUNC_DESTROY    6
 
 typedef struct EventPoint {
-    char * name;
+    const char * name;
     int heap_type;
     int func_type;
 } EventPoint;
@@ -127,8 +127,10 @@ static LINK mem_hash[MEM_HASH_SIZE];
 static RegisterDefinition * reg_def_eax = NULL;
 static RegisterDefinition * reg_def_esp = NULL;
 static RegisterDefinition * reg_def_eip = NULL;
+#if defined(__x86_64__)
 static RegisterDefinition * reg_def_rdi = NULL;
 static RegisterDefinition * reg_def_rsi = NULL;
+#endif
 
 #define link_mem2trace(x)  ((StackTrace *)((char *)(x) - offsetof(StackTrace, link_all)))
 #define link_mem2ret(x)    ((ReturnPoint *)((char *)(x) - offsetof(ReturnPoint, link_mem)))
@@ -516,12 +518,14 @@ static int sort_func(const void * x, const void * y) {
 
 static int print_text_pos_cnt = 0;
 
+#if SERVICE_LineNumbers
 static void print_text_pos(CodeArea * area, void * args) {
     if (print_text_pos_cnt == 0) {
         printf("    %s %d\n", area->file, area->start_line);
     }
     print_text_pos_cnt++;
 }
+#endif
 
 #if !USE_DEBUG_REGS
 static void rp_callback(Context * ctx, void * args) {
@@ -537,8 +541,10 @@ static void event_point(Context * ctx, void * args) {
     StackFrame * info = NULL;
     uint64_t esp = 0;
     uint64_t eip = 0;
+#if defined(__x86_64__)
     uint64_t rdi = 0;
     uint64_t rsi = 0;
+#endif
     ContextAddress buf[4];
     MemorySpace * m = NULL;
     static StackTrace trace;
@@ -691,11 +697,13 @@ static void event_point(Context * ctx, void * args) {
             for (i = 0; i < 8 && i < cnt; i++) {
                 int j;
                 StackTrace * t = buf[i];
-                printf("  curr %lld, total %lld, calls %d\n",
-                    (long long)t->size_current, (long long)t->size_total, t->call_cnt);
+                printf("  curr %" PRId64 ", total %" PRId64 ", calls %d\n",
+                    (int64_t)t->size_current, (int64_t)t->size_total, t->call_cnt);
                 for (j = 0; j < t->frame_cnt; j++) {
                     print_text_pos_cnt = 0;
+#if SERVICE_LineNumbers
                     address_to_line(ctx, t->frames[j], t->frames[j] + 1, print_text_pos, NULL);
+#endif
                     if (print_text_pos_cnt == 0) {
                         printf("    0x%" PRIX64 "\n", (uint64_t)t->frames[j]);
                     }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -674,6 +674,34 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, Pu
     dio_ExitSection();
 }
 
+static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
+    ObjectInfo * unit = sCache->mCompUnits;
+    tbl->mMax = (unsigned)(debug_info->size / 256) + 16;
+    tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * SYM_HASH_SIZE);
+    tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
+    memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
+    while (unit != NULL) {
+        ObjectInfo * obj = unit->mChildren;
+        while (obj != NULL) {
+            if (obj->mFlags & DOIF_external) {
+                unsigned h;
+                PubNamesInfo * info = NULL;
+                if (tbl->mCnt >= tbl->mMax) {
+                    tbl->mMax = tbl->mMax * 3 / 2;
+                    tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
+                }
+                info = tbl->mNext + tbl->mCnt;
+                h = calc_symbol_name_hash(obj->mName);
+                info->mID = obj->mID;
+                info->mNext = tbl->mHash[h];
+                tbl->mHash[h] = tbl->mCnt++;
+            }
+            obj = obj->mSibling;
+        }
+        unit = unit->mSibling;
+    }
+}
+
 static void load_debug_sections(void) {
     Trap trap;
     unsigned idx;
@@ -736,6 +764,7 @@ static void load_debug_sections(void) {
 
     if (debug_info) {
         if (pub_names) load_pub_names(debug_info, pub_names, &sCache->mPubNames);
+        else create_pub_names(debug_info, &sCache->mPubNames);
         if (pub_types) load_pub_names(debug_info, pub_types, &sCache->mPubTypes);
     }
 
@@ -1032,6 +1061,14 @@ static void free_dwarf_cache(ELF_File * file) {
     }
 }
 
+ELF_File * get_dwarf_file(ELF_File * file) {
+    if (file->debug_info_file_name != NULL && !file->debug_info_file) {
+        ELF_File * debug = elf_open(file->debug_info_file_name);
+        if (debug != NULL) return debug;
+    }
+    return file;
+}
+
 DWARFCache * get_dwarf_cache(ELF_File * file) {
     DWARFCache * Cache = (DWARFCache *)file->dwarf_dt_cache;
     if (Cache == NULL) {
@@ -1251,7 +1288,7 @@ static void load_line_numbers_v2(CompUnit * Unit, U8_T unit_size, int dwarf64) {
                 }
                 break;
             case DW_LNE_set_discriminator:
-                state.mDiscriminator = dio_ReadULEB128();
+                state.mDiscriminator = (U1_T)dio_ReadULEB128();
                 break;
             default:
                 dio_Skip(op_size - 1);

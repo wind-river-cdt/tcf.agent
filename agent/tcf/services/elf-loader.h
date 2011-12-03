@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -14,29 +14,27 @@
  *******************************************************************************/
 
 /*
- * Agent self-testing service.
+ * This module implements access to ELF dynamic loader data.
  */
 
-#ifndef D_test
-#define D_test
+#ifndef D_elf_loader
+#define D_elf_loader
 
 #include <tcf/config.h>
 
-#if ENABLE_RCBP_TEST
+#if ENABLE_ELF && ENABLE_DebugContext
 
 #include <tcf/framework/context.h>
-#include <tcf/services/symbols.h>
+#include <tcf/services/tcf_elf.h>
 
-extern void test_proc(void);
-extern int run_test_process(ContextAttachCallBack * done, void * data);
-extern int find_test_symbol(Context * ctx, const char * name, void ** addr, int * sym_class);
+/*
+ * Return run-time address of the debug structrure that is normally pointed by DT_DEBUG entry in ".dynamic" section.
+ * "file" is assigned a file that contains DT_DEBUG entry.
+ * Return 0 if the structure could not be found.
+ */
+extern ContextAddress elf_get_debug_structure_address(Context * ctx, ELF_File ** file_ptr);
 
-#else /* ENABLE_RCBP_TEST */
+extern ContextAddress get_tls_address(Context * ctx, ELF_File * file);
 
-#include <tcf/framework/errors.h>
-
-#define find_test_symbol(ctx, name, addr, sym_class) (errno = ERR_SYM_NOT_FOUND, -1)
-
-#endif /* ENABLE_RCBP_TEST */
-
-#endif /* D_test */
+#endif /* ENABLE_ELF && ENABLE_DebugContext */
+#endif /* D_elf_loader */

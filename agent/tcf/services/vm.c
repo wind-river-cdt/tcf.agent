@@ -156,6 +156,13 @@ static void get_state(VMState * s) {
     code_len = 0;
 }
 
+static int is_end_of_loc_expr(void) {
+    return
+        code_pos >= code_len ||
+        code[code_pos] == OP_piece ||
+        code[code_pos] == OP_bit_piece;
+}
+
 static void evaluate_expression(void) {
     uint64_t data = 0;
 
@@ -166,7 +173,7 @@ static void evaluate_expression(void) {
 
         if (state->stk_pos + 4 > state->stk_max) {
             state->stk_max += 8;
-            state->stk = (uint64_t *)loc_realloc(state->stk, sizeof(uint64_t) * state->stk_max);
+            state->stk = (uint64_t *)tmp_realloc(state->stk, sizeof(uint64_t) * state->stk_max);
         }
 
         switch (op) {
@@ -274,6 +281,7 @@ static void evaluate_expression(void) {
         case OP_div:
             check_e_stack(2);
             state->stk_pos--;
+            if (state->stk[state->stk_pos] == 0) inv_dwarf("Division by zero in DWARF expression");
             state->stk[state->stk_pos - 1] /= state->stk[state->stk_pos];
             break;
         case OP_minus:
@@ -284,6 +292,7 @@ static void evaluate_expression(void) {
         case OP_mod:
             check_e_stack(2);
             state->stk_pos--;
+            if (state->stk[state->stk_pos] == 0) inv_dwarf("Division by zero in DWARF expression");
             state->stk[state->stk_pos - 1] %= state->stk[state->stk_pos];
             break;
         case OP_mul:
@@ -330,11 +339,16 @@ static void evaluate_expression(void) {
                 check_e_stack(2);
                 data = state->stk[state->stk_pos - 2];
                 cnt = state->stk[state->stk_pos - 1];
-                while (cnt > 0) {
-                    int s = (data & ((uint64_t)1 << 63)) != 0;
-                    data >>= 1;
-                    if (s) data |= (uint64_t)1 << 63;
-                    cnt--;
+                if (cnt >= 64) {
+                    data = data & ((uint64_t)1 << 63) ? ~(uint64_t)0 : 0;
+                }
+                else {
+                    while (cnt > 0) {
+                        int s = (data & ((uint64_t)1 << 63)) != 0;
+                        data >>= 1;
+                        if (s) data |= (uint64_t)1 << 63;
+                        cnt--;
+                    }
                 }
                 state->stk[state->stk_pos - 2] = data;
                 state->stk_pos--;
@@ -458,7 +472,7 @@ static void evaluate_expression(void) {
         case OP_reg31:
             {
                 unsigned n = op - OP_reg0;
-                if (code_pos < code_len && code[code_pos] != OP_piece) inv_dwarf("OP_reg must be last instruction");
+                if (!is_end_of_loc_expr()) inv_dwarf("OP_reg must be last instruction");
                 state->reg = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
                 if (state->reg == NULL) exception(errno);
             }
@@ -466,7 +480,7 @@ static void evaluate_expression(void) {
         case OP_regx:
             {
                 unsigned n = (unsigned)read_u4leb128();
-                if (code_pos < code_len && code[code_pos] != OP_piece) inv_dwarf("OP_regx must be last instruction");
+                if (!is_end_of_loc_expr()) inv_dwarf("OP_regx must be last instruction");
                 state->reg = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
                 if (state->reg == NULL) exception(errno);
             }
@@ -474,7 +488,7 @@ static void evaluate_expression(void) {
         case OP_reg:
             {
                 unsigned n = (unsigned)read_ua();
-                if (code_pos < code_len && code[code_pos] != OP_piece) inv_dwarf("OP_reg must be last instruction");
+                if (!is_end_of_loc_expr()) inv_dwarf("OP_reg must be last instruction");
                 state->reg = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
                 if (state->reg == NULL) exception(errno);
             }
@@ -571,7 +585,7 @@ static void evaluate_expression(void) {
             state->value_addr = tmp_alloc(state->value_size);
             memcpy(state->value_addr, code + code_pos, state->value_size);
             code_pos += state->value_size;
-            if (code_pos < code_len && code[code_pos] != OP_piece) inv_dwarf("OP_implicit_value must be last instruction");
+            if (!is_end_of_loc_expr()) inv_dwarf("OP_implicit_value must be last instruction");
             break;
         case OP_stack_value:
             check_e_stack(1);
@@ -579,7 +593,7 @@ static void evaluate_expression(void) {
             state->value_size = sizeof(uint64_t);
             state->value_addr = tmp_alloc(state->value_size);
             memcpy(state->value_addr, state->stk + state->stk_pos, state->value_size);
-            if (code_pos < code_len && code[code_pos] != OP_piece) inv_dwarf("OP_stack_value must be last instruction");
+            if (!is_end_of_loc_expr()) inv_dwarf("OP_stack_value must be last instruction");
             if (big_endian_host() != state->big_endian) {
                 size_t i, j, n = state->value_size >> 1;
                 char * p = (char *)state->value_addr;

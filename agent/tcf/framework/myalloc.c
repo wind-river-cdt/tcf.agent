@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -20,39 +20,40 @@
 #include <tcf/config.h>
 #include <assert.h>
 #include <string.h>
+#include <tcf/framework/link.h>
 #include <tcf/framework/trace.h>
 #include <tcf/framework/events.h>
 #include <tcf/framework/myalloc.h>
 
-typedef struct TmpBuffer TmpBuffer;
-
-struct TmpBuffer {
-    TmpBuffer * next;
-};
+#define ALIGNMENT (sizeof(size_t *))
+#define POOL_SIZE (0x100000 * MEM_USAGE_FACTOR)
 
 static char * tmp_pool = NULL;
 static unsigned tmp_pool_pos = 0;
 static unsigned tmp_pool_max = 0;
 static unsigned tmp_pool_avr = 0;
 static unsigned tmp_alloc_size = 0;
-static TmpBuffer * tmp_alloc_list = NULL;
+static LINK tmp_alloc_list = TCF_LIST_INIT(tmp_alloc_list);
 static int tmp_gc_posted = 0;
 
 static void tmp_gc(void * args) {
-    if (tmp_alloc_list != NULL) {
-        tmp_pool_max += tmp_pool_max > tmp_alloc_size ? tmp_pool_max : tmp_alloc_size;
-        tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
-        while (tmp_alloc_list != NULL) {
-            TmpBuffer * buf = tmp_alloc_list;
-            tmp_alloc_list = buf->next;
-            loc_free(buf);
+    if (!list_is_empty(&tmp_alloc_list)) {
+        if (tmp_pool_max < POOL_SIZE) {
+            tmp_pool_max += tmp_pool_max > tmp_alloc_size ? tmp_pool_max : tmp_alloc_size;
+            if (tmp_pool_max > POOL_SIZE) tmp_pool_max = POOL_SIZE;
+            tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
+        }
+        while (!list_is_empty(&tmp_alloc_list)) {
+            LINK * l = tmp_alloc_list.next;
+            list_remove(l);
+            loc_free(l);
         }
     }
     if (tmp_pool_pos + tmp_alloc_size >= tmp_pool_avr) {
         tmp_pool_avr = tmp_pool_pos + tmp_alloc_size;
     }
-    else if (tmp_pool_avr > 0) {
-        tmp_pool_avr--;
+    else if (tmp_pool_avr > POOL_SIZE / 100) {
+        tmp_pool_avr -= POOL_SIZE / 100;
     }
     if (tmp_pool_avr < tmp_pool_max / 4) {
         tmp_pool_max /= 2;
@@ -70,24 +71,49 @@ void * tmp_alloc(size_t size) {
         post_event(tmp_gc, NULL);
         tmp_gc_posted = 1;
     }
-    if (tmp_pool_pos + size <= tmp_pool_max) {
+    if (tmp_pool_pos + size + ALIGNMENT + sizeof(size_t *) <= tmp_pool_max) {
+        tmp_pool_pos += sizeof(size_t *);
+        tmp_pool_pos = (tmp_pool_pos + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
         p = tmp_pool + tmp_pool_pos;
-        tmp_pool_pos += (size + 7) & ~7u;
+        *((size_t *)p - 1) = size;
+        tmp_pool_pos += size;
     }
     else {
-        TmpBuffer * buf = (TmpBuffer *)loc_alloc(sizeof(TmpBuffer) + size);
-        buf->next = tmp_alloc_list;
-        tmp_alloc_list = buf;
+        LINK * l = (LINK *)loc_alloc(sizeof(LINK) + size);
+        list_add_last(l, &tmp_alloc_list);
         tmp_alloc_size += size;
-        p = buf + 1;
+        p = l + 1;
     }
     return p;
 }
 
 void * tmp_alloc_zero(size_t size) {
-    void * p = tmp_alloc(size);
-    memset(p, 0, size);
-    return p;
+    return memset(tmp_alloc(size), 0, size);
+}
+
+void * tmp_realloc(void * ptr, size_t size) {
+    if (ptr == NULL) return tmp_alloc(size);
+    if ((char *)ptr >= tmp_pool && (char *)ptr <= tmp_pool + tmp_pool_max) {
+        size_t m = *((size_t *)ptr - 1);
+        unsigned pos = tmp_pool_pos - m;
+        if (ptr == tmp_pool + pos && pos + size <= tmp_pool_max) {
+            tmp_pool_pos = pos + size;
+            *((size_t *)ptr - 1) = size;
+        }
+        else {
+            void * p = tmp_alloc(size);
+            if (m > size) m = size;
+            ptr = memcpy(p, ptr, m);
+        }
+    }
+    else {
+        LINK * l = (LINK *)ptr - 1;
+        list_remove(l);
+        l = (LINK *)loc_realloc(l, sizeof(LINK) + size);
+        list_add_last(l, &tmp_alloc_list);
+        ptr = l + 1;
+    }
+    return ptr;
 }
 
 void * loc_alloc(size_t size) {
@@ -107,9 +133,7 @@ void * loc_alloc(size_t size) {
 void * loc_alloc_zero(size_t size) {
     void * p;
 
-    if (size == 0) {
-        size = 1;
-    }
+    if (size == 0) size = 1;
     if ((p = malloc(size)) == NULL) {
         perror("malloc");
         exit(1);
@@ -122,9 +146,7 @@ void * loc_alloc_zero(size_t size) {
 void * loc_realloc(void * ptr, size_t size) {
     void * p;
 
-    if (size == 0) {
-        size = 1;
-    }
+    if (size == 0) size = 1;
     if ((p = realloc(ptr, size)) == NULL) {
         perror("realloc");
         exit(1);

@@ -259,6 +259,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\agent\tcf\services\elf-loader.c"
+				>
+			</File>
+			<File
+				RelativePath="..\agent\tcf\services\elf-loader.h"
+				>
+			</File>
+			<File
 				RelativePath="..\agent\tcf\services\filesystem.c"
 				>
 			</File>

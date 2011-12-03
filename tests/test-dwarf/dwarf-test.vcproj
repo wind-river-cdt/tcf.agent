@@ -230,6 +230,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\framework\cpudefs-ext.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\agent\tcf\framework\cpudefs.c"
 				>
 			</File>
@@ -490,6 +494,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\agent\tcf\services\elf-loader.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\services\elf-loader.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\agent\tcf\services\expressions.c"
 				>
 			</File>
@@ -647,22 +659,6 @@
 			</File>
 		</Filter>
 		<Filter
-			Name="machine"
-			>
-			<File
-				RelativePath=".\tcf\machine\cpudefs-ext.h"
-				>
-			</File>
-			<Filter
-				Name="i386"
-				>
-				<File
-					RelativePath="..\..\agent\tcf\machine\i386\elf-mdep.h"
-					>
-				</File>
-			</Filter>
-		</Filter>
-		<Filter
 			Name="backend"
 			>
 			<File
@@ -678,7 +674,7 @@
 			Name="system"
 			>
 			<File
-				RelativePath="..\..\agent\tcf\system\Windows\pthreads-win32.c"
+				RelativePath="..\..\agent\system\Windows\tcf\pthreads-win32.c"
 				>
 			</File>
 		</Filter>

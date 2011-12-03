@@ -199,15 +199,8 @@ int line_to_address(Context * ctx, char * file_name, int line, int column,
             h = calc_file_name_hash(fnm);
             while (file != NULL) {
                 Trap trap;
-                if (file->debug_info_file_name != NULL && !file->debug_info_file) {
-                    ELF_File * debug = elf_open(file->debug_info_file_name);
-                    if (debug != NULL) {
-                        debug->debug_info_file = 1;
-                        file = debug;
-                    }
-                }
                 if (set_trap(&trap)) {
-                    DWARFCache * cache = get_dwarf_cache(file);
+                    DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                     ObjectInfo * info = cache->mCompUnits;
                     while (info != NULL) {
                         CompUnit * unit = info->mCompUnit;
