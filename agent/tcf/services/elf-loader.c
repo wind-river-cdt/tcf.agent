@@ -245,7 +245,14 @@ static ContextAddress get_module_id(Context * ctx, ELF_File * module) {
 
 ContextAddress get_tls_address(Context * ctx, ELF_File * file) {
     ContextAddress mod_tls_addr = 0;
-    RegisterIdScope reg_id_scope = { file->machine, file->os_abi, file->big_endian, REGNUM_DWARF };
+    RegisterIdScope reg_id_scope;
+
+    memset(&reg_id_scope, 0, sizeof(reg_id_scope));
+    reg_id_scope.machine = file->machine;
+    reg_id_scope.os_abi = file->os_abi;
+    reg_id_scope.big_endian = file->big_endian;
+    reg_id_scope.id_type = REGNUM_DWARF;
+
     switch (file->machine) {
     case EM_X86_64:
         {

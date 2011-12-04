@@ -216,6 +216,7 @@ static void loc_var_func(void * args, Symbol * sym) {
             if (strncmp(errno_to_str(err), "Object is not available", 23) == 0) return;
             if (strncmp(errno_to_str(err), "Object has no RT address", 24) == 0) return;
             if (strncmp(errno_to_str(err), "Division by zero in DWARF", 25) == 0) return;
+            if (strncmp(errno_to_str(err), "Cannot find loader debug", 24) == 0) return;
             errno = err;
             error("get_symbol_address");
         }

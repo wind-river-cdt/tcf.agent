@@ -377,6 +377,7 @@
 #define OP_calli                    0x9a  /* typo? */
 #define OP_ref                      0x9a
 #define OP_call_ref                 0x9a
+#define OP_form_tls_address         0x9b
 #define OP_call_frame_cfa           0x9c
 #define OP_bit_piece                0x9d
 #define OP_implicit_value           0x9e /* v4 */

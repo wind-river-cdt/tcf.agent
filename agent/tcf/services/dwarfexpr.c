@@ -184,7 +184,19 @@ static void client_op(uint8_t op) {
         if (sState->stack_frame == STACK_NO_FRAME) str_exception(ERR_INV_CONTEXT, "Invalid stack frame");
         sState->stk[sState->stk_pos++] = get_fbreg();
         break;
+    case OP_form_tls_address:
+        if (sState->stk_pos == 0) str_exception(ERR_INV_DWARF, "Invalid DWARF expression stack");
+        sState->stk[sState->stk_pos - 1] = evaluate_tls_address(sState->stk[sState->stk_pos - 1]);
+        break;
     case OP_GNU_push_tls_address:
+        if (sState->stk_pos == 0 && sState->code_pos < sState->code_len) {
+            /* This looks like a bug in GCC: offset sometimes is emitted after OP_GNU_push_tls_address */
+            switch (dio_ReadU1()) {
+            case OP_const4u: sState->stk[sState->stk_pos++] = dio_ReadU4(); break;
+            case OP_const8u: sState->stk[sState->stk_pos++] = dio_ReadU8(); break;
+            case OP_constu:  sState->stk[sState->stk_pos++] = dio_ReadU8LEB128(); break;
+            }
+        }
         if (sState->stk_pos == 0) str_exception(ERR_INV_DWARF, "Invalid DWARF expression stack");
         sState->stk[sState->stk_pos - 1] = evaluate_tls_address(sState->stk[sState->stk_pos - 1]);
         break;
