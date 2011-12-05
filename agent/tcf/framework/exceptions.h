@@ -45,7 +45,7 @@ struct Trap {
     Trap * next;
 };
 
-#define set_trap(trap) (set_trap_a(trap), (trap)->error = setjmp((trap)->env), set_trap_b(trap))
+#define set_trap(trap) (set_trap_a(trap), setjmp((trap)->env), set_trap_b(trap))
 
 extern int set_trap_a(Trap * trap);
 extern int set_trap_b(Trap * trap);

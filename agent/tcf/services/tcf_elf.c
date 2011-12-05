@@ -42,9 +42,9 @@
 #include <tcf/services/pathmap.h>
 
 #if defined(_WRS_KERNEL)
-#elif defined(__CYGWIN__)
-#elif defined(WIN32)
+#elif defined(_MSC_VER)
 #  define USE_MMAP
+#elif defined(WIN32)
 #else
 #  include <sys/mman.h>
 #  define USE_MMAP

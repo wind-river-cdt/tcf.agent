@@ -28,6 +28,7 @@
 #include <tcf/framework/events.h>
 #include <tcf/framework/errors.h>
 #include <tcf/framework/trace.h>
+#include <tcf/framework/exceptions.h>
 #include <tcf/framework/channel_tcp.h>
 #include <tcf/framework/plugins.h>
 #include <tcf/services/discovery.h>
@@ -61,6 +62,21 @@ static void signal_handler(int sig) {
 }
 
 #if defined(WIN32)
+static LONG NTAPI VectoredExceptionHandler(PEXCEPTION_POINTERS x) {
+    if (is_dispatch_thread()) {
+        DWORD exception_code = x->ExceptionRecord->ExceptionCode;
+        if (exception_code == EXCEPTION_IN_PAGE_ERROR) {
+            int error = ERR_OTHER;
+            if (x->ExceptionRecord->NumberParameters >= 3) {
+                ULONG status = x->ExceptionRecord->ExceptionInformation[2];
+                if (status != 0) error = set_nt_status_errno(status);
+            }
+            str_exception(error, "In page error");
+        }
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
 static BOOL CtrlHandler(DWORD ctrl) {
     switch(ctrl) {
     case CTRL_C_EVENT:
@@ -249,6 +265,7 @@ int main(int argc, char ** argv) {
     signal(SIGTERM, signal_handler);
 #if defined(WIN32)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
+    AddVectoredExceptionHandler(1, VectoredExceptionHandler);
 #endif
 #endif /* ENABLE_SignalHandlers */
 

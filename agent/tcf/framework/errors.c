@@ -117,7 +117,7 @@ static ErrorMessage * alloc_msg(int source) {
 
 #ifdef WIN32
 
-static char * system_strerror(DWORD win32_error_code) {
+static char * system_strerror(DWORD error_code, HMODULE module) {
     WCHAR * buf = NULL;
     assert(is_dispatch_thread());
     msg_len = 0;
@@ -125,9 +125,10 @@ static char * system_strerror(DWORD win32_error_code) {
             FORMAT_MESSAGE_ALLOCATE_BUFFER |
             FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS |
-            FORMAT_MESSAGE_MAX_WIDTH_MASK,
-            NULL,
-            win32_error_code,
+            FORMAT_MESSAGE_MAX_WIDTH_MASK |
+            (module ? FORMAT_MESSAGE_FROM_HMODULE : 0),
+            module,
+            error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* Default language */
             (LPWSTR)&buf, 0, NULL)) {
         msg_len = WideCharToMultiByte(CP_UTF8, 0, buf, -1, NULL, 0, NULL, NULL);
@@ -138,7 +139,7 @@ static char * system_strerror(DWORD win32_error_code) {
     }
     if (msg_len == 0) {
         realloc_msg_buf();
-        msg_len = snprintf(msg_buf, msg_max, "System error code 0x%lx", (unsigned long)win32_error_code);
+        msg_len = snprintf(msg_buf, msg_max, "System error code 0x%lx", (unsigned long)error_code);
     }
     if (buf != NULL) LocalFree(buf);
     while (msg_len > 0 && msg_buf[msg_len - 1] <= ' ') msg_len--;
@@ -151,6 +152,17 @@ int set_win32_errno(DWORD win32_error_code) {
     if (win32_error_code == 0) return errno = 0;
     if (win32_error_code >= ERR_WINDOWS_CNT) return errno = ERR_OTHER;
     return errno = ERR_WINDOWS_MIN + win32_error_code;
+}
+
+int set_nt_status_errno(DWORD status) {
+    int error = 0;
+    if (status != 0) {
+        HMODULE module = LoadLibrary("NTDLL.DLL");
+        char * msg = system_strerror(status, module);
+        error = set_errno(ERR_OTHER, msg);
+        FreeLibrary(module);
+    }
+    return errno = error;
 }
 
 #elif defined(__SYMBIAN32__)
@@ -336,12 +348,17 @@ const char * errno_to_str(int err) {
                 }
             }
             else {
-                return "cannot get error message text: errno_to_str() must be called from the main thread";
+                return "Cannot get error message text: errno_to_str() must be called from the main thread";
             }
         }
 #ifdef WIN32
         if (err >= ERR_WINDOWS_MIN && err <= ERR_WINDOWS_MAX) {
-            return system_strerror(err - ERR_WINDOWS_MIN);
+            if (is_dispatch_thread()) {
+                return system_strerror(err - ERR_WINDOWS_MIN, NULL);
+            }
+            else {
+                return "Cannot get error message text: errno_to_str() must be called from the main thread";
+            }
         }
 #endif
 #ifdef __SYMBIAN32__
@@ -366,11 +383,12 @@ int set_errno(int no, const char * msg) {
             m->text = loc_strdup(msg);
         }
         else {
-            const char * text0 = errno_to_str(no);
-            size_t len = strlen(msg) + strlen(text0) + 4;
-            char * text1 = (char *)loc_alloc(len);
-            snprintf(text1, len, "%s. %s", msg, text0);
-            m->text = text1;
+            const char * text0 = tmp_strdup(msg);
+            const char * text1 = errno_to_str(no);
+            size_t len = strlen(text0) + strlen(text1) + 4;
+            char * text2 = (char *)loc_alloc(len);
+            snprintf(text2, len, "%s. %s", text0, text1);
+            m->text = text2;
         }
         errno = err;
     }

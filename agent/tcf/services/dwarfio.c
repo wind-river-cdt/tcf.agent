@@ -263,7 +263,7 @@ U8_T dio_ReadUX(int Size) {
     case 8:
         return dio_ReadU8();
     default:
-        str_exception(ERR_INV_DWARF, "invalid data size");;
+        str_exception(ERR_INV_DWARF, "Invalid data size");
         return 0;
     }
 }
@@ -287,7 +287,7 @@ U8_T dio_ReadAddressX(ELF_Section ** s, int size) {
         return x;
     }
     default:
-        str_exception(ERR_INV_DWARF, "invalid data size");;
+        str_exception(ERR_INV_DWARF, "Invalid data size");
         return 0;
     }
 }
@@ -315,7 +315,7 @@ static U1_T * dio_LoadStringTable(U4_T * StringTableSize) {
         for (ID = 1; ID < File->section_cnt; ID++) {
             if (strcmp(File->sections[ID].name, ".debug_str") == 0) {
                 if (Section != NULL) {
-                    str_exception(ERR_INV_DWARF, "more then one .debug_str section in a file");
+                    str_exception(ERR_INV_DWARF, "More then one .debug_str section in a file");
                 }
                 Section = File->sections + ID;
                 assert(Section->file == File);
@@ -323,12 +323,12 @@ static U1_T * dio_LoadStringTable(U4_T * StringTableSize) {
         }
 
         if (Section == NULL) {
-            str_exception(ERR_INV_DWARF, "section .debug_str not found");
+            str_exception(ERR_INV_DWARF, "Section .debug_str not found");
         }
 
         Cache->mStringTableSize = (size_t)Section->size;
         if (elf_load(Section) < 0) {
-            str_exception(ERR_INV_DWARF, "invalid .debug_str section");
+            str_exception(ERR_INV_DWARF, "Invalid .debug_str section");
         }
         Cache->mStringTable = (U1_T *)Section->data;
     }
@@ -362,7 +362,7 @@ static void dio_ReadFormRef(void) {
 
 static void dio_ReadFormRelRef(U8_T Offset) {
     if (sUnit->mUnitSize > 0 && Offset >= sUnit->mUnitSize) {
-        str_exception(ERR_INV_DWARF, "invalid REF attribute value");
+        str_exception(ERR_INV_DWARF, "Invalid REF attribute value");
     }
     dio_gFormData = sSection->addr + sUnit->mUnitOffs + Offset;
     dio_gFormDataSize = sAddressSize;
@@ -387,7 +387,7 @@ static void dio_ReadFormStringRef(void) {
     dio_gFormDataSize = 1;
     for (;;) {
         if (Offset >= StringTableSize) {
-            str_exception(ERR_INV_DWARF, "invalid FORM_STRP attribute");
+            str_exception(ERR_INV_DWARF, "Invalid FORM_STRP attribute");
         }
         if (StringTable[Offset++] == 0) break;
         dio_gFormDataSize++;
@@ -405,7 +405,7 @@ void dio_ReadAttribute(U2_T Attr, U2_T Form) {
         case FORM_DATA2     : Size = 2; break;
         case FORM_DATA4     : Size = 4; break;
         case FORM_DATA8     : Size = 8; break;
-        default: str_exception(ERR_INV_DWARF, "invalid FORM of DW_AT_stmt_list");
+        default: str_exception(ERR_INV_DWARF, "Invalid FORM of DW_AT_stmt_list");
         }
         dio_gFormData = dio_ReadAddressX(&dio_gFormSection, Size);
         dio_gFormDataSize = Size;
@@ -439,7 +439,7 @@ void dio_ReadAttribute(U2_T Attr, U2_T Form) {
                             break;
     case FORM_EXPRLOC       : dio_ReadFormBlock(dio_ReadULEB128()); break;
     case FORM_REF_SIG8      : dio_ReadFormData(8, dio_ReadU8()); break;
-    default: str_exception(ERR_INV_DWARF, "invalid FORM");
+    default: str_exception(ERR_INV_DWARF, "Invalid FORM code");
     }
 }
 
@@ -455,7 +455,7 @@ int dio_ReadEntry(DIO_EntryCallBack CallBack, U2_T TargetAttr) {
         U4_T AbbrCode = dio_ReadULEB128();
         if (AbbrCode == 0) return 0;
         if (AbbrCode >= sUnit->mAbbrevTableSize || sUnit->mAbbrevTable[AbbrCode] == NULL) {
-            str_exception(ERR_INV_DWARF, "invalid abbreviation code");
+            str_exception(ERR_INV_DWARF, "Invalid abbreviation code");
         }
         Abbr =  sUnit->mAbbrevTable[AbbrCode];
         Tag = Abbr->mTag;
@@ -548,7 +548,7 @@ int dio_ReadEntry(DIO_EntryCallBack CallBack, U2_T TargetAttr) {
                 assert(sUnit->mUnitOffs + sUnit->mUnitSize >= sDataPos);
             }
             else if (Attr == 0 && Form == 0) {
-                if (sUnit->mUnitSize == 0) str_exception(ERR_INV_DWARF, "missing compilation unit sibling attribute");
+                if (sUnit->mUnitSize == 0) str_exception(ERR_INV_DWARF, "Missing compilation unit sibling attribute");
             }
         }
         CallBack(Tag, Attr, Form);
@@ -610,7 +610,7 @@ void dio_LoadAbbrevTable(ELF_File * File) {
     for (ID = 1; ID < File->section_cnt; ID++) {
         if (strcmp(File->sections[ID].name, ".debug_abbrev") == 0) {
             if (Section != NULL) {
-                str_exception(ERR_INV_DWARF, "more then one .debug_abbrev section in a file");
+                str_exception(ERR_INV_DWARF, "More then one .debug_abbrev section in a file");
             }
             Section = File->sections + ID;
         }
@@ -638,7 +638,7 @@ void dio_LoadAbbrevTable(ELF_File * File) {
             TableOffset = sDataPos;
             continue;
         }
-        if (ID >= 0x1000000) str_exception(ERR_INV_DWARF, "invalid abbreviation table");
+        if (ID >= 0x1000000) str_exception(ERR_INV_DWARF, "Invalid abbreviation table");
         if (ID >= AbbrevBufPos) {
             U4_T Pos = AbbrevBufPos;
             AbbrevBufPos = ID + 1;
@@ -659,10 +659,10 @@ void dio_LoadAbbrevTable(ELF_File * File) {
         for (;;) {
             U4_T Attr = dio_ReadULEB128();
             U4_T Form = dio_ReadULEB128();
-            if (Attr >= 0x10000 || Form >= 0x10000) str_exception(ERR_INV_DWARF, "invalid abbreviation table");
+            if (Attr >= 0x10000 || Form >= 0x10000) str_exception(ERR_INV_DWARF, "Invalid abbreviation table");
             if (Attr == 0 && Form == 0) {
                 DIO_Abbreviation * Abbr;
-                if (AbbrevBuf[ID] != NULL) str_exception(ERR_INV_DWARF, "invalid abbreviation table");
+                if (AbbrevBuf[ID] != NULL) str_exception(ERR_INV_DWARF, "Invalid abbreviation table");
                 Abbr = (DIO_Abbreviation *)loc_alloc_zero(sizeof(DIO_Abbreviation) - sizeof(U2_T) * 2 + sizeof(U2_T) * AttrPos);
                 Abbr->mTag = Tag;
                 Abbr->mChildren = Children;
@@ -699,7 +699,7 @@ static void dio_FindAbbrevTable(void) {
     }
     sUnit->mAbbrevTable = NULL;
     sUnit->mAbbrevTableSize = 0;
-    str_exception(ERR_INV_DWARF, "invalid abbreviation table offset");
+    str_exception(ERR_INV_DWARF, "Invalid abbreviation table offset");
 }
 
 void dio_ChkFlag(U2_T Form) {

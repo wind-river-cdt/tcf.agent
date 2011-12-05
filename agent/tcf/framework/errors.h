@@ -111,6 +111,13 @@ extern int set_gai_errno(int gai_error_code);
  * Return new value of errno.
  */
 extern int set_win32_errno(DWORD win32_error_code);
+
+/*
+ * Set errno to indicate NTSTATUS error code.
+ * This function can be called only from dispatch thread.
+ * Return new value of errno.
+ */
+extern int set_nt_status_errno(DWORD /* NTSTATUS */ status);
 #endif
 
 /*

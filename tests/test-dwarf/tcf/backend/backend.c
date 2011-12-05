@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <assert.h>
 #include <stdio.h>
+#include <fcntl.h>
 #if !defined(WIN32) || defined(__CYGWIN__)
 #  include <dirent.h>
 #endif
@@ -575,11 +576,18 @@ static void add_dir(const char * dir_name) {
                 add_dir(path);
             }
             else {
-                if (files_cnt >= files_max) {
-                    files_max += 8;
-                    files = (char **)loc_realloc(files, files_max * sizeof(char *));
+                int fd = open(path, O_RDONLY | O_BINARY, 0);
+                if (fd < 0) {
+                    printf("File %s: %s\n", path, errno_to_str(errno));
                 }
-                files[files_cnt++] = loc_strdup(path);
+                else {
+                    close(fd);
+                    if (files_cnt >= files_max) {
+                        files_max += 8;
+                        files = (char **)loc_realloc(files, files_max * sizeof(char *));
+                    }
+                    files[files_cnt++] = loc_strdup(path);
+                }
             }
         }
     }

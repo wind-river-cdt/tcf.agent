@@ -49,19 +49,6 @@
 static const char * TERMINALS = "Terminals";
 
 #if defined(WIN32)
-#  include <tlhelp32.h>
-#  ifdef _MSC_VER
-#    pragma warning(disable:4201) /* nonstandard extension used : nameless struct/union (in winternl.h) */
-#    include <winternl.h>
-#  else
-#    include <ntdef.h>
-#  endif
-#  ifndef STATUS_INFO_LENGTH_MISMATCH
-#   define STATUS_INFO_LENGTH_MISMATCH      ((NTSTATUS)0xC0000004L)
-#  endif
-#  ifndef SystemHandleInformation
-#    define SystemHandleInformation 16
-#  endif
 #  define TERM_LAUNCH_EXEC "cmd"
 #  define TERM_LAUNCH_ARGS {TERM_LAUNCH_EXEC, NULL}
     struct winsize {

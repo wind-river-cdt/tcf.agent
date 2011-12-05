@@ -116,6 +116,12 @@ void * tmp_realloc(void * ptr, size_t size) {
     return ptr;
 }
 
+char * tmp_strdup(const char * s) {
+    char * rval = (char *)tmp_alloc(strlen(s) + 1);
+    strcpy(rval, s);
+    return rval;
+}
+
 void * loc_alloc(size_t size) {
     void * p;
 

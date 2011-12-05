@@ -72,8 +72,8 @@ void exception(int error) {
             error, errno_to_str(error));
         exit(error);
     }
-    error = set_errno(error, NULL);
-    longjmp(chain->env, error);
+    errno = chain->error = error;
+    longjmp(chain->env, 1);
 }
 
 void str_exception(int error, const char * msg) {
