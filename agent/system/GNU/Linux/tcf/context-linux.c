@@ -97,7 +97,8 @@ typedef struct ContextExtensionLinux {
     int                     end_of_step;
     REG_SET *               regs;               /* copy of context registers, updated when context stops */
     ErrorReport *           regs_error;         /* if not NULL, 'regs' is invalid */
-    int                     regs_dirty;         /* if not 0, 'regs' is modified and needs to be saved before context is continued */
+    int                     regs_gp_dirty;      /* if not 0, 'regs->gp' is modified and needs to be saved before context is continued */
+    int                     regs_fp_dirty;      /* if not 0, 'regs->fp' is modified and needs to be saved before context is continued */
     int                     pending_step;
     int                     tkill_cnt;
 } ContextExtensionLinux;
@@ -197,7 +198,8 @@ int context_stop(Context * ctx) {
     assert(!ctx->exited);
     assert(!ctx->exiting);
     assert(!ctx->stopped);
-    assert(!ext->regs_dirty);
+    assert(!ext->regs_gp_dirty);
+    assert(!ext->regs_fp_dirty);
     if (ext->tkill_cnt > 4) {
         /* Check for zombies */
         int ch = 0;
@@ -242,6 +244,48 @@ static int syscall_never_returns(Context * ctx) {
     return 0;
 }
 
+static int flush_regs(Context * ctx) {
+    ContextExtensionLinux * ext = EXT(ctx);
+
+    if (ext->regs_gp_dirty) {
+        if (ptrace(PTRACE_SETREGS, ext->pid, 0, &ext->regs->gp) < 0) {
+            int err = errno;
+            if (err == ESRCH) {
+                ext->regs_gp_dirty = 0;
+                ctx->exiting = 1;
+                send_context_started_event(ctx);
+                return 0;
+            }
+            trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETREGS) failed: ctx %#lx, id %s, error %d %s",
+                ctx, ctx->id, err, errno_to_str(err));
+            errno = err;
+            return -1;
+        }
+        ext->regs_gp_dirty = 0;
+    }
+    if (ext->regs_fp_dirty) {
+#if defined(__i386__)
+        if (ptrace(PTRACE_SETFPXREGS, ext->pid, 0, &ext->regs->fp) < 0) {
+#else
+        if (ptrace(PTRACE_SETFPREGS, ext->pid, 0, &ext->regs->fp) < 0) {
+#endif
+            int err = errno;
+            if (err == ESRCH) {
+                ext->regs_fp_dirty = 0;
+                ctx->exiting = 1;
+                send_context_started_event(ctx);
+                return 0;
+            }
+            trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETFPREGS) failed: ctx %#lx, id %s, error %d %s",
+                ctx, ctx->id, err, errno_to_str(err));
+            errno = err;
+            return -1;
+        }
+        ext->regs_fp_dirty = 0;
+    }
+    return 0;
+}
+
 int context_continue(Context * ctx) {
     int signal = 0;
     ContextExtensionLinux * ext = EXT(ctx);
@@ -271,27 +315,13 @@ int context_continue(Context * ctx) {
 
     trace(LOG_CONTEXT, "context: resuming ctx %#lx, id %s, with signal %d", ctx, ctx->id, signal);
 #if defined(__i386__) || defined(__x86_64__)
-    if (ext->regs->eflags & 0x100) {
-        ext->regs->eflags &= ~0x100;
-        ext->regs_dirty = 1;
+    if (ext->regs->gp.eflags & 0x100) {
+        ext->regs->gp.eflags &= ~0x100;
+        ext->regs_gp_dirty = 1;
     }
 #endif
-    if (ext->regs_dirty) {
-        if (ptrace(PTRACE_SETREGS, ext->pid, 0, ext->regs) < 0) {
-            int err = errno;
-            if (err == ESRCH) {
-                ext->regs_dirty = 0;
-                ctx->exiting = 1;
-                send_context_started_event(ctx);
-                return 0;
-            }
-            trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETREGS) failed: ctx %#lx, id %s, error %d %s",
-                ctx, ctx->id, err, errno_to_str(err));
-            errno = err;
-            return -1;
-        }
-        ext->regs_dirty = 0;
-    }
+    if (flush_regs(ctx) < 0) return -1;
+    if (!ctx->stopped) return 0;
 #if USE_PTRACE_SYSCALL
     if (ptrace(PTRACE_SYSCALL, ext->pid, 0, signal) < 0) {
 #else
@@ -331,22 +361,8 @@ int context_single_step(Context * ctx) {
 
     if (syscall_never_returns(ctx)) return context_continue(ctx);
     trace(LOG_CONTEXT, "context: single step ctx %#lx, id %s", ctx, ctx->id);
-    if (ext->regs_dirty) {
-        if (ptrace(PTRACE_SETREGS, ext->pid, 0, ext->regs) < 0) {
-            int err = errno;
-            if (err == ESRCH) {
-                ext->regs_dirty = 0;
-                ctx->exiting = 1;
-                send_context_started_event(ctx);
-                return 0;
-            }
-            trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETREGS) failed: ctx %#lx, id %s, error %d %s",
-                ctx, ctx->id, err, errno_to_str(err));
-            errno = err;
-            return -1;
-        }
-        ext->regs_dirty = 0;
-    }
+    if (flush_regs(ctx) < 0) return -1;
+    if (!ctx->stopped) return 0;
     if (ptrace(PTRACE_SINGLESTEP, ext->pid, 0, 0) < 0) {
         int err = errno;
         if (err == ESRCH) {
@@ -543,7 +559,8 @@ int context_write_reg(Context * ctx, RegisterDefinition * def, unsigned offs, un
         return -1;
     }
     memcpy((uint8_t *)ext->regs + def->offset + offs, buf, size);
-    ext->regs_dirty = 1;
+    if (def->offset < offsetof(REG_SET, fp)) ext->regs_gp_dirty = 1;
+    else ext->regs_fp_dirty = 1;
     return 0;
 }
 
@@ -761,9 +778,9 @@ static void event_pid_exited(pid_t pid, int status, int signal) {
 #if !USE_PTRACE_SYSCALL
 #   define get_syscall_id(ctx) 0
 #elif defined(__x86_64__)
-#   define get_syscall_id(ctx) (EXT(ctx)->regs->orig_rax)
+#   define get_syscall_id(ctx) (EXT(ctx)->regs->gp.orig_rax)
 #elif defined(__i386__)
-#   define get_syscall_id(ctx) (EXT(ctx)->regs->orig_eax)
+#   define get_syscall_id(ctx) (EXT(ctx)->regs->gp.orig_eax)
 #else
 #   error "get_syscall_id() is not implemented for CPU other then X86"
 #endif
@@ -967,7 +984,8 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             }
         }
         ctx->exiting = 1;
-        ext->regs_dirty = 0;
+        ext->regs_gp_dirty = 0;
+        ext->regs_fp_dirty = 0;
         break;
     }
 
@@ -987,7 +1005,8 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         ContextAddress pc0 = 0;
         ContextAddress pc1 = 0;
 
-        assert(!ext->regs_dirty);
+        assert(!ext->regs_gp_dirty);
+        assert(!ext->regs_fp_dirty);
 
         ext->end_of_step = 0;
         ext->ptrace_event = event;
@@ -1004,7 +1023,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             pc0 = get_regs_PC(ctx);
         }
 
-        if (ptrace(PTRACE_GETREGS, ext->pid, 0, ext->regs) < 0) {
+        if (ptrace(PTRACE_GETREGS, ext->pid, 0, &ext->regs->gp) < 0) {
             assert(errno != 0);
             if (errno == ESRCH) {
                 ctx->stopped = 0;
@@ -1017,6 +1036,22 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         }
         else {
             pc1 = get_regs_PC(ctx);
+        }
+
+#if defined(__i386__)
+        if (ext->regs_error == NULL && ptrace(PTRACE_GETFPXREGS, ext->pid, 0, &ext->regs->fp) < 0) {
+#else
+        if (ext->regs_error == NULL && ptrace(PTRACE_GETFPREGS, ext->pid, 0, &ext->regs->fp) < 0) {
+#endif
+            assert(errno != 0);
+            if (errno == ESRCH) {
+                ctx->stopped = 0;
+                ctx->exiting = 1;
+                return;
+            }
+            ext->regs_error = get_error_report(errno);
+            trace(LOG_ALWAYS, "error: ptrace(PTRACE_GETFPREGS) failed; pid %d, error %d %s",
+                ext->pid, errno, errno_to_str(errno));
         }
 
         if (syscall && !ext->regs_error) {

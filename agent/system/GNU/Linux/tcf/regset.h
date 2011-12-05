@@ -20,5 +20,12 @@
 
 #if defined(__linux__)
 #  include <sys/user.h>
-   typedef struct user_regs_struct REG_SET;
+typedef struct REG_SET {
+    struct user_regs_struct gp;
+#if defined(__i386__)
+    struct user_fpxregs_struct fp;
+#else
+    struct user_fpregs_struct fp;
+#endif
+} REG_SET;
 #endif
