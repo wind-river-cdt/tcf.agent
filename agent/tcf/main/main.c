@@ -28,6 +28,7 @@
 #include <tcf/framework/events.h>
 #include <tcf/framework/errors.h>
 #include <tcf/framework/trace.h>
+#include <tcf/framework/myalloc.h>
 #include <tcf/framework/exceptions.h>
 #include <tcf/framework/channel_tcp.h>
 #include <tcf/framework/plugins.h>
@@ -42,6 +43,26 @@
 #endif
 
 static const char * progname;
+static unsigned int idle_timeout;
+static unsigned int idle_count;
+
+static void check_idle_timeout(void * args) {
+    if (list_is_empty(&channel_root)) {
+        idle_count++;
+        if (idle_count > idle_timeout) {
+            trace(LOG_ALWAYS, "No connections for %d seconds, shutting down", idle_timeout);
+            discovery_stop();
+            cancel_event_loop();
+            return;
+        }
+    }
+    post_event_with_delay(check_idle_timeout, NULL, 1000000);
+}
+
+static void channel_closed(Channel *c) {
+    /* Reset idle_count if there are short lived connections */
+    idle_count = 0;
+}
 
 #if ENABLE_SignalHandlers
 
@@ -120,6 +141,8 @@ static const char * help_text[] = {
     "       0x2000          stack trace service",
     "       0x4000          plugins",
     "  -s<url>          set agent listening port and protocol, default is TCP::1534",
+    "  -S               print server properties in Json format to stdout",
+    "  -I<idle-seconds> exit if are no connections for the specified time",
 #if ENABLE_Plugins
     "  -P<dir>          set agent plugins directory name",
 #endif
@@ -145,6 +168,7 @@ int main(int argc, char ** argv) {
     const char * log_name = NULL;
 #endif
     int interactive = 0;
+    int print_server_properties = 0;
     const char * url = "TCP:";
     Protocol * proto = NULL;
     TCFBroadcastGroup * bcg = NULL;
@@ -193,6 +217,11 @@ int main(int argc, char ** argv) {
                 exit(0);
                 break;
 
+            case 'S':
+                print_server_properties = 1;
+                break;
+
+            case 'I':
             case 'l':
             case 'L':
             case 's':
@@ -207,6 +236,10 @@ int main(int argc, char ** argv) {
                     s = argv[ind];
                 }
                 switch (c) {
+                case 'I':
+                    idle_timeout = strtol(s, 0, 0);
+                    break;
+
                 case 'l':
                     log_mode = strtol(s, 0, 0);
                     break;
@@ -258,6 +291,17 @@ int main(int argc, char ** argv) {
     }
     discovery_start();
 
+    if (print_server_properties) {
+        ChannelServer *s;
+        char *server_properties;
+        assert(!list_is_empty(&channel_server_root));
+        s = servlink2channelserverp(channel_server_root.next);
+        server_properties = channel_peer_to_json(s->ps);
+        printf("Server-Properties: %s\n", server_properties);
+        trace(LOG_ALWAYS, "Server-Properties: %s", server_properties);
+        loc_free(server_properties);
+    }
+
 #if ENABLE_SignalHandlers
     signal(SIGABRT, signal_handler);
     signal(SIGILL, signal_handler);
@@ -268,6 +312,11 @@ int main(int argc, char ** argv) {
     AddVectoredExceptionHandler(1, VectoredExceptionHandler);
 #endif
 #endif /* ENABLE_SignalHandlers */
+
+    if (idle_timeout != 0) {
+        add_channel_close_listener(channel_closed);
+        check_idle_timeout(NULL);
+    }
 
     /* Process events - must run on the initial thread since ptrace()
      * returns ECHILD otherwise, thinking we are not the owner. */
