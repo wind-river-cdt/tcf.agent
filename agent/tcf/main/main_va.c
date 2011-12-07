@@ -56,10 +56,10 @@ static void channel_new_connection(ChannelServer * serv, Channel * c) {
 int tcf_va(void) {
 #else
 int main(int argc, char ** argv) {
-#endif
     int c;
     int ind;
     const char * log_name = NULL;
+#endif
     const char * url = "TCP:";
     PeerServer * ps;
 

@@ -121,10 +121,10 @@ static void channel_new_connection(ChannelServer * serv, Channel * c) {
 int tcf_log(void) {
 #else
 int main(int argc, char ** argv) {
-#endif
     int c;
     int ind;
     const char * log_name = "-";
+#endif
     const char * url = "TCP:";
     PeerServer * ps;
     ChannelServer * serv;

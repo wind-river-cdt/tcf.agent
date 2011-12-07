@@ -346,7 +346,6 @@ int context_single_step(Context * ctx) {
 
 static int context_terminate(Context * ctx) {
     ContextExtensionVxWorks * ext = EXT(ctx);
-    VXDBG_CTX vxdbg_ctx;
 
     assert(is_dispatch_thread());
     assert(ctx->parent != NULL);

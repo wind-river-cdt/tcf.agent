@@ -139,12 +139,12 @@ static void show_help(void) {
 int tcf(void) {
 #else
 int main(int argc, char ** argv) {
-#endif
     int c;
     int ind;
     int daemon = 0;
-    int interactive = 0;
     const char * log_name = NULL;
+#endif
+    int interactive = 0;
     const char * url = "TCP:";
     Protocol * proto = NULL;
     TCFBroadcastGroup * bcg = NULL;

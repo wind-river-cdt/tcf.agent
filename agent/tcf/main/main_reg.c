@@ -39,10 +39,10 @@ static const char * progname;
 int tcf_registry(void) {
 #else
 int main(int argc, char **argv) {
-#endif
     int c;
     int ind;
     const char * log_name = NULL;
+#endif
 
     ini_mdep();
     ini_trace();

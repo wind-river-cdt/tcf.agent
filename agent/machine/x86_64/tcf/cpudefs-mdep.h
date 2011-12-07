@@ -23,7 +23,7 @@
 #    define eip pc
 #    undef BREAK_INST
 #  endif
-#  include <tcf/system/VxWorks/context-vxworks.h>
+#  include <system/VxWorks/tcf/context-vxworks.h>
 #endif
 
 #if defined(_AMD64_) && !defined(__x86_64__)
@@ -167,7 +167,22 @@ RegisterDefinition regs_index[] = {
     { "eip",    REG_OFFSET(r_eip),    4,  8,  8},
     { "eflags", REG_OFFSET(r_eflags), 4,  9,  9},
 
-#elif defined(__x86_64__)
+#elif defined (_WRS_KERNEL) && defined(__i386__)
+#   define REG_SP esp
+#   define REG_BP ebp
+#   define REG_IP eip
+    { "eax",    REG_OFFSET(eax),      4,  0,  0},
+    { "ebx",    REG_OFFSET(ebx),      4,  3,  3},
+    { "ecx",    REG_OFFSET(ecx),      4,  1,  1},
+    { "edx",    REG_OFFSET(edx),      4,  2,  2},
+    { "esp",    REG_OFFSET(esp),      4,  4,  4},
+    { "ebp",    REG_OFFSET(ebp),      4,  5,  5},
+    { "esi",    REG_OFFSET(esi),      4,  6,  6},
+    { "edi",    REG_OFFSET(edi),      4,  7,  7},
+    { "eip",    REG_OFFSET(eip),      4,  8,  8},
+    { "eflags", REG_OFFSET(eflags),   4,  9,  9},
+
+    #elif defined(__x86_64__)
 #   define REG_SP gp.rsp
 #   define REG_BP gp.rbp
 #   define REG_IP gp.rip

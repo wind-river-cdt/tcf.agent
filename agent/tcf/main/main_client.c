@@ -51,9 +51,10 @@ static Protocol * proto;
 int tcf_client(void) {
 #else
 int main(int argc, char ** argv) {
-#endif
     int c;
     int ind;
+    const char * log_name = "-";
+#endif
 #if ENABLE_Cmdline
     int keep_alive = 0;
     int mode = 1; /* interactive */
@@ -61,7 +62,6 @@ int main(int argc, char ** argv) {
     const char * command = NULL;
     const char * script_name = NULL;
 #endif
-    const char * log_name = "-";
 
     log_mode = 0;
 
