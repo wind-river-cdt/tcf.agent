@@ -735,9 +735,12 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                     if (cache->mPubNames.mHash != NULL) {
                         found = find_by_name_in_pub_names(cache, &cache->mPubNames, name, res);
-                        if (!found && cache->mPubTypes.mHash != NULL) {
-                            found = find_by_name_in_pub_names(cache, &cache->mPubTypes, name, res);
-                        }
+                    }
+                    if (!found && cache->mPubTypes.mHash != NULL) {
+                        found = find_by_name_in_pub_names(cache, &cache->mPubTypes, name, res);
+                    }
+                    if (!found) {
+                        found = find_by_name_in_sym_table(cache, name, res);
                     }
                     clear_trap(&trap);
                 }
