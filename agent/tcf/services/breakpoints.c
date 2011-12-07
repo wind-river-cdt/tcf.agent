@@ -1095,7 +1095,9 @@ static ContextAddress bp_ip = 0;
 static void plant_breakpoint_address_iterator(CodeArea * area, void * x) {
     EvaluationArgs * args = (EvaluationArgs *)x;
     if (args->bp->location == NULL) {
-        plant_breakpoint(args->ctx, args->bp, area->start_address, 1);
+        ContextAddress addr = area->start_address;
+        if (area->start_line != args->bp->line && area->next_address != 0) addr = area->next_address;
+        plant_breakpoint(args->ctx, args->bp, addr, 1);
     }
     else {
         /* TODO: cannot call plant_at_address_expression() here because elf_list_first() is not re-entrant */
