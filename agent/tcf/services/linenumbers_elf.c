@@ -131,11 +131,14 @@ static void call_client(CompUnit * unit, LineNumbersState * state,
     area.file_size = file_info->mSize;
     area.start_address = state_addr;
     area.end_address = (state + 1)->mAddress - state->mAddress + state_addr;
+    if (next != NULL) area.next_address = next->mAddress;
     area.isa = state->mISA;
     area.is_statement = (state->mFlags & LINE_IsStmt) != 0;
     area.basic_block = (state->mFlags & LINE_BasicBlock) != 0;
     area.prologue_end = (state->mFlags & LINE_PrologueEnd) != 0;
     area.epilogue_begin = (state->mFlags & LINE_EpilogueBegin) != 0;
+    area.op_index = state->mOpIndex;
+    area.discriminator = state->mDiscriminator;
     client(&area, args);
 }
 

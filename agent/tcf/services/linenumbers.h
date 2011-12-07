@@ -36,11 +36,14 @@ typedef struct CodeArea {
     ContextAddress end_address;
     int end_line;
     int end_column;
+    ContextAddress next_address; /* Address of next area - in source text order */
     int isa;
     int is_statement;
     int basic_block;
     int prologue_end;
     int epilogue_begin;
+    int op_index;
+    int discriminator;
 } CodeArea;
 
 typedef void LineNumbersCallBack(CodeArea *, void *);

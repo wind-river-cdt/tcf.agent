@@ -97,6 +97,12 @@ static void write_line_info(OutputStream * out, int cnt) {
             json_write_ulong(out, area->end_column);
         }
     }
+    if (area->next_address != 0) {
+        write_stream(out, ',');
+        json_write_string(out, "NAddr");
+        write_stream(out, ':');
+        json_write_uint64(out, area->next_address);
+    }
     if (area->file != NULL && (prev == NULL || prev->file != area->file)) {
         write_stream(out, ',');
         json_write_string(out, "File");
@@ -138,6 +144,18 @@ static void write_line_info(OutputStream * out, int cnt) {
         json_write_string(out, "EpilogueBegin");
         write_stream(out, ':');
         json_write_boolean(out, 1);
+    }
+    if (area->op_index) {
+        write_stream(out, ',');
+        json_write_string(out, "OpIndex");
+        write_stream(out, ':');
+        json_write_long(out, area->op_index);
+    }
+    if (area->discriminator) {
+        write_stream(out, ',');
+        json_write_string(out, "Discriminator");
+        write_stream(out, ':');
+        json_write_long(out, area->discriminator);
     }
     write_stream(out, '}');
 }

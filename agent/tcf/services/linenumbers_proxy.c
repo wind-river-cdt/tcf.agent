@@ -147,6 +147,7 @@ static void read_code_area_props(InputStream * inp, const char * name, void * ar
     else if (strcmp(name, "ELine") == 0) area->end_line = json_read_long(inp);
     else if (strcmp(name, "ECol") == 0) area->end_column = json_read_long(inp);
     else if (strcmp(name, "EAddr") == 0) area->end_address = (ContextAddress)json_read_uint64(inp);
+    else if (strcmp(name, "NAddr") == 0) area->next_address = (ContextAddress)json_read_uint64(inp);
     else if (strcmp(name, "File") == 0) area->file = json_read_alloc_string(inp);
     else if (strcmp(name, "Dir") == 0) area->directory = json_read_alloc_string(inp);
     else if (strcmp(name, "ISA") == 0) area->isa = json_read_long(inp);
@@ -154,6 +155,8 @@ static void read_code_area_props(InputStream * inp, const char * name, void * ar
     else if (strcmp(name, "BasicBlock") == 0) area->basic_block = json_read_boolean(inp);
     else if (strcmp(name, "PrologueEnd") == 0) area->prologue_end = json_read_boolean(inp);
     else if (strcmp(name, "EpilogueBegin") == 0) area->epilogue_begin = json_read_boolean(inp);
+    else if (strcmp(name, "OpIndex") == 0) area->op_index = json_read_long(inp);
+    else if (strcmp(name, "Discriminator") == 0) area->discriminator = json_read_long(inp);
 }
 
 static void read_code_area_array(InputStream * inp, void * args) {
