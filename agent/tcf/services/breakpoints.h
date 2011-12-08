@@ -117,7 +117,7 @@ extern void change_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribut
 /*
  * Delete a breakpoint.
  * If other (remote) client also created a breakpoint with same ID,
- * the breakpoint will be deleted when all clients have requested it to be deleted.
+ * the breakpoint will be deleted when both clients have requested it to be deleted.
  */
 extern void delete_breakpoint(BreakpointInfo * bp);
 
