@@ -66,7 +66,6 @@ typedef struct ContextExtensionWin32 {
 #if USE_HW_BPS
     ContextBreakpoint * triggered_hw_bps[MAX_HW_BPS + 1];
     unsigned            hw_bps_regs_generation;
-    DWORD               skip_hw_bp_addr;
 #endif
 } ContextExtensionWin32;
 
@@ -262,16 +261,12 @@ static DWORD event_win32_context_stopped(Context * ctx) {
             get_registers(ctx);
             if (!ext->regs_error) {
 #if USE_HW_BPS
-                if (ext->regs->Eip != ext->skip_hw_bp_addr) ext->skip_hw_bp_addr = 0;
                 if (ext->regs->Dr6 & 0xfu) {
                     int i, j = 0;
                     for (i = 0; i < MAX_HW_BPS; i++) {
                         if (ext->regs->Dr6 & (1u << i)) {
                             ContextBreakpoint * bp = debug_state->hw_bps[i];
                             if (bp == NULL) continue;
-                            if (bp->address == ext->regs->Eip && (bp->access_types & CTX_BP_ACCESS_INSTRUCTION)) {
-                                ext->skip_hw_bp_addr = ext->regs->Eip;
-                            }
                             ctx->stopped_by_cb = ext->triggered_hw_bps;
                             ctx->stopped_by_cb[j++] = bp;
                             ctx->stopped_by_cb[j] = NULL;
@@ -478,10 +473,8 @@ static int win32_resume(Context * ctx, int step) {
 
 #if USE_HW_BPS
 
-    if (ext->skip_hw_bp_addr == 0 && skip_breakpoint(ctx, step)) return 0;
-
     /* Update debug registers */
-    if (ext->skip_hw_bp_addr != 0 || ext->hw_bps_regs_generation != debug_state->hw_bps_generation) {
+    if (ctx->stopped_by_cb != NULL || ext->hw_bps_regs_generation != debug_state->hw_bps_generation) {
         int i;
         DWORD Dr7 = 0;
         int step_over_hw_bp = 0;
@@ -495,7 +488,7 @@ static int win32_resume(Context * ctx, int step) {
         for (i = 0; i < MAX_HW_BPS; i++) {
             ContextBreakpoint * bp = debug_state->hw_bps[i];
             if (bp != NULL &&
-                    ext->skip_hw_bp_addr == bp->address &&
+                    ext->regs->Eip == bp->address &&
                     (bp->access_types & CTX_BP_ACCESS_INSTRUCTION)) {
                 /* Skipping the breakpoint */
                 step_over_hw_bp = 1;
@@ -573,16 +566,11 @@ static int win32_resume(Context * ctx, int step) {
             step = 1;
             ext->hw_bps_regs_generation--;
         }
-        else {
-            ext->skip_hw_bp_addr = 0;
-        }
     }
 
-#else
+#endif
 
     if (skip_breakpoint(ctx, step)) return 0;
-
-#endif
 
     /* Update CPU trace flag */
     if (!step && ext->trace_flag) {

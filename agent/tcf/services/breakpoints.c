@@ -2359,7 +2359,8 @@ int skip_breakpoint(Context * ctx, int single_step) {
     assert(single_step || ext->stepping_over_bp == NULL);
 
     if (ext->stepping_over_bp != NULL) return 0;
-    if (ctx->exited || ctx->exiting || !ctx->stopped_by_bp) return 0;
+    if (!ctx->stopped_by_bp && ctx->stopped_by_cb == NULL) return 0;
+    if (ctx->exited || ctx->exiting) return 0;
 
     if (context_get_canonical_addr(ctx, get_regs_PC(ctx), &mem, &mem_addr, NULL, NULL) < 0) return -1;
     bi = find_instruction(mem, 0, mem_addr);
