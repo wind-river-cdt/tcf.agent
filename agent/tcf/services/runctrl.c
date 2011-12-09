@@ -929,7 +929,7 @@ static void send_event_context_suspended(void) {
         OutputStream * out = &broadcast_group->out;
         LINK * n = !list_is_empty(&p0) ? p0.next : p1.next;
         Context * ctx = link2ctx(n);
-        int container = list_is_empty(&p0) && !list_is_empty(&p1);
+        int container = list_is_empty(&p0) && p1.next != p1.prev;
 
         list_remove(n);
 
