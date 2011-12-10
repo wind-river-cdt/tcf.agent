@@ -71,6 +71,7 @@ struct BreakpointInfo {
     int client_cnt;
     int instruction_cnt;
     ErrorReport * error;
+    char * type;
     char * location;
     char * condition;
     char ** context_ids;
@@ -237,6 +238,7 @@ static void get_bi_access_types(BreakInstruction * bi, unsigned * access_types, 
 static void plant_instruction(BreakInstruction * bi) {
     int i;
     int error = 0;
+    int soft = 1;
     size_t saved_size = bi->saved_size;
     ErrorReport * rp = NULL;
 
@@ -250,22 +252,39 @@ static void plant_instruction(BreakInstruction * bi) {
     get_bi_access_types(bi, &bi->cb.access_types, &bi->cb.length);
 
     bi->saved_size = 0;
-    if (context_plant_breakpoint(&bi->cb) < 0) {
+    if (bi->virtual_addr) {
+        soft = 0;
+    }
+    else {
+        for (i = 0; i < bi->ref_cnt; i++) {
+            char * type = bi->refs[i].bp->type;
+            if (type == NULL || strcmp(type, "Software")) {
+                soft = 0;
+                break;
+            }
+        }
+    }
+    if (!soft && context_plant_breakpoint(&bi->cb) < 0) {
         if (bi->cb.access_types == CTX_BP_ACCESS_INSTRUCTION && get_error_code(errno) == ERR_UNSUPPORTED) {
-            uint8_t * break_inst = get_break_instruction(bi->cb.ctx, &bi->saved_size);
-            assert(sizeof(bi->saved_code) >= bi->saved_size);
-            planting_instruction = 1;
-            if (context_read_mem(bi->cb.ctx, bi->cb.address, bi->saved_code, bi->saved_size) < 0) {
-                error = errno;
-            }
-            else if (context_write_mem(bi->cb.ctx, bi->cb.address, break_inst, bi->saved_size) < 0) {
-                error = errno;
-            }
-            planting_instruction = 0;
+            /* Fall back to software breakpoint type */
+            soft = 1;
         }
         else {
             error = errno;
         }
+    }
+    if (soft) {
+        uint8_t * break_inst = get_break_instruction(bi->cb.ctx, &bi->saved_size);
+        assert(sizeof(bi->saved_code) >= bi->saved_size);
+        assert(!bi->virtual_addr);
+        planting_instruction = 1;
+        if (context_read_mem(bi->cb.ctx, bi->cb.address, bi->saved_code, bi->saved_size) < 0) {
+            error = errno;
+        }
+        else if (context_write_mem(bi->cb.ctx, bi->cb.address, break_inst, bi->saved_size) < 0) {
+            error = errno;
+        }
+        planting_instruction = 0;
     }
     rp = get_error_report(error);
     if (saved_size != bi->saved_size || !compare_error_reports(bi->planting_error, rp)) {
@@ -354,6 +373,17 @@ static void clear_instruction_refs(Context * ctx, BreakpointInfo * bp) {
     }
 }
 
+static void free_instruction(BreakInstruction * bi) {
+    assert(bi->planted == 0);
+    assert(bi->ref_cnt == 0);
+    list_remove(&bi->link_all);
+    list_remove(&bi->link_adr);
+    context_unlock(bi->cb.ctx);
+    release_error_report(bi->planting_error);
+    loc_free(bi->refs);
+    loc_free(bi);
+}
+
 static void flush_instructions(void) {
     LINK * l = instructions.next;
     while (l != &instructions) {
@@ -378,12 +408,7 @@ static void flush_instructions(void) {
         if (!bi->stepping_over_bp) {
             if (bi->ref_cnt == 0) {
                 if (bi->planted) remove_instruction(bi);
-                list_remove(&bi->link_all);
-                list_remove(&bi->link_adr);
-                context_unlock(bi->cb.ctx);
-                release_error_report(bi->planting_error);
-                loc_free(bi->refs);
-                loc_free(bi);
+                free_instruction(bi);
             }
             else if (!bi->planted) {
                 plant_instruction(bi);
@@ -450,12 +475,8 @@ void unplant_breakpoints(Context * ctx) {
             context_unlock(bi->refs[i].ctx);
             release_error_report(bi->refs[i].address_error);
         }
-        list_remove(&bi->link_all);
-        list_remove(&bi->link_adr);
-        context_unlock(bi->cb.ctx);
-        release_error_report(bi->planting_error);
-        loc_free(bi->refs);
-        loc_free(bi);
+        bi->ref_cnt = 0;
+        free_instruction(bi);
     }
 }
 
@@ -866,6 +887,7 @@ static void free_bp(BreakpointInfo * bp) {
     if (*bp->id) list_remove(&bp->link_id);
     if (bp->ctx) context_unlock(bp->ctx);
     release_error_report(bp->error);
+    loc_free(bp->type);
     loc_free(bp->location);
     loc_free(bp->context_ids);
     loc_free(bp->context_ids_prev);
@@ -1539,6 +1561,10 @@ static int set_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * 
         if (strcmp(name, BREAKPOINT_ID) == 0) {
             json_read_string(buf_inp, bp->id, sizeof(bp->id));
         }
+        else if (strcmp(name, BREAKPOINT_TYPE) == 0) {
+            loc_free(bp->type);
+            bp->type = json_read_alloc_string(buf_inp);
+        }
         else if (strcmp(name, BREAKPOINT_LOCATION) == 0) {
             loc_free(bp->location);
             bp->location = json_read_alloc_string(buf_inp);
@@ -1595,6 +1621,10 @@ static int set_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * 
 
         if (strcmp(name, BREAKPOINT_ID) == 0) {
             bp->id[0] = 0;
+        }
+        else if (strcmp(name, BREAKPOINT_TYPE) == 0) {
+            loc_free(bp->type);
+            bp->type = NULL;
         }
         else if (strcmp(name, BREAKPOINT_LOCATION) == 0) {
             loc_free(bp->location);
@@ -2077,6 +2107,10 @@ static void command_get_capabilities(char * token, Channel * c) {
     json_write_string(&c->out, "ID");
     write_stream(&c->out, ':');
     json_write_string(&c->out, id);
+    write_stream(&c->out, ',');
+    json_write_string(&c->out, "BreakpointType");
+    write_stream(&c->out, ':');
+    json_write_boolean(&c->out, 1);
     write_stream(&c->out, ',');
     json_write_string(&c->out, "Location");
     write_stream(&c->out, ':');
