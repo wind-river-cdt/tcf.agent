@@ -2142,6 +2142,7 @@ static void command_get_capabilities(char * token, Channel * c) {
     if (ctx != NULL) {
         int md = CTX_BP_ACCESS_INSTRUCTION;
         md |= context_get_supported_bp_access_types(ctx);
+        md &= ~CTX_BP_ACCESS_VIRTUAL;
         write_stream(&c->out, ',');
         json_write_string(&c->out, "AccessMode");
         write_stream(&c->out, ':');
