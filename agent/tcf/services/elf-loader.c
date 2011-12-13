@@ -206,7 +206,6 @@ static ContextAddress find_module(Context * ctx, ELF_File * exe_file, ELF_File *
             ELF_File * link_file = NULL;
             if (elf_read_memory_word(ctx, exe_file, link + offs_l_addr, &l_addr) < 0) exception(errno);
             elf_map_to_link_time_address(ctx, l_addr, &link_file, NULL);
-            //printf("link  0x%016" PRIX64 " 0x%016" PRIX64 " 0x%016" PRIX64 " 0x%X\n", (U8_T)link, (U8_T)l_addr, (U8_T)l_tls_modid, link_file);
             if (link_file != NULL) {
                 if (link_file == module) return l_tls_modid;
                 if (link_file->debug_info_file_name != NULL &&
