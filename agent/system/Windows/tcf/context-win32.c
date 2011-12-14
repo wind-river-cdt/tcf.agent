@@ -19,7 +19,7 @@
 
 #include <tcf/config.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 #if ENABLE_DebugContext && !ENABLE_ContextProxy
 
@@ -46,6 +46,16 @@
 #endif
 #if USE_HW_BPS
 #  define MAX_HW_BPS 4
+#endif
+
+#if defined(_M_IX86)
+#  define reg_ip Eip
+#  define reg_sp Esp
+typedef DWORD REGWORD;
+#elif defined(_M_AMD64)
+#  define reg_ip Rip
+#  define reg_sp Rsp
+typedef DWORD64 REGWORD;
 #endif
 
 typedef struct ContextExtensionWin32 {
@@ -204,7 +214,7 @@ static void get_registers(Context * ctx) {
     else {
         ext->trace_flag = (ext->regs->EFlags & 0x100) != 0;
         trace(LOG_CONTEXT, "context: get regs OK: ctx %#lx, id %s, PC %#lx",
-            ctx, ctx->id, ext->regs->Eip);
+            ctx, ctx->id, ext->regs->reg_ip);
     }
 }
 
@@ -264,7 +274,7 @@ static DWORD event_win32_context_stopped(Context * ctx) {
                 if (ext->regs->Dr6 & 0xfu) {
                     int i, j = 0;
                     for (i = 0; i < MAX_HW_BPS; i++) {
-                        if (ext->regs->Dr6 & (1u << i)) {
+                        if (ext->regs->Dr6 & ((REGWORD)1 << i)) {
                             ContextBreakpoint * bp = debug_state->hw_bps[i];
                             if (bp == NULL) continue;
                             ctx->stopped_by_cb = ext->triggered_hw_bps;
@@ -274,19 +284,19 @@ static DWORD event_win32_context_stopped(Context * ctx) {
                     }
                 }
 #endif
-                if (ext->step_opcodes_len > 0 && ext->step_opcodes[0] == 0x9c && ext->step_opcodes_addr != ext->regs->Eip) {
+                if (ext->step_opcodes_len > 0 && ext->step_opcodes[0] == 0x9c && ext->step_opcodes_addr != ext->regs->reg_ip) {
                     /* PUSHF instruction: need to clear trace flag from top of the stack */
                     SIZE_T bcnt = 0;
                     ContextAddress buf = 0;
                     assert(ext->regs->EFlags & 0x100);
-                    assert(ext->step_opcodes_addr == ext->regs->Eip - 1);
-                    if (!ReadProcessMemory(EXT(ctx->mem)->handle, (LPCVOID)ext->regs->Esp, &buf, sizeof(ContextAddress), &bcnt) || bcnt != sizeof(ContextAddress)) {
+                    assert(ext->step_opcodes_addr == ext->regs->reg_ip - 1);
+                    if (!ReadProcessMemory(EXT(ctx->mem)->handle, (LPCVOID)ext->regs->reg_sp, &buf, sizeof(ContextAddress), &bcnt) || bcnt != sizeof(ContextAddress)) {
                         log_error("ReadProcessMemory", 0);
                     }
                     else {
                         assert(buf & 0x100);
                         buf &= ~0x100;
-                        if (!WriteProcessMemory(EXT(ctx->mem)->handle, (LPVOID)ext->regs->Esp, &buf, sizeof(ContextAddress), &bcnt) || bcnt != sizeof(ContextAddress)) {
+                        if (!WriteProcessMemory(EXT(ctx->mem)->handle, (LPVOID)ext->regs->reg_sp, &buf, sizeof(ContextAddress), &bcnt) || bcnt != sizeof(ContextAddress)) {
                             log_error("WriteProcessMemory", 0);
                         }
                     }
@@ -302,7 +312,7 @@ static DWORD event_win32_context_stopped(Context * ctx) {
             get_registers(ctx);
             if (!ext->regs_error) {
                 if (is_breakpoint_address(ctx, exception_addr)) {
-                    ext->regs->Eip = exception_addr;
+                    ext->regs->reg_ip = exception_addr;
                     ext->regs_dirty = 1;
                     ctx->stopped_by_bp = 1;
 #if USE_HW_BPS
@@ -314,7 +324,7 @@ static DWORD event_win32_context_stopped(Context * ctx) {
 #endif
                 }
                 else {
-                    ext->regs->Eip = exception_addr;
+                    ext->regs->reg_ip = exception_addr;
                     ext->regs_dirty = 1;
                 }
             }
@@ -431,7 +441,7 @@ static void break_process_event(void * args) {
             }
             if (cnt > 0) {
                 const SIZE_T buf_size = 0x100;
-                DWORD size = 0;
+                SIZE_T size = 0;
                 int error = 0;
 
                 trace(LOG_CONTEXT, "context: creating remote thread in process %#lx, id %s", ctx, ctx->id);
@@ -476,7 +486,7 @@ static int win32_resume(Context * ctx, int step) {
     /* Update debug registers */
     if (ctx->stopped_by_cb != NULL || ext->hw_bps_regs_generation != debug_state->hw_bps_generation) {
         int i;
-        DWORD Dr7 = 0;
+                REGWORD Dr7 = 0;
         int step_over_hw_bp = 0;
 
         get_registers(ctx);
@@ -488,13 +498,13 @@ static int win32_resume(Context * ctx, int step) {
         for (i = 0; i < MAX_HW_BPS; i++) {
             ContextBreakpoint * bp = debug_state->hw_bps[i];
             if (bp != NULL &&
-                    ext->regs->Eip == bp->address &&
+                    ext->regs->reg_ip == bp->address &&
                     (bp->access_types & CTX_BP_ACCESS_INSTRUCTION)) {
                 /* Skipping the breakpoint */
                 step_over_hw_bp = 1;
                 bp = NULL;
             }
-            Dr7 &= ~(3u << (i * 2));
+            Dr7 &= ~((REGWORD)3 << (i * 2));
             if (bp != NULL) {
                 switch (i) {
                 case 0:
@@ -522,34 +532,34 @@ static int win32_resume(Context * ctx, int step) {
                     }
                     break;
                 }
-                Dr7 |= 1u << (i * 2);
+                Dr7 |= (REGWORD)1 << (i * 2);
                 if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
-                    Dr7 &= ~(3u << (i * 4 + 16));
+                    Dr7 &= ~((REGWORD)3 << (i * 4 + 16));
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
-                    Dr7 &= ~(3u << (i * 4 + 16));
-                    Dr7 |= 1u << (i * 4 + 16);
+                    Dr7 &= ~((REGWORD)3 << (i * 4 + 16));
+                    Dr7 |= (REGWORD)1 << (i * 4 + 16);
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
-                    Dr7 |= 3u << (i * 4 + 16);
+                    Dr7 |= (REGWORD)3 << (i * 4 + 16);
                 }
                 else {
                     errno = set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported access mode");
                     return -1;
                 }
                 if (bp->length == 1) {
-                    Dr7 &= ~(3u << (i * 4 + 18));
+                    Dr7 &= ~((REGWORD)3 << (i * 4 + 18));
                 }
                 else if (bp->length == 2) {
-                    Dr7 &= ~(3u << (i * 4 + 18));
-                    Dr7 |= 1u << (i * 4 + 18);
+                    Dr7 &= ~((REGWORD)3 << (i * 4 + 18));
+                    Dr7 |= (REGWORD)1 << (i * 4 + 18);
                 }
                 else if (bp->length == 4) {
-                    Dr7 |= 3u << (i * 4 + 18);
+                    Dr7 |= (REGWORD)3 << (i * 4 + 18);
                 }
                 else if (bp->length == 8) {
-                    Dr7 &= ~(3u << (i * 4 + 18));
-                    Dr7 |= 2u << (i * 4 + 18);
+                    Dr7 &= ~((REGWORD)3 << (i * 4 + 18));
+                    Dr7 |= (REGWORD)2 << (i * 4 + 18);
                 }
                 else {
                     errno = set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported length");
@@ -606,8 +616,8 @@ static int win32_resume(Context * ctx, int step) {
             set_error_report_errno(ext->regs_error);
             return -1;
         }
-        ext->step_opcodes_addr = ext->regs->Eip;
-        if (!ReadProcessMemory(prs_ext->handle, (LPCVOID)ext->regs->Eip, &ext->step_opcodes,
+        ext->step_opcodes_addr = ext->regs->reg_ip;
+        if (!ReadProcessMemory(prs_ext->handle, (LPCVOID)ext->regs->reg_ip, &ext->step_opcodes,
                 sizeof(ext->step_opcodes), &ext->step_opcodes_len) || ext->step_opcodes_len == 0) {
             errno = log_error("ReadProcessMemory", 0);
             return -1;
@@ -1466,4 +1476,4 @@ void init_contexts_sys_dep(void) {
 }
 
 #endif  /* if ENABLE_DebugContext */
-#endif /* WIN32 */
+#endif /* _WIN32 */

@@ -219,8 +219,8 @@ PeerServer * channel_peer_from_url(const char * url) {
 }
 
 char * channel_peer_to_json(PeerServer * ps) {
-    int i;
-    char *rval;
+    unsigned i;
+    char * rval;
     ByteArrayOutputStream buf;
     OutputStream * out;
 

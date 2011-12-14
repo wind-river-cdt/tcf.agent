@@ -409,7 +409,7 @@ static int udp_send_peer_info(PeerServer * ps, void * arg) {
         }
 
         if (send_size == 8) {
-            int i;
+            unsigned i;
             send_buf[4] = UDP_ACK_INFO;
             app_str("ID=");
             app_strz(ps->id);

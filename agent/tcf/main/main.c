@@ -82,7 +82,7 @@ static void signal_handler(int sig) {
     }
 }
 
-#if defined(WIN32)
+#if defined(_WIN32)
 static LONG NTAPI VectoredExceptionHandler(PEXCEPTION_POINTERS x) {
     if (is_dispatch_thread()) {
         DWORD exception_code = x->ExceptionRecord->ExceptionCode;
@@ -308,7 +308,7 @@ int main(int argc, char ** argv) {
     signal(SIGILL, signal_handler);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
-#if defined(WIN32)
+#if defined(_WIN32)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
     AddVectoredExceptionHandler(1, VectoredExceptionHandler);
 #endif

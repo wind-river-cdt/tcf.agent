@@ -19,7 +19,7 @@
 
 #include <tcf/config.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 #include <fcntl.h>
 #include <errno.h>
@@ -78,7 +78,7 @@ struct ServerInstance {
     int index;
     int fd_inp;
     int fd_out;
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(_WIN32) && !defined(__CYGWIN__)
     HANDLE pipe;
     AsyncReqInfo req;
 #endif
@@ -550,7 +550,7 @@ void channel_pipe_connect(PeerServer * ps, ChannelConnectCallBack callback, void
     post_event(channel_pipe_connect_done, info);
 }
 
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(_WIN32) && !defined(__CYGWIN__)
 
 #define check_error_win32(ok) { if (!(ok)) check_error(set_win32_errno(GetLastError())); }
 
@@ -564,7 +564,7 @@ static void pipe_client_connected(void * args) {
     if (req->error) error = req->error;
 
     if (!error) {
-        int l = 0;
+        size_t l = 0;
         HANDLE h = NULL;
         OVERLAPPED overlap;
         char inp_path[FILE_PATH_SIZE];
@@ -659,7 +659,7 @@ static void close_output_pipe(ChannelPIPE * c) {
 }
 
 static void register_server(ServerPIPE * s) {
-    int i;
+    size_t i;
     PeerServer * ps = s->serv.ps;
     PeerServer * ps2 = peer_server_alloc();
     const char * transport = peer_server_getprop(ps, "TransportName", NULL);
@@ -705,7 +705,7 @@ static void server_close(ChannelServer * serv) {
         if (ins->fd_inp >= 0 && close(ins->fd_inp) < 0) check_error(errno);
         if (ins->fd_out >= 0 && close(ins->fd_out) < 0) check_error(errno);
         ins->fd_inp = ins->fd_out = -1;
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(_WIN32) && !defined(__CYGWIN__)
         ins->pipe = NULL;
 #endif
     }
@@ -714,7 +714,7 @@ static void server_close(ChannelServer * serv) {
 
 ChannelServer * channel_pipe_server(PeerServer * ps) {
     ServerPIPE * s = (ServerPIPE *)loc_alloc_zero(sizeof(ServerPIPE));
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(_WIN32) && !defined(__CYGWIN__)
     {
         int i;
         const char * path = peer_server_getprop(ps, attr_pipe_name, def_pipe_name);

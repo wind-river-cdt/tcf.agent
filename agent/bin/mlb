@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# This script invokes Microsoft Visual Studio lib.exe from CygWin shell.
+# Command line options:
+#  -m<machine> i386 or x86_64
+
+. `dirname $0`/mcc-env
+
+machine=
+
+while getopts m: name
+do
+    case $name in
+    m)
+        machine="$OPTARG"
+        ;;
+    *)
+        echo Invalid option $name
+        exit 2
+        ;;
+    esac
+done
+
+shift `expr $OPTIND - 1`
+
+libfile=$1
+shift
+
+export LIB=
+
+if [ "$machine" == "x86_64" ] ; then
+  export PATH="$VSHOME/VC/bin/x86_amd64:$PATH"
+  if [ "$PROCESSOR_ARCHITECTURE" == "AMD64" -o "$PROCESSOR_ARCHITEW6432" == "AMD64" ] ; then
+    export PATH="$VSHOME/VC/bin/amd64:$PATH"
+  fi
+fi
+
+lib.exe /nologo /nodefaultlib "/out:$libfile" "$@" || exit 1

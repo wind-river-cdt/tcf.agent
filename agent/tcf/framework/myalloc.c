@@ -29,10 +29,10 @@
 #define POOL_SIZE (0x100000 * MEM_USAGE_FACTOR)
 
 static char * tmp_pool = NULL;
-static unsigned tmp_pool_pos = 0;
-static unsigned tmp_pool_max = 0;
-static unsigned tmp_pool_avr = 0;
-static unsigned tmp_alloc_size = 0;
+static size_t tmp_pool_pos = 0;
+static size_t tmp_pool_max = 0;
+static size_t tmp_pool_avr = 0;
+static size_t tmp_alloc_size = 0;
 static LINK tmp_alloc_list = TCF_LIST_INIT(tmp_alloc_list);
 static int tmp_gc_posted = 0;
 
@@ -95,7 +95,7 @@ void * tmp_realloc(void * ptr, size_t size) {
     if (ptr == NULL) return tmp_alloc(size);
     if ((char *)ptr >= tmp_pool && (char *)ptr <= tmp_pool + tmp_pool_max) {
         size_t m = *((size_t *)ptr - 1);
-        unsigned pos = tmp_pool_pos - m;
+        size_t pos = tmp_pool_pos - m;
         if (ptr == tmp_pool + pos && pos + size <= tmp_pool_max) {
             tmp_pool_pos = pos + size;
             *((size_t *)ptr - 1) = size;

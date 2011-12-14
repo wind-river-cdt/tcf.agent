@@ -10,6 +10,7 @@
 #  -D<name>  macro definition
 #  -I<dir>   include directory
 #  -p<file>  PDB file name
+#  -m<machine> i386 or x86_64
 
 . `dirname $0`/mcc-env
 
@@ -20,9 +21,10 @@ cflag=0
 gflag=0
 Oflag=0
 language=
+machine=
 oval=
 
-while getopts co:D:I:gOp:x: name
+while getopts co:D:I:gOp:x:m: name
 do
     case $name in
     c)
@@ -53,6 +55,9 @@ do
         ;;
     x)
         language="$OPTARG"
+        ;;
+    m)
+        machine="$OPTARG"
         ;;
     *)
         echo Invalid option $name
@@ -96,5 +101,13 @@ else
     CFLAGS2="/O2 /Ob1"
 fi
 CFLAGS3="/Oy- /DWIN32 /D_CONSOLE /D_VC80_UPGRADE=0x0600 /D_MBCS /W4"
+
+if [ "$machine" == "x86_64" ] ; then
+  export LIB=$(cygpath -aw "$VSHOME/VC/lib/amd64")\;$(cygpath -aw "$WINSDK/Lib/x64")
+  export PATH="$VSHOME/VC/bin/x86_amd64:$PATH"
+  if [ "$PROCESSOR_ARCHITECTURE" == "AMD64" -o "$PROCESSOR_ARCHITEW6432" == "AMD64" ] ; then
+    export PATH="$VSHOME/VC/bin/amd64:$PATH"
+  fi
+fi
 
 cl.exe /nologo $CFLAGS1 $CFLAGS2 $CFLAGS3 "${cmd[@]}" "$@" || exit 1

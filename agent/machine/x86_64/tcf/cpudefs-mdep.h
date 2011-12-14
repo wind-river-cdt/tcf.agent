@@ -37,7 +37,7 @@
 #define REG_OFFSET(name) offsetof(REG_SET, name)
 
 RegisterDefinition regs_index[] = {
-#if defined(WIN32) && defined(__i386__)
+#if defined(_WIN32) && defined(__i386__)
 #   define REG_SP Esp
 #   define REG_BP Ebp
 #   define REG_IP Eip
@@ -85,10 +85,10 @@ RegisterDefinition regs_index[] = {
     { "status",  REG_OFFSET(FloatSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
     { "tag",     REG_OFFSET(FloatSave.TagWord),      2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
 
-#elif defined(WIN32) && defined(__x86_64__)
-#   define REG_SP Esp
-#   define REG_BP Ebp
-#   define REG_IP Eip
+#elif defined(_WIN32) && defined(__x86_64__)
+#   define REG_SP Rsp
+#   define REG_BP Rbp
+#   define REG_IP Rip
     { "rax",    REG_OFFSET(Rax),      8,  0,  0},
     { "rdx",    REG_OFFSET(Rdx),      8,  1,  1},
     { "rcx",    REG_OFFSET(Rcx),      8,  2,  2},

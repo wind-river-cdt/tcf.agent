@@ -408,7 +408,7 @@ static void command_get_environment(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-#elif defined(WIN32)
+#elif defined(_WIN32)
 
 #include <windows.h>
 #include <wchar.h>
@@ -540,7 +540,6 @@ static RTL_USER_PROCESS_PARAMETERS upa;
 
 static int get_process_info(HANDLE prs) {
     static LONG (NTAPI * QueryInformationProcessProc)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG) = NULL;
-    SIZE_T len = 0;
 
     memset(&pbi, 0, sizeof(pbi));
     memset(&peb, 0, sizeof(peb));
@@ -553,19 +552,19 @@ static int get_process_info(HANDLE prs) {
             return -1;
         }
     }
-    if (QueryInformationProcessProc(prs, ProcessBasicInformation, &pbi, sizeof(pbi), &len) < 0) {
+    if (QueryInformationProcessProc(prs, ProcessBasicInformation, &pbi, sizeof(pbi), NULL) < 0) {
         set_win32_errno(GetLastError());
         return -1;
     }
 
     if (pbi.PebBaseAddress != NULL) {
-        if (ReadProcessMemory(prs, (LPCVOID)pbi.PebBaseAddress, &peb, sizeof(peb), &len) == 0) {
+        if (ReadProcessMemory(prs, (LPCVOID)pbi.PebBaseAddress, &peb, sizeof(peb), NULL) == 0) {
             set_win32_errno(GetLastError());
             return -1;
         }
 
         if (peb.ProcessParameters != NULL) {
-            if (ReadProcessMemory(prs, (LPCVOID)peb.ProcessParameters, &upa, sizeof(upa), &len) == 0) {
+            if (ReadProcessMemory(prs, (LPCVOID)peb.ProcessParameters, &upa, sizeof(upa), NULL) == 0) {
                 set_win32_errno(GetLastError());
                 return -1;
             }
@@ -584,8 +583,8 @@ static int write_unicode_string(OutputStream * out, HANDLE prs, UNICODE_STRING s
         if (buff_size > sizeof(w_fnm)) buff_size = sizeof(w_fnm);
         if (ReadProcessMemory(prs, (LPCVOID)str.Buffer, w_fnm, buff_size, &read_size)) {
             char a_fnm[FILE_PATH_SIZE * 4];
-            DWORD k = wcslen(w_fnm);
-            int n = WideCharToMultiByte(CP_UTF8, 0, w_fnm, k, a_fnm, sizeof(a_fnm), NULL, NULL);
+            size_t k = wcslen(w_fnm);
+            int n = WideCharToMultiByte(CP_UTF8, 0, w_fnm, (int)k, a_fnm, sizeof(a_fnm), NULL, NULL);
             a_fnm[n] = 0;
             write_stream(out, ',');
             json_write_string(out, name);

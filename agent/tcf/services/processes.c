@@ -55,7 +55,7 @@
 static const char * PROCESSES[2] = { "Processes", "ProcessesV1" };
 #endif
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #  include <tlhelp32.h>
 #  ifdef _MSC_VER
 #    pragma warning(disable:4201) /* nonstandard extension used : nameless struct/union (in winternl.h) */
@@ -309,7 +309,7 @@ static void command_get_context(char * token, Channel * c) {
     write_stringz(&c->out, token);
 
     if (pid != 0 && parent == 0) {
-#if defined(WIN32)
+#if defined(_WIN32)
 #elif defined(_WRS_KERNEL)
         if (TASK_ID_VERIFY(pid) == ERROR) err = ERR_INV_CONTEXT;
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__APPLE__)
@@ -353,7 +353,7 @@ static void command_get_children(char * token, Channel * c) {
         write_stringz(&c->out, "null");
     }
     else {
-#if defined(WIN32)
+#if defined(_WIN32)
     DWORD err = 0;
     HANDLE snapshot;
     PROCESSENTRY32 pe32;
@@ -611,7 +611,7 @@ static void command_terminate(char * token, Channel * c) {
         err = ERR_INV_CONTEXT;
     }
     else {
-#if defined(WIN32)
+#if defined(_WIN32)
         HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
         if (h == NULL) {
             err = set_win32_errno(GetLastError());
@@ -645,7 +645,7 @@ static void command_signal(char * token, Channel * c) {
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
 
-#if defined(WIN32)
+#if defined(_WIN32)
     err = ENOSYS;
 #elif defined(_WRS_KERNEL)
     if (kill(pid, signal) < 0) err = errno;
@@ -922,7 +922,7 @@ static ProcessOutput * read_process_output(ChildProcess * prs, int fd) {
 #  define context_attach_self() (errno = ERR_UNSUPPORTED, -1)
 #endif
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 static int start_process_imp(Channel * c, char ** envp, const char * dir, const char * exe, char ** args,
                   ProcessStartParams * params, int * selfattach, ChildProcess ** prs) {
@@ -997,7 +997,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         DWORD id = GetCurrentProcessId();
         for (i = 0; i < hi->Count; i++) {
             if (hi->Handles[i].ProcessId != id) continue;
-            SetHandleInformation((HANDLE)(int)hi->Handles[i].Handle, HANDLE_FLAG_INHERIT, FALSE);
+            SetHandleInformation((HANDLE)(uintptr_t)hi->Handles[i].Handle, HANDLE_FLAG_INHERIT, FALSE);
         }
     }
     else {

@@ -35,7 +35,7 @@
 pthread_attr_t pthread_create_attr;
 int utf8_locale = 0;
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 #ifndef SIO_UDP_CONNRESET
 #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR,12)
@@ -215,9 +215,9 @@ int inet_pton(int af, const char * src, void * dst) {
     return 1;
 }
 
-#endif /* WIN32 */
+#endif /* _WIN32 */
 
-#if defined(WIN32) && !defined(__CYGWIN__)
+#if defined(_WIN32) && !defined(__CYGWIN__)
 
 static __int64 file_time_to_unix_time(const FILETIME * ft) {
     __int64 res = (__int64)ft->dwHighDateTime << 32;
@@ -504,9 +504,9 @@ int utf8_closedir(DIR * d) {
     return r;
 }
 
-#endif /* defined(WIN32) && !defined(__CYGWIN__) */
+#endif /* defined(_WIN32) && !defined(__CYGWIN__) */
 
-#if defined(WIN32) && !defined(__CYGWIN__) || defined(_WRS_KERNEL) || defined(__SYMBIAN32__)
+#if defined(_WIN32) && !defined(__CYGWIN__) || defined(_WRS_KERNEL) || defined(__SYMBIAN32__)
 
 ssize_t pread(int fd, void * buf, size_t size, off_t offset) {
     off_t offs0;
@@ -528,7 +528,7 @@ ssize_t pwrite(int fd, const void * buf, size_t size, off_t offset) {
     return wr;
 }
 
-#endif /* defined(WIN32) && !defined(__CYGWIN__) || defined(_WRS_KERNEL) || defined(__SYMBIAN32__) */
+#endif /* defined(_WIN32) && !defined(__CYGWIN__) || defined(_WRS_KERNEL) || defined(__SYMBIAN32__) */
 
 #ifndef big_endian_host
 extern int big_endian_host(void) {
@@ -538,7 +538,7 @@ extern int big_endian_host(void) {
 }
 #endif
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 #include <shlobj.h>
 
@@ -810,7 +810,7 @@ void ini_mdep(void) {
 
 /** canonicalize_file_name ****************************************************/
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 char * canonicalize_file_name(const char * name) {
     DWORD len;
@@ -1092,7 +1092,7 @@ const char * loc_gai_strerror(int ecode) {
     return buf;
 }
 
-#elif defined(WIN32)
+#elif defined(_WIN32)
 
 const char * loc_gai_strerror(int ecode) {
     WCHAR * buf = NULL;
@@ -1126,7 +1126,7 @@ const char * loc_gai_strerror(int ecode) {
 
 #endif
 
-#if defined(WIN32) || defined(_WRS_KERNEL) || defined (__SYMBIAN32__)
+#if defined(_WIN32) || defined(_WRS_KERNEL) || defined (__SYMBIAN32__)
 
 int is_daemon(void) {
     return 0;

@@ -12,7 +12,7 @@ EXECS = $(BINDIR)/dwarf-test$(EXTEXE)
 all:    $(EXECS)
 
 $(BINDIR)/libtcf$(EXTLIB) : $(OFILES)
-	$(AR) -rc $@ $^
+	$(AR) $(AR_FLAGS) $@ $^
 	$(RANLIB)
 
 $(BINDIR)/dwarf-test$(EXTEXE): $(BINDIR)/tcf/main/main$(EXTOBJ) $(BINDIR)/libtcf$(EXTLIB)

@@ -200,7 +200,7 @@ static int cmd_peers(char * s) {
 
 static int cmd_peerinfo(char * s) {
     PeerServer * ps;
-    int i;
+    unsigned i;
 
     printf("Peer information: %s\n", s);
     ps = peer_server_find(s);

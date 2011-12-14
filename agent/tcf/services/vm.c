@@ -29,8 +29,8 @@
 
 static VMState * state = NULL;
 static uint8_t * code = NULL;
-static unsigned code_pos = 0;
-static unsigned code_len = 0;
+static size_t code_pos = 0;
+static size_t code_len = 0;
 
 static void inv_dwarf(const char * msg) {
     str_exception(ERR_INV_DWARF, msg);

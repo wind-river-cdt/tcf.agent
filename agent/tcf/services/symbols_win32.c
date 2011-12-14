@@ -19,7 +19,7 @@
 
 #include <tcf/config.h>
 
-#if SERVICE_Symbols && !ENABLE_SymbolsProxy && defined(WIN32) && !ENABLE_ELF
+#if SERVICE_Symbols && !ENABLE_SymbolsProxy && defined(_WIN32) && !ENABLE_ELF
 
 #include <errno.h>
 #include <assert.h>
@@ -249,7 +249,7 @@ const char * symbol2id(const Symbol * sym) {
         snprintf(buf, sizeof(buf), "@P%"PRIX64".%s", (uint64_t)sym->length, base);
     }
     else {
-        int i = sym->info ? sym->info - basic_type_info + 1 : 0;
+        int i = sym->info ? (int)(sym->info - basic_type_info) + 1 : 0;
         snprintf(buf, sizeof(buf), "@S%"PRIX64".%lX.%X.%X.%s",
             (uint64_t)sym->module, sym->index, sym->frame, i, sym->ctx->id);
     }

@@ -18,6 +18,6 @@
  * hold values of target CPU registers.
  */
 
-#if defined(WIN32)
+#if defined(_WIN32)
    typedef CONTEXT REG_SET;
 #endif

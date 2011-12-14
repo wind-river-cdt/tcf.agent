@@ -20,7 +20,7 @@
 
 #include <tcf/config.h>
 
-#if defined(WIN32) && !ENABLE_ELF
+#if defined(_WIN32) && !ENABLE_ELF
 #  define ENABLE_PE_Symbols ((SERVICE_LineNumbers && !ENABLE_LineNumbersProxy) || (SERVICE_Symbols && !ENABLE_SymbolsProxy))
 #  define ENABLE_EnumerateModules (SERVICE_MemoryMap && !ENABLE_ContextProxy)
 #else

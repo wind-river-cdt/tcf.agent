@@ -48,7 +48,7 @@
 
 static const char * TERMINALS = "Terminals";
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #  define TERM_LAUNCH_EXEC "cmd"
 #  define TERM_LAUNCH_ARGS {TERM_LAUNCH_EXEC, NULL}
     struct winsize {
@@ -232,7 +232,7 @@ static int kill_term(Terminal * term) {
     int err = 0;
     int pid = get_process_pid(term->prs);
 
-#if defined(WIN32)
+#if defined(_WIN32)
     HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
     if (h == NULL) {
         err = set_win32_errno(GetLastError());
@@ -291,7 +291,7 @@ static void terminal_exited(void * args) {
     loc_free(term);
 }
 
-#if !defined(WIN32)
+#if !defined(_WIN32)
 /*
  * Set the environment variable "name" to the value "value". If the variable
  * exists already, override it or just skip.
@@ -420,7 +420,7 @@ static void command_launch(char * token, Channel * c) {
         if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
         if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
-#if !defined(WIN32)
+#if !defined(_WIN32)
         {
             struct stat st;
             if (err == 0 && stat(exec, &st) != 0) {
@@ -461,7 +461,7 @@ static void command_launch(char * token, Channel * c) {
         if (err == 0 && start_process(c, &prms, &selfattach, &term->prs) < 0) err = errno;
 
         if (!err) {
-#if !defined(WIN32)
+#if !defined(_WIN32)
             struct winsize size;
             int tty = get_process_tty(term->prs);
             memset(&size, 0, sizeof(struct winsize));
@@ -525,7 +525,7 @@ static void command_set_win_size(char * token, Channel * c) {
         err = ERR_INV_CONTEXT;
     }
     else if (term->width != size.ws_col || term->height != size.ws_row) {
-#if defined(WIN32)
+#if defined(_WIN32)
 #else
         int tty = get_process_tty(term->prs);
         if (ioctl(tty, TIOCSWINSZ, &size) < 0) err = errno;

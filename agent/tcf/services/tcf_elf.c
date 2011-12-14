@@ -44,7 +44,7 @@
 #if defined(_WRS_KERNEL)
 #elif defined(_MSC_VER)
 #  define USE_MMAP
-#elif defined(WIN32)
+#elif defined(_WIN32)
 #else
 #  include <sys/mman.h>
 #  define USE_MMAP
@@ -97,7 +97,7 @@ static void elf_dispose(ELF_File * file) {
             ELF_Section * s = file->sections + n;
 #if !defined(USE_MMAP)
             loc_free(s->data);
-#elif defined(WIN32)
+#elif defined(_WIN32)
             UnmapViewOfFile(s->data);
 #else
             if (s->mmap_addr != NULL) munmap(s->mmap_addr, s->mmap_size);
@@ -108,7 +108,7 @@ static void elf_dispose(ELF_File * file) {
         }
         loc_free(file->sections);
     }
-#if defined(WIN32)
+#if defined(_WIN32)
     if (file->mmap_handle != NULL) CloseHandle(file->mmap_handle);
 #endif
     release_error_report(file->error);
@@ -302,7 +302,7 @@ static char * get_debug_info_file_name(ELF_File * file, int * error) {
                 char * lnm = fnm;
                 struct stat buf;
                 char * name = (char *)sec->data;
-                int l = strlen(file->name);
+                int l = (int)strlen(file->name);
                 while (l > 0 && file->name[l - 1] != '/' && file->name[l - 1] != '\\') l--;
                 if (strcmp(file->name + l, name) != 0) {
                     snprintf(fnm, sizeof(fnm), "%.*s%s", l, file->name, name);
@@ -657,7 +657,7 @@ int elf_load(ELF_Section * s) {
     }
 
 #ifdef USE_MMAP
-#ifdef WIN32
+#ifdef _WIN32
     {
         ELF_File * file = s->file;
         if (file->mmap_handle == NULL) {

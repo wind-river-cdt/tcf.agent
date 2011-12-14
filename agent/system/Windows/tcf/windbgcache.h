@@ -22,12 +22,13 @@
 
 #include <tcf/config.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 #if defined(__GNUC__)
 #  include <imagehlp.h>
 #else
 #  define _NO_CVCONST_H
+#  define _IMAGEHLP_SOURCE_
 #  include <dbghelp.h>
 #endif
 
@@ -247,5 +248,5 @@ extern BOOL LocEnumerateLoadedModulesW64(HANDLE hProcess, PENUMLOADED_MODULES_CA
 }
 #endif
 
-#endif /* defined(WIN32) */
+#endif /* defined(_WIN32) */
 #endif /* D_windbgcache */

@@ -106,7 +106,7 @@ struct AsyncReqInfo {
             /* Out */
             int rval;
         } con;
-#ifdef WIN32
+#ifdef _WIN32
         struct {
             /* In */
             HANDLE pipe;

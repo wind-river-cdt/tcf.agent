@@ -31,12 +31,12 @@
 
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
 
-#if !defined(WIN32) && !defined(ifr_netmask)
+#if !defined(_WIN32) && !defined(ifr_netmask)
 #  define ifr_netmask ifr_addr
 #endif
 
 int build_ifclist(int sock, int max, ip_ifc_info * list) {
-#ifdef WIN32
+#ifdef _WIN32
     int i;
     int ind;
     MIB_IPADDRTABLE * info;

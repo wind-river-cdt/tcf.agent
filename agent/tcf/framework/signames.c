@@ -22,7 +22,7 @@
 #include <signal.h>
 #include <tcf/framework/signames.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 typedef struct ExceptionName {
     DWORD code;

@@ -40,9 +40,9 @@
 typedef struct Trap Trap;
 
 struct Trap {
-    int error;
     jmp_buf env;
     Trap * next;
+    int error;
 };
 
 #define set_trap(trap) (set_trap_a(trap), setjmp((trap)->env), set_trap_b(trap))

@@ -21,7 +21,7 @@
 #include <tcf/config.h>
 #include <assert.h>
 #include <stddef.h>
-#if defined(WIN32)
+#if defined(_WIN32)
 #elif defined(_WRS_KERNEL)
 #else
 #  include <sys/wait.h>
@@ -143,7 +143,7 @@ static void * worker_thread_handler(void * x) {
             break;
 
 /* Platform dependant IO methods */
-#if defined(WIN32)
+#if defined(_WIN32)
         case AsyncReqConnectPipe:
             req->u.cnp.rval = ConnectNamedPipe(req->u.cnp.pipe, NULL);
             if (!req->u.cnp.rval) {

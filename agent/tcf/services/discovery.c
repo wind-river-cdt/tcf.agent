@@ -41,7 +41,7 @@ static const char * LOCATOR = "Locator";
 static int peer_cnt = 0;
 
 static int write_peer_properties(PeerServer * ps, void * arg) {
-    int i;
+    unsigned i;
     OutputStream * out = (OutputStream *)arg;
 
     if (peer_cnt > 0) write_stream(out, ',');

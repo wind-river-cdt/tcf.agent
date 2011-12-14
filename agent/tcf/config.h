@@ -23,7 +23,7 @@
 
 #include <tcf/framework/mdep.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #  define TARGET_WINDOWS    1
 #  define TARGET_VXWORKS    0
 #  define TARGET_UNIX       0

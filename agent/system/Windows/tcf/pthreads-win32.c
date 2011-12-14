@@ -15,7 +15,7 @@
 
 #include <tcf/config.h>
 
-#if defined(WIN32) && !defined(DISABLE_PTHREADS_WIN32)
+#if defined(_WIN32) && !defined(DISABLE_PTHREADS_WIN32)
 
 #include <assert.h>
 #include <tcf/framework/myalloc.h>

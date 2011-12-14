@@ -1261,7 +1261,7 @@ static int lua_peer_getid(lua_State *L)
 
 static int lua_peer_getnames(lua_State *L)
 {
-    int i;
+    unsigned i;
     struct peer_extra *pse = NULL;
 
     assert(L == luastate);
@@ -1455,7 +1455,7 @@ int main(int argc, char ** argv) {
 
     log_mode = 0;
 
-#ifndef WIN32
+#ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
 #endif
     ini_mdep();

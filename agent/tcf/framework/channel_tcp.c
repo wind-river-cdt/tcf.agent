@@ -41,7 +41,7 @@
 #  ifndef _MSC_VER
 #    include <dirent.h>
 #  endif
-#  ifdef WIN32
+#  ifdef _WIN32
 #    include <ShlObj.h>
 #  endif
 #else
@@ -69,7 +69,7 @@
 #define MSG_MORE 0
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 #  define FD_SETX(a,b) FD_SET((unsigned)a, b)
 #  define MKDIR_MODE_TCF 0
 #  define MKDIR_MODE_SSL 0
@@ -89,7 +89,7 @@
 #define MAX_IFC 10
 
 #if !defined(ENABLE_OutputQueue)
-#  if ENABLE_SSL || ENABLE_ContextProxy || defined(WIN32)
+#  if ENABLE_SSL || ENABLE_ContextProxy || defined(_WIN32)
 #    define ENABLE_OutputQueue 1
 #  else
 #    define ENABLE_OutputQueue 0
@@ -175,7 +175,7 @@ static void ini_ssl(void) {
         RAND_add(&ts.tv_nsec, sizeof(ts.tv_nsec), 0.1);
     }
     inited = 1;
-#ifdef WIN32
+#ifdef _WIN32
     {
         WCHAR fnm[MAX_PATH];
         char buf[MAX_PATH];
@@ -815,7 +815,7 @@ static ChannelTCP * create_channel(int sock, int en_ssl, int server, int unix_do
             }
         }
 
-#ifdef WIN32
+#ifdef _WIN32
         {
             unsigned long opts = 1;
             if (ioctlsocket((SOCKET)sock, FIONBIO, &opts) != 0) {
@@ -897,7 +897,7 @@ static ChannelTCP * create_channel(int sock, int en_ssl, int server, int unix_do
 }
 
 static void refresh_peer_server(int sock, PeerServer * ps) {
-    int i;
+    unsigned i;
     const char * transport = peer_server_getprop(ps, "TransportName", NULL);
     assert(transport != NULL);
     if (strcmp(transport, "UNIX") == 0) {
@@ -1183,7 +1183,7 @@ ChannelServer * channel_tcp_server(PeerServer * ps) {
             reason = "create";
             continue;
         }
-#if !defined(WIN32)
+#if !defined(_WIN32)
         {
             const int i = 1;
             if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&i, sizeof(i)) < 0) {
@@ -1435,14 +1435,14 @@ void generate_ssl_certificate(void) {
     if (!err && (fp = fopen(fnm, "w")) == NULL) err = errno;
     if (!err && !PEM_write_PKCS8PrivateKey(fp, rsa_key, NULL, NULL, 0, NULL, NULL)) err = set_ssl_errno();
     if (!err && fclose(fp) != 0) err = errno;
-#ifndef WIN32
+#ifndef _WIN32
     if (!err && chmod(fnm, S_IRWXU) != 0) err = errno;
 #endif
     snprintf(fnm, sizeof(fnm), "%s/ssl/local.cert", tcf_dir);
     if (!err && (fp = fopen(fnm, "w")) == NULL) err = errno;
     if (!err && !PEM_write_X509(fp, cert)) err = set_ssl_errno();
     if (!err && fclose(fp) != 0) err = errno;
-#ifndef WIN32
+#ifndef _WIN32
     if (!err && chmod(fnm, S_IRWXU) != 0) err = errno;
 #endif
     if (err) {

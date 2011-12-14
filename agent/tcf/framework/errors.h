@@ -104,9 +104,9 @@ extern int set_fmt_errno(int no, const char * fmt, ...);
  */
 extern int set_gai_errno(int gai_error_code);
 
-#ifdef WIN32
+#ifdef _WIN32
 /*
- * Set errno to indicate WIN32 error code.
+ * Set errno to indicate _WIN32 error code.
  * This function is thread-safe - can be called from background threads.
  * Return new value of errno.
  */

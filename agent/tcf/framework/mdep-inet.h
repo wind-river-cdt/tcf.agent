@@ -21,7 +21,7 @@
 #ifndef D_mdep_inet
 #define D_mdep_inet
 
-#if defined(WIN32) || defined(__CYGWIN__)
+#if defined(_WIN32) || defined(__CYGWIN__)
 
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
@@ -63,7 +63,7 @@ extern int wsa_bind(int socket, const struct sockaddr * addr, int addr_size);
 extern int wsa_listen(int socket, int size);
 extern int wsa_recv(int socket, void * buf, size_t size, int flags);
 extern int wsa_recvfrom(int socket, void * buf, size_t size, int flags,
-                    struct sockaddr * addr, socklen_t * addr_size);
+                  struct sockaddr * addr, socklen_t * addr_size);
 extern int wsa_send(int socket, const void * buf, size_t size, int flags);
 extern int wsa_sendto(int socket, const void * buf, size_t size, int flags,
                   const struct sockaddr * dest_addr, socklen_t dest_size);

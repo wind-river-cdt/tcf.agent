@@ -21,7 +21,10 @@ else
 endif
 
 ifeq ($(OPSYS),Windows)
-  CC = @$(TCF_AGENT_DIR)/bin/mcc -p $(BINDIR)/agent.pdb
+  CC = @$(TCF_AGENT_DIR)/bin/mcc -p $(BINDIR)/agent.pdb -m $(MACHINE)
+  AR = @$(TCF_AGENT_DIR)/bin/mlb -m $(MACHINE)
+  AR_FLAGS =
+  AR_OUT_F =
   EXTOBJ = .obj
   EXTLIB = .lib
   EXTEXE = .exe
@@ -128,7 +131,7 @@ INIT = /etc/init.d
 
 HFILES = $(foreach dir,$(SRCDIRS),$(wildcard $(TCF_AGENT_DIR)/$(dir)/*.h))
 CFILES = $(foreach fnm,$(foreach dir,$(SRCDIRS),$(wildcard $(TCF_AGENT_DIR)/$(dir)/*.c)),$(subst ^$(TCF_AGENT_DIR)/,,^$(fnm)))
-OFILES = $(addprefix $(BINDIR)/,$(addsuffix $(EXTOBJ),$(basename $(filter-out main/main%,$(CFILES)))))
+OFILES = $(addprefix $(BINDIR)/,$(addsuffix $(EXTOBJ),$(basename $(filter-out tcf/main/main%,$(CFILES)))))
 EXECS  = $(addprefix $(BINDIR)/,agent$(EXTEXE) client$(EXTEXE) tcfreg$(EXTEXE) valueadd$(EXTEXE) tcflog$(EXTEXE))
 
 ifeq ($(OPSYS),Cygwin)

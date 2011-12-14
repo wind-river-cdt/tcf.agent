@@ -12,7 +12,7 @@ EXECS = $(BINDIR)/server$(EXTEXE)
 all:	$(EXECS)
 
 $(BINDIR)/libtcf$(EXTLIB) : $(OFILES)
-	$(AR) -rc $@ $^
+	$(AR) $(AR_FLAGS) $@ $^
 	$(RANLIB)
 
 $(BINDIR)/server$(EXTEXE): $(BINDIR)/tcf/main/main$(EXTOBJ) $(BINDIR)/libtcf$(EXTLIB)

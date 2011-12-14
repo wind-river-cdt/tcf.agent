@@ -21,7 +21,7 @@
 
 #include <tcf/config.h>
 
-#if SERVICE_LineNumbers && !ENABLE_LineNumbersProxy && defined(WIN32) && !ENABLE_ELF
+#if SERVICE_LineNumbers && !ENABLE_LineNumbersProxy && defined(_WIN32) && !ENABLE_ELF
 
 #include <errno.h>
 #include <assert.h>

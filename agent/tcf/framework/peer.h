@@ -33,10 +33,10 @@ struct PeerServerList {
 
 struct PeerServer {
     const char * id;
-    int max;
-    int ind;
+    unsigned max;
+    unsigned ind;
     PeerServerList * list;
-    unsigned int flags;
+    unsigned flags;
     time_t creation_time;
     time_t expiration_time;
     PeerServer * next;

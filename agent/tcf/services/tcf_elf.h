@@ -23,12 +23,12 @@
 
 #if ENABLE_ELF
 
-#if !defined(WIN32) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__APPLE__)
 #  include <elf.h>
 #endif
 #include <tcf/framework/context.h>
 
-#if defined(WIN32) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__APPLE__)
 
 #define EI_MAG0        0
 #define EI_MAG1        1
@@ -252,7 +252,7 @@ typedef struct {
 
 #endif
 
-#if defined(_WRS_KERNEL) || defined(WIN32) || defined(__APPLE__)
+#if defined(_WRS_KERNEL) || defined(_WIN32) || defined(__APPLE__)
 
 typedef uint64_t        Elf64_Addr;
 typedef uint16_t        Elf64_Half;
@@ -389,7 +389,7 @@ struct ELF_File {
     ErrorReport * error;
     int fd;
 
-#if defined(WIN32)
+#if defined(_WIN32)
     HANDLE mmap_handle;
 #endif
 

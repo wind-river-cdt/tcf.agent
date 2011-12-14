@@ -27,7 +27,7 @@
 
 #define __STDC_FORMAT_MACROS 1
 
-#if defined(WIN32) || defined(__CYGWIN__)
+#if defined(_WIN32) || defined(__CYGWIN__)
 /* MS Windows NT/XP */
 
 #ifndef _WIN32_WINNT
@@ -114,7 +114,11 @@ struct timespec {
 #if defined(__MINGW32__)
 typedef unsigned int useconds_t;
 #elif defined(_MSC_VER)
-#define __i386__
+#if defined(_M_IX86)
+#  define __i386__
+#elif defined(_M_AMD64)
+#  define __x86_64__
+#endif
 #define strcasecmp(x,y) stricmp(x,y)
 typedef unsigned long pid_t;
 typedef unsigned long useconds_t;
@@ -181,7 +185,7 @@ extern int utf8_rename(const char * path1, const char * path2);
  * readdir() emulation with UTF-8 support
  */
 struct UTF8_DIR {
-  long hdl;
+  intptr_t hdl;
   struct _wfinddatai64_t blk;
   wchar_t * path;
 };

@@ -42,7 +42,7 @@
 
 #define MESSAGE_CNT             (ERR_MESSAGE_MAX - ERR_MESSAGE_MIN + 1)
 
-#ifdef WIN32
+#ifdef _WIN32
 #  define ERR_WINDOWS_MIN       (STD_ERR_BASE + 0x10000)
 #  define ERR_WINDOWS_MAX       (ERR_WINDOWS_MIN + 0xffff)
 #  define ERR_WINDOWS_CNT       (ERR_WINDOWS_MAX - ERR_WINDOWS_MIN + 1)
@@ -115,7 +115,7 @@ static ErrorMessage * alloc_msg(int source) {
     return m;
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 
 static char * system_strerror(DWORD error_code, HMODULE module) {
     WCHAR * buf = NULL;
@@ -134,7 +134,7 @@ static char * system_strerror(DWORD error_code, HMODULE module) {
         msg_len = WideCharToMultiByte(CP_UTF8, 0, buf, -1, NULL, 0, NULL, NULL);
         if (msg_len > 0) {
             realloc_msg_buf();
-            msg_len = WideCharToMultiByte(CP_UTF8, 0, buf, -1, msg_buf, msg_max, NULL, NULL);
+            msg_len = WideCharToMultiByte(CP_UTF8, 0, buf, -1, msg_buf, (int)msg_max, NULL, NULL);
         }
     }
     if (msg_len == 0) {
@@ -351,7 +351,7 @@ const char * errno_to_str(int err) {
                 return "Cannot get error message text: errno_to_str() must be called from the main thread";
             }
         }
-#ifdef WIN32
+#ifdef _WIN32
         if (err >= ERR_WINDOWS_MIN && err <= ERR_WINDOWS_MAX) {
             if (is_dispatch_thread()) {
                 return system_strerror(err - ERR_WINDOWS_MIN, NULL);
@@ -495,10 +495,10 @@ ErrorReport * get_error_report(int err) {
 
         report->pub.format = loc_strdup(errno_to_str(err));
 
-#ifdef WIN32
+#ifdef _WIN32
         if (err >= ERR_WINDOWS_MIN && err <= ERR_WINDOWS_MAX) {
             add_report_prop_int(report, "AltCode", err - ERR_WINDOWS_MIN);
-            add_report_prop_str(report, "AltOrg", "WIN32");
+            add_report_prop_str(report, "AltOrg", "_WIN32");
             err = ERR_OTHER;
         }
 #endif

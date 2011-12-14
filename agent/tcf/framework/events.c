@@ -45,7 +45,7 @@ struct event_node {
     void *              arg;
 };
 
-#if defined(WIN32)
+#if defined(_WIN32)
    static DWORD event_thread;
 #  define current_thread GetCurrentThreadId()
 #  define is_event_thread (event_thread == current_thread)

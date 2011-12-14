@@ -50,8 +50,8 @@ static void notify_listeners(PeerServer * ps, int type) {
 }
 
 static int is_same(PeerServer * a, PeerServer * b) {
-    int i;
-    int j;
+    unsigned i;
+    unsigned j;
 
     if (a->ind != b->ind) {
         return 0;
@@ -109,7 +109,7 @@ PeerServer * peer_server_alloc(void) {
 }
 
 void peer_server_addprop(PeerServer * s, const char * name, const char * value) {
-    int i;
+    unsigned i;
 
     if (strcmp(name, "ID") == 0) {
         loc_free(name);
@@ -134,7 +134,7 @@ void peer_server_addprop(PeerServer * s, const char * name, const char * value) 
 }
 
 const char * peer_server_getprop(PeerServer * s, const char * name, const char * default_value) {
-    int i;
+    unsigned i;
 
     for (i = 0; i < s->ind; i++) {
         if (strcmp(s->list[i].name, name) == 0) {
