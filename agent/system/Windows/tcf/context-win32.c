@@ -111,6 +111,7 @@ typedef struct DebugState {
 #if USE_HW_BPS
     int                 ok_to_use_hw_bp;    /* NtContinue() changes Dr6 and Dr7, so HW breakpoints should be disabled until NtContinue() is done */
     ContextBreakpoint * hw_bps[MAX_HW_BPS];
+    unsigned            hw_idx[MAX_HW_BPS];
     unsigned            hw_bps_generation;
 #endif
 } DebugState;
@@ -218,6 +219,28 @@ static void get_registers(Context * ctx) {
     }
 }
 
+#if USE_HW_BPS
+static int skip_read_only_breakpoint(Context * ctx, ContextBreakpoint * bp) {
+    int i;
+    int read_write_hit = 0;
+    ContextExtensionWin32 * ext = EXT(ctx);
+    DebugState * debug_state = EXT(ctx->mem)->debug_state;
+
+    for (i = 0; i < MAX_HW_BPS; i++) {
+        if (debug_state->hw_bps[i] != bp) continue;
+        if ((ext->regs->Dr6 & ((REGWORD)1 << i)) == 0) continue;
+        if (debug_state->hw_idx[i] == 0) return 1;
+        read_write_hit = 1;
+    }
+    if (!read_write_hit) return 1;
+    if (ctx->stopped_by_cb != NULL) {
+        ContextBreakpoint ** p = ctx->stopped_by_cb;
+        while (*p != NULL) if (*p++ == bp) return 1;
+    }
+    return 0;
+}
+#endif
+
 static DWORD event_win32_context_stopped(Context * ctx) {
     ContextExtensionWin32 * ext = EXT(ctx);
 #if USE_HW_BPS
@@ -265,6 +288,7 @@ static DWORD event_win32_context_stopped(Context * ctx) {
         ctx->stopped_by_exception = 0;
     }
     else if (ext->suspend_reason.dwFirstChance) {
+        int cb_found = 0;
         ctx->stopped_by_exception = 0;
         switch (exception_code) {
         case EXCEPTION_SINGLE_STEP:
@@ -277,6 +301,10 @@ static DWORD event_win32_context_stopped(Context * ctx) {
                         if (ext->regs->Dr6 & ((REGWORD)1 << i)) {
                             ContextBreakpoint * bp = debug_state->hw_bps[i];
                             if (bp == NULL) continue;
+                            cb_found = 1;
+                            if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
+                                if (skip_read_only_breakpoint(ctx, bp)) continue;
+                            }
                             ctx->stopped_by_cb = ext->triggered_hw_bps;
                             ctx->stopped_by_cb[j++] = bp;
                             ctx->stopped_by_cb[j] = NULL;
@@ -302,7 +330,7 @@ static DWORD event_win32_context_stopped(Context * ctx) {
                     }
                 }
             }
-            if ((!ctx->stopped_by_cb && ext->step_opcodes_len == 0) || ext->regs_error) {
+            if ((!cb_found && ext->step_opcodes_len == 0) || ext->regs_error) {
                 continue_status = DBG_EXCEPTION_NOT_HANDLED;
             }
             ext->step_opcodes_len = 0;
@@ -486,7 +514,7 @@ static int win32_resume(Context * ctx, int step) {
     /* Update debug registers */
     if (ctx->stopped_by_cb != NULL || ext->hw_bps_regs_generation != debug_state->hw_bps_generation) {
         int i;
-                REGWORD Dr7 = 0;
+        REGWORD Dr7 = 0;
         int step_over_hw_bp = 0;
 
         get_registers(ctx);
@@ -535,6 +563,15 @@ static int win32_resume(Context * ctx, int step) {
                 Dr7 |= (REGWORD)1 << (i * 2);
                 if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
                     Dr7 &= ~((REGWORD)3 << (i * 4 + 16));
+                }
+                else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
+                    if (debug_state->hw_idx[i] == 0) {
+                        Dr7 &= ~((REGWORD)3 << (i * 4 + 16));
+                        Dr7 |= (REGWORD)1 << (i * 4 + 16);
+                    }
+                    else {
+                        Dr7 |= (REGWORD)3 << (i * 4 + 16);
+                    }
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
                     Dr7 &= ~((REGWORD)3 << (i * 4 + 16));
@@ -1308,13 +1345,15 @@ int context_get_supported_bp_access_types(Context * ctx) {
 
 int context_plant_breakpoint(ContextBreakpoint * bp) {
 #if USE_HW_BPS
-    int i;
     Context * ctx = bp->ctx;
     assert(bp->access_types);
     if (ctx->mem == ctx && (bp->access_types & CTX_BP_ACCESS_VIRTUAL)) {
         ContextExtensionWin32 * ext = EXT(ctx);
         DebugState * debug_state = ext->debug_state;
         if (debug_state->ok_to_use_hw_bp && bp->length <= 8 && ((1u << bp->length) & 0x116u)) {
+            unsigned i;
+            unsigned n = 1;
+            unsigned m = 0;
             if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
                 /* Don't use more then 2 HW slots for regular instruction breakpoints */
                 int cnt = 0;
@@ -1329,17 +1368,27 @@ int context_plant_breakpoint(ContextBreakpoint * bp) {
                     return -1;
                 }
             }
+            else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
+                n = 2;
+            }
             else if (bp->access_types != (CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL) &&
                         bp->access_types != (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
                 errno = ERR_UNSUPPORTED;
                 return -1;
             }
-            for (i = 0; i < MAX_HW_BPS; i++) {
-                if (debug_state->hw_bps[i] == NULL || debug_state->hw_bps[i] == bp) {
+            for (i = 0; i < MAX_HW_BPS && m < n; i++) {
+                assert(debug_state->hw_bps[i] != bp);
+                if (debug_state->hw_bps[i] == NULL) {
                     debug_state->hw_bps[i] = bp;
-                    debug_state->hw_bps_generation++;
-                    return 0;
+                    debug_state->hw_idx[i] = m++;
                 }
+            }
+            if (m == n) {
+                debug_state->hw_bps_generation++;
+                return 0;
+            }
+            for (i = 0; i < MAX_HW_BPS && n > 0; i++) {
+                if (debug_state->hw_bps[i] == bp) debug_state->hw_bps[i] = NULL;
             }
         }
     }
