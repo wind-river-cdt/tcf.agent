@@ -741,6 +741,7 @@ void dio_ChkData(U2_T Form) {
     case FORM_DATA8     :
     case FORM_SDATA     :
     case FORM_UDATA     :
+    case FORM_SEC_OFFSET:
         return;
     }
     str_exception(ERR_INV_DWARF, "FORM_DATA expected");
@@ -756,6 +757,7 @@ void dio_ChkBlock(U2_T Form, U1_T ** Buf, size_t * Size) {
     case FORM_DATA2     :
     case FORM_DATA4     :
     case FORM_DATA8     :
+    case FORM_SEC_OFFSET:
         assert(dio_gFormDataAddr >= sSection->data);
         assert((U1_T *)dio_gFormDataAddr < (U1_T *)sSection->data + sSection->size);
         *Size = dio_gFormDataSize;

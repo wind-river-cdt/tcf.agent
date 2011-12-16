@@ -522,6 +522,21 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
             add_command(SFT_CMD_NUMBER)->num = dio_ReadU8LEB128();
             add_command(SFT_CMD_ADD);
             break;
+        case OP_ge:
+            add_command(SFT_CMD_GE);
+            break;
+        case OP_gt:
+            add_command(SFT_CMD_GT);
+            break;
+        case OP_le:
+            add_command(SFT_CMD_LE);
+            break;
+        case OP_lt:
+            add_command(SFT_CMD_LT);
+            break;
+        case OP_shl:
+            add_command(SFT_CMD_SHL);
+            break;
         case OP_lit0:
         case OP_lit1:
         case OP_lit2:

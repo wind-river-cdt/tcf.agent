@@ -325,7 +325,7 @@ void dwarf_evaluate_expression(U8_T BaseAddress, PropertyValue * v) {
     sState->stack_frame = sValue->mFrame;
     sState->reg_id_scope = Unit->mRegIdScope;
     sState->object_address = BaseAddress;
-    sState->client_op = client_op;;
+    sState->client_op = client_op;
 
     if (sValue->mAttr == AT_data_member_location) {
         sState->stk = (U8_T *)tmp_alloc(sizeof(U8_T) * (sState->stk_max = 8));

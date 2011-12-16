@@ -276,6 +276,31 @@ uint64_t evaluate_stack_trace_commands(Context * ctx, StackFrame * frame, StackT
             stk[stk_pos - 2] = stk[stk_pos - 2] | stk[stk_pos - 1];
             stk_pos--;
             break;
+        case SFT_CMD_GE:
+            if (stk_pos < 2) stack_trace_error();
+            stk[stk_pos - 2] = stk[stk_pos - 2] >= stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_GT:
+            if (stk_pos < 2) stack_trace_error();
+            stk[stk_pos - 2] = stk[stk_pos - 2] > stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_LE:
+            if (stk_pos < 2) stack_trace_error();
+            stk[stk_pos - 2] = stk[stk_pos - 2] <= stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_LT:
+            if (stk_pos < 2) stack_trace_error();
+            stk[stk_pos - 2] = stk[stk_pos - 2] < stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_SHL:
+            if (stk_pos < 2) stack_trace_error();
+            stk[stk_pos - 2] = stk[stk_pos - 2] <<= stk[stk_pos - 1];
+            stk_pos--;
+            break;
         default:
             stack_trace_error();
             break;
