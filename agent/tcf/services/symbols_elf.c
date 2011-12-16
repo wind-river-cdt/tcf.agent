@@ -171,7 +171,6 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
                 value += sec->addr;
             }
             *address = elf_map_to_run_time_address(ctx, file, sec, (ContextAddress)value);
-            if (*address == 0 && file->type == ET_EXEC) *address = (ContextAddress)value;
             return 0;
         }
     }
@@ -2021,6 +2020,16 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
             else if (v.mAddr != NULL) {
                 *value = v.mAddr;
                 *size = v.mSize;
+                *big_endian = v.mBigEndian;
+            }
+            else if (v.mForm == FORM_EXPR_VALUE) {
+                void * bf = NULL;
+                ContextAddress val_size = 0;
+                if (get_symbol_size(sym, &val_size) < 0) exception(errno);
+                bf = tmp_alloc((size_t)val_size);
+                if (context_read_mem(sym_ctx, (ContextAddress)v.mValue, bf, (size_t)val_size) < 0) exception(errno);
+                *value = bf;
+                *size = (size_t)val_size;
                 *big_endian = v.mBigEndian;
             }
             else {

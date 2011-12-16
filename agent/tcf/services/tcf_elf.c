@@ -1041,7 +1041,6 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
         }
         if (r->sect_name == NULL) {
             unsigned j;
-            if (file->pheader_cnt == 0 && file->type == ET_EXEC) return addr;
             for (j = 0; j < file->pheader_cnt; j++) {
                 U8_T offs;
                 ELF_PHeader * p = file->pheaders + j;
@@ -1056,6 +1055,7 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
                 if (offs < r->file_offs || offs >= r->file_offs + r->size) continue;
                 return (ContextAddress)(offs - r->file_offs + r->addr);
             }
+            if (file->type == ET_EXEC) return addr;
         }
         else if (sec != NULL && strcmp(sec->name, r->sect_name) == 0) {
             return (ContextAddress)(addr - sec->addr + r->addr);
