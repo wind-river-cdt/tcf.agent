@@ -298,7 +298,7 @@ uint64_t evaluate_stack_trace_commands(Context * ctx, StackFrame * frame, StackT
             break;
         case SFT_CMD_SHL:
             if (stk_pos < 2) stack_trace_error();
-            stk[stk_pos - 2] = stk[stk_pos - 2] <<= stk[stk_pos - 1];
+            stk[stk_pos - 2] <<= stk[stk_pos - 1];
             stk_pos--;
             break;
         default:
