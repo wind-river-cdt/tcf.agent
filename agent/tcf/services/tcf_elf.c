@@ -324,6 +324,7 @@ static char * get_debug_info_file_name(ELF_File * file, int * error) {
 static int is_debug_info_file(ELF_File * file) {
     unsigned i = 0;
     if (strcmp(file->name + strlen(file->name) - 6, ".debug") == 0) return 1;
+    if (file->section_cnt == 0) return 0;
     for (i = 1; i < file->section_cnt - 1; i++) {
         ELF_Section * sec = file->sections + i;
         if (sec->size > 0 && sec->type == SHT_NOBITS && sec->name != NULL) {
