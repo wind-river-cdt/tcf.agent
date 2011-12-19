@@ -1,5 +1,5 @@
 %define name tcf-agent
-%define version 0.4.0
+%define version 0.6.0
 %define release 1.%(bin/get-os-tag)
 %define make_options CONF=Release PATH_Plugins=/etc/tcf/plugins
 

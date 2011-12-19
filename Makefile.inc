@@ -116,7 +116,7 @@ ifdef OpenSSL
 endif
 
 ifeq ($(OPSYS),MinGW)
-  VERSION := 0.4.0
+  VERSION := 0.6.0
 else
   VERSION := $(shell grep "%define version " $(TCF_AGENT_DIR)/main/tcf-agent.spec | sed -e "s/%define version //")
 endif
