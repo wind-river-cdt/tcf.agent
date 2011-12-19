@@ -45,6 +45,7 @@ static int get_dynamic_tag(Context * ctx, ELF_File * file, int tag, ContextAddre
         if (sec->name == NULL) continue;
         if (strcmp(sec->name, ".dynamic") == 0) {
             ContextAddress sec_addr = elf_map_to_run_time_address(ctx, file, sec, (ContextAddress)sec->addr);
+            if (errno) return -1;
             if (elf_load(sec) < 0) return -1;
             if (file->elf64) {
                 unsigned cnt = (unsigned)(sec->size / sizeof(Elf64_Dyn));
@@ -126,7 +127,7 @@ static int get_global_symbol_address(Context * ctx, ELF_File * file, const char 
                     case STT_FUNC:
                         if (file->byte_swap) SWAP(sym.st_value);
                         *addr = elf_map_to_run_time_address(ctx, file, NULL, (ContextAddress)sym.st_value);
-                        if (*addr != 0) return 0;
+                        if (errno == 0) return 0;
                     }
                 }
             }
@@ -142,7 +143,7 @@ static int get_global_symbol_address(Context * ctx, ELF_File * file, const char 
                     case STT_FUNC:
                         if (file->byte_swap) SWAP(sym.st_value);
                         *addr = elf_map_to_run_time_address(ctx, file, NULL, (ContextAddress)sym.st_value);
-                        if (*addr != 0) return 0;
+                        if (errno == 0) return 0;
                     }
                 }
             }

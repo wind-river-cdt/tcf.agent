@@ -458,7 +458,7 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
                 U8_T lt_addr = dio_ReadAddress(&section);
                 ContextAddress rt_addr = elf_map_to_run_time_address(
                     rules.ctx, rules.section->file, section, (ContextAddress)lt_addr);
-                if (rt_addr == 0) str_exception(ERR_INV_DWARF, "object has no RT address");
+                if (errno) str_exception(ERR_INV_DWARF, "Cannot get object run-time address");
                 add_command(SFT_CMD_NUMBER)->num = rt_addr;
             }
             break;

@@ -173,7 +173,7 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
                     }
                     for (;;) {
                         ContextAddress addr = elf_map_to_run_time_address(ctx, unit->mFile, unit->mTextSection, state->mAddress);
-                        if (addr != 0) call_client(unit, state, addr, client, args);
+                        if (errno == 0) call_client(unit, state, addr, client, args);
                         if (i == k) break;
                         state = unit->mStatesIndex[++i];
                     }

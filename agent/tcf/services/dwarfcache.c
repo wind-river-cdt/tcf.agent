@@ -1099,6 +1099,7 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
         break;
     case FORM_ADDR      :
         Value->mValue = elf_map_to_run_time_address(Ctx, Obj->mCompUnit->mFile, gop_gFormSection, (ContextAddress)gop_gFormData);
+        if (errno) str_exception(errno, "Cannot get object run-time address");
         break;
     default:
         if (Attr == AT_data_member_location && Obj->mTag == TAG_member && Obj->mParent->mTag == TAG_union_type) {

@@ -171,7 +171,7 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
                 value += sec->addr;
             }
             *address = elf_map_to_run_time_address(ctx, file, sec, (ContextAddress)value);
-            return 0;
+            return errno ? -1 : 0;
         }
     }
     errno = ERR_INV_ADDRESS;

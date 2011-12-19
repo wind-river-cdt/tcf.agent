@@ -537,7 +537,7 @@ extern void elf_list_done(Context * ctx);
 
 /*
  * Map link-time address in an ELF file to run-time address in a context.
- * Return 0 if the address is not currently mapped.
+ * Clear errno if no errors found, otherwise set errno and return 0.
  */
 extern ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_Section * section, ContextAddress addr);
 

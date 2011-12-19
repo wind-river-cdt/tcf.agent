@@ -84,7 +84,7 @@ static U8_T read_address(void) {
 
     addr = dio_ReadAddress(&section);
     addr = elf_map_to_run_time_address(sState->ctx, Unit->mFile, section, (ContextAddress)addr);
-    if (addr == 0) str_exception(ERR_INV_ADDRESS, "Object has no RT address");
+    if (errno) str_exception(errno, "Cannot get object run-time address");
     return addr;
 }
 
