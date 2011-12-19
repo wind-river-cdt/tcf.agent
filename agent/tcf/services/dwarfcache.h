@@ -32,6 +32,10 @@
 #include <tcf/services/dwarfio.h>
 #include <tcf/framework/errors.h>
 
+#ifndef ENABLE_DWARF_LAZY_LOAD
+#  define ENABLE_DWARF_LAZY_LOAD 0
+#endif
+
 typedef struct FileInfo FileInfo;
 typedef struct ObjectInfo ObjectInfo;
 typedef struct PubNamesInfo PubNamesInfo;
@@ -57,24 +61,29 @@ struct FileInfo {
     CompUnit * mCompUnit;
 };
 
-#define TAG_fund_type     0x2000
-#define TAG_index_range   0x2001
-#define TAG_mod_pointer   0x2002
-#define TAG_mod_reference 0x2003
+#define TAG_fund_type           0x2000
+#define TAG_index_range         0x2001
+#define TAG_mod_pointer         0x2002
+#define TAG_mod_reference       0x2003
 
 #define DOIF_declaration        0x0001
 #define DOIF_external           0x0002
 #define DOIF_artificial         0x0004
 #define DOIF_specification      0x0008
 #define DOIF_abstract_origin    0x0010
+#define DOIF_children_loaded    0x0020
 
 struct ObjectInfo {
+
+    /* 'mID' is link-time debug information entry address:
+     * address of .debug_info section + offset in the section */
+    ContextAddress mID;
+
     ObjectInfo * mHashNext;
     ObjectInfo * mSibling;
     ObjectInfo * mChildren;
     ObjectInfo * mParent;
 
-    U8_T mID; /* Link-time debug information entry address: address of .debug_info section + offset in the section */
     U2_T mTag;
     U2_T mFlags;
     CompUnit * mCompUnit;
@@ -116,7 +125,7 @@ struct ObjectArray {
 
 struct PubNamesInfo {
     unsigned mNext;
-    U8_T mID;
+    ContextAddress mID;
 };
 
 struct PubNamesTable {
@@ -258,6 +267,13 @@ extern ELF_File * get_dwarf_file(ELF_File * file);
 /* Return DWARF cache for given file, create and populate the cache if needed, throw an exception if error */
 extern DWARFCache * get_dwarf_cache(ELF_File * file);
 
+/* Load chilfren of DWARF object - if not loaded already. Return obj->mChildren */
+#if ENABLE_DWARF_LAZY_LOAD
+extern ObjectInfo * get_dwarf_children(ObjectInfo * obj);
+#else
+#  define get_dwarf_children(obj) obj->mChildren
+#endif
+
 /* Return file name hash. The hash is used to search FileInfo. */
 extern unsigned calc_file_name_hash(const char * s);
 
@@ -265,7 +281,7 @@ extern unsigned calc_file_name_hash(const char * s);
 extern void load_line_numbers(CompUnit * unit);
 
 /* Find ObjectInfo by ID */
-extern ObjectInfo * find_object(DWARFCache * cache, U8_T ID);
+extern ObjectInfo * find_object(DWARFCache * cache, ContextAddress ID);
 
 /* Search and return first compilation unit address range in given link-time address range 'addr_min'..'addr_max' (inclusive). */
 extern UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ContextAddress addr_min, ContextAddress addr_max);

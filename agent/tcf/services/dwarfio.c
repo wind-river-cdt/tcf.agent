@@ -551,7 +551,7 @@ int dio_ReadEntry(DIO_EntryCallBack CallBack, U2_T TargetAttr) {
                 if (sUnit->mUnitSize == 0) str_exception(ERR_INV_DWARF, "Missing compilation unit sibling attribute");
             }
         }
-        CallBack(Tag, Attr, Form);
+        if (CallBack != NULL) CallBack(Tag, Attr, Form);
         if (Attr == 0 && Form == 0) break;
     }
     return 1;

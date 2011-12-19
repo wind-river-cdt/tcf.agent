@@ -239,7 +239,7 @@ static void evaluate_expression(ELF_Section * Section, U1_T * Buf, size_t Size) 
                 Piece->mValue = (U1_T *)tmp_alloc_zero(size);
             }
             else {
-                Piece->mAddress = sState->stk[--sState->stk_pos];
+                Piece->mAddress = (ContextAddress)sState->stk[--sState->stk_pos];
                 Piece->mBigEndian = sState->big_endian;
             }
             Piece->mBitOffset = sState->piece_offs;

@@ -39,5 +39,6 @@ extern void * tmp_alloc(size_t size);
 extern void * tmp_alloc_zero(size_t size);
 extern void * tmp_realloc(void * ptr, size_t size);
 extern char * tmp_strdup(const char * s);
+extern void tmp_gc(void);
 
 #endif /* D_myalloc */

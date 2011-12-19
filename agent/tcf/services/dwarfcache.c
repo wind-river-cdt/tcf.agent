@@ -33,7 +33,13 @@
 #include <tcf/services/dwarfexpr.h>
 #include <tcf/services/stacktrace.h>
 
-#define OBJ_HASH(Cache,ID)            (((U4_T)(ID) + ((U4_T)(ID) >> 8)) % Cache->mObjectHashSize)
+#define OBJ_HASH(Cache,ID) (((U4_T)(ID) + ((U4_T)(ID) >> 8)) % Cache->mObjectHashSize)
+
+typedef struct ObjectReference {
+    ELF_Section * sec;
+    ObjectInfo * obj;
+    ObjectInfo * org;
+} ObjectReference;
 
 static DWARFCache * sCache;
 static ELF_Section * sDebugSection;
@@ -41,6 +47,10 @@ static DIO_UnitDescriptor sUnitDesc;
 static CompUnit * sCompUnit;
 static ObjectInfo * sParentObject;
 static ObjectInfo * sPrevSibling;
+static ObjectReference * sObjRefs;
+static U4_T sObjRefsPos = 0;
+static U4_T sObjRefsCnt = 0;
+static U4_T sObjRefsMax = 0;
 
 static int sCloseListenerOK = 0;
 
@@ -60,45 +70,38 @@ unsigned calc_file_name_hash(const char * s) {
     return h;
 }
 
-ObjectInfo * find_object(DWARFCache * Cache, U8_T ID) {
-    if (Cache->mObjectHash != NULL) {
-        ObjectInfo * Info = Cache->mObjectHash[OBJ_HASH(Cache, ID)];
-
-        while (Info != NULL) {
-            if (Info->mID == ID) return Info;
-            Info = Info->mHashNext;
-        }
+ObjectInfo * find_object(DWARFCache * Cache, ContextAddress ID) {
+    ObjectInfo * Info = Cache->mObjectHash[OBJ_HASH(Cache, ID)];
+    while (Info != NULL) {
+        if (Info->mID == ID) return Info;
+        Info = Info->mHashNext;
     }
     return NULL;
 }
 
-static ObjectInfo * add_object_info(U8_T ID) {
-    ObjectInfo * Info = find_object(sCache, ID);
-    if (Info == NULL) {
-        U4_T Hash;
-        if (ID < sDebugSection->addr + dio_gEntryPos) str_exception(ERR_INV_DWARF, "Invalid entry reference");
-        if (ID > sDebugSection->addr + sDebugSection->size) str_exception(ERR_INV_DWARF, "Invalid entry reference");
-        if (sCache->mObjectHash == NULL) {
-            sCache->mObjectHashSize = (unsigned)(sDebugSection->size / 251);
-            if (sCache->mObjectHashSize < 101) sCache->mObjectHashSize = 101;
-            sCache->mObjectHash = (ObjectInfo **)loc_alloc_zero(sizeof(ObjectInfo *) * sCache->mObjectHashSize);
-        }
-        Hash = OBJ_HASH(sCache, ID);
-        if (sCache->mObjectArrayPos >= OBJECT_ARRAY_SIZE) {
-            ObjectArray * Buf = (ObjectArray *)loc_alloc_zero(sizeof(ObjectArray));
-            Buf->mNext = sCache->mObjectList;
-            sCache->mObjectList = Buf;
-            sCache->mObjectArrayPos = 0;
-        }
-        Info = sCache->mObjectList->mArray + sCache->mObjectArrayPos++;
-        Info->mHashNext = sCache->mObjectHash[Hash];
-        sCache->mObjectHash[Hash] = Info;
-        Info->mID = ID;
+static ObjectInfo * add_object_info(ContextAddress ID) {
+    U4_T Hash = OBJ_HASH(sCache, ID);
+    ObjectInfo * Info = sCache->mObjectHash[Hash];
+    while (Info != NULL) {
+        if (Info->mID == ID) return Info;
+        Info = Info->mHashNext;
     }
+    if (ID < sDebugSection->addr) str_exception(ERR_INV_DWARF, "Invalid entry reference");
+    if (ID > sDebugSection->addr + sDebugSection->size) str_exception(ERR_INV_DWARF, "Invalid entry reference");
+    if (sCache->mObjectArrayPos >= OBJECT_ARRAY_SIZE) {
+        ObjectArray * Buf = (ObjectArray *)loc_alloc_zero(sizeof(ObjectArray));
+        Buf->mNext = sCache->mObjectList;
+        sCache->mObjectList = Buf;
+        sCache->mObjectArrayPos = 0;
+    }
+    Info = sCache->mObjectList->mArray + sCache->mObjectArrayPos++;
+    Info->mHashNext = sCache->mObjectHash[Hash];
+    sCache->mObjectHash[Hash] = Info;
+    Info->mID = ID;
     return Info;
 }
 
-static CompUnit * add_comp_unit(U8_T ID) {
+static CompUnit * add_comp_unit(ContextAddress ID) {
     ObjectInfo * Info = add_object_info(ID);
     if (Info->mCompUnit == NULL) {
         CompUnit * Unit = (CompUnit *)loc_alloc_zero(sizeof(CompUnit));
@@ -106,6 +109,29 @@ static CompUnit * add_comp_unit(U8_T ID) {
         Info->mCompUnit = Unit;
     }
     return Info->mCompUnit;
+}
+
+static void add_object_reference(ELF_Section * sec, ObjectInfo * org, ObjectInfo * obj) {
+#if ENABLE_DWARF_LAZY_LOAD
+    if (org->mTag != 0 && obj == NULL) return;
+#else
+    if (obj == NULL) return;
+#endif
+    if (sec == NULL) sec = sDebugSection;
+    if (org->mCompUnit == NULL) {
+        U8_T offs = org->mID - sec->addr;
+        if (sCompUnit->mDesc.mUnitOffs <= offs && sCompUnit->mDesc.mUnitOffs + sCompUnit->mDesc.mUnitSize > offs) {
+            org->mCompUnit = sCompUnit;
+        }
+    }
+    if (sObjRefsCnt >= sObjRefsMax) {
+        sObjRefsMax += sObjRefsMax ? sObjRefsMax * 2 : 256;
+        sObjRefs = (ObjectReference *)loc_realloc(sObjRefs, sizeof(ObjectReference) * sObjRefsMax);
+    }
+    sObjRefs[sObjRefsCnt].sec = sec;
+    sObjRefs[sObjRefsCnt].org = org;
+    sObjRefs[sObjRefsCnt].obj = obj;
+    sObjRefsCnt++;
 }
 
 static U4_T get_fund_type_size(CompUnit * Unit, U2_T ft) {
@@ -156,7 +182,7 @@ static void read_mod_fund_type(U2_T Form, ObjectInfo ** Type) {
         FT |= (U2_T)Buf[BufSize - 2 +
             (sDebugSection->file->big_endian ? 1 - i : i)] << (i * 8);
     }
-    *Type = add_object_info(sDebugSection->addr + dio_GetPos() - 2);
+    *Type = add_object_info((ContextAddress)(sDebugSection->addr + dio_GetPos() - 2));
     (*Type)->mTag = TAG_fund_type;
     (*Type)->mCompUnit = sCompUnit;
     (*Type)->u.mFundType = FT;
@@ -177,7 +203,7 @@ static void read_mod_fund_type(U2_T Form, ObjectInfo ** Type) {
         default:
             str_exception(ERR_INV_DWARF, "Invalid type modifier code");
         }
-        Mod = add_object_info(sDebugSection->addr + dio_GetPos() - BufSize + BufPos);
+        Mod = add_object_info((ContextAddress)(sDebugSection->addr + dio_GetPos() - BufSize + BufPos));
         Mod->mTag = Tag;
         Mod->mCompUnit = sCompUnit;
         Mod->mType = *Type;
@@ -196,7 +222,8 @@ static void read_mod_user_def_type(U2_T Form, ObjectInfo ** Type) {
         Ref |= (U4_T)Buf[BufSize - 4 +
             (sDebugSection->file->big_endian ? 3 - i : i)] << (i * 8);
     }
-    *Type = add_object_info(sDebugSection->addr + Ref);
+    *Type = add_object_info((ContextAddress)(sDebugSection->addr + Ref));
+    add_object_reference(sDebugSection, *Type, NULL);
     BufPos = BufSize - 4;
     while (BufPos > 0) {
         U2_T Tag = 0;
@@ -214,7 +241,7 @@ static void read_mod_user_def_type(U2_T Form, ObjectInfo ** Type) {
         default:
             str_exception(ERR_INV_DWARF, "Invalid type modifier code");
         }
-        Mod = add_object_info(sDebugSection->addr + dio_GetPos() - BufSize + BufPos);
+        Mod = add_object_info((ContextAddress)(sDebugSection->addr + dio_GetPos() - BufSize + BufPos));
         Mod->mTag = Tag;
         Mod->mCompUnit = sCompUnit;
         Mod->mType = *Type;
@@ -252,7 +279,7 @@ static void read_subscr_data(U2_T Form, ObjectInfo * Array) {
         case FMT_FT_C_X:
         case FMT_FT_X_C:
         case FMT_FT_X_X:
-            Type = add_object_info(sDebugSection->addr + dio_GetPos());
+            Type = add_object_info((ContextAddress)(sDebugSection->addr + dio_GetPos()));
             Type->mTag = TAG_fund_type;
             Type->mCompUnit = sCompUnit;
             Type->u.mFundType = dio_ReadU2();
@@ -262,11 +289,12 @@ static void read_subscr_data(U2_T Form, ObjectInfo * Array) {
         case FMT_UT_X_C:
         case FMT_UT_X_X:
             dio_ReadAttribute(AT_subscr_data, FORM_REF);
-            Type = add_object_info(dio_gFormData);
+            Type = add_object_info((ContextAddress)dio_gFormData);
+            add_object_reference(sDebugSection, Type, NULL);
             break;
         }
         if (Type != NULL) {
-            ObjectInfo * Range = add_object_info(sDebugSection->addr + dio_GetPos());
+            ObjectInfo * Range = add_object_info((ContextAddress)(sDebugSection->addr + dio_GetPos()));
             Range->mTag = TAG_index_range;
             Range->mCompUnit = sCompUnit;
             Range->mType = Type;
@@ -314,14 +342,15 @@ static void read_subscr_data(U2_T Form, ObjectInfo * Array) {
             switch (Attr) {
             case AT_fund_type:
                 dio_ChkData(Form);
-                Type = add_object_info(sDebugSection->addr + dio_GetPos() - dio_gFormDataSize);
+                Type = add_object_info((ContextAddress)(sDebugSection->addr + dio_GetPos() - dio_gFormDataSize));
                 Type->mTag = TAG_fund_type;
                 Type->mCompUnit = sCompUnit;
                 Type->u.mFundType = (U2_T)dio_gFormData;
                 break;
             case AT_user_def_type:
                 dio_ChkRef(Form);
-                Type = add_object_info(dio_gFormData);
+                Type = add_object_info((ContextAddress)dio_gFormData);
+                add_object_reference(dio_gFormSection, Type, NULL);
                 break;
             case AT_mod_fund_type:
                 read_mod_fund_type(Form, &Type);
@@ -343,17 +372,18 @@ static void read_subscr_data(U2_T Form, ObjectInfo * Array) {
 
 static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     static ObjectInfo * Info;
-    static ObjectInfo * Spec;
-    static ObjectInfo * AOrg;
     static U8_T Sibling;
     static int HasChildren;
+    static int Skip;
+
+    if (Skip && Attr && Attr != AT_sibling) return;
 
     switch (Attr) {
     case 0:
         if (Form) {
-            assert((sParentObject == NULL) == (Tag == TAG_compile_unit));
             if (Tag == TAG_compile_unit) {
-                CompUnit * Unit = add_comp_unit(sDebugSection->addr + dio_gEntryPos);
+                CompUnit * Unit = add_comp_unit((ContextAddress)(sDebugSection->addr + dio_gEntryPos));
+                assert(sParentObject == NULL);
                 Unit->mFile = sCache->mFile;
                 Unit->mDebugRangesOffs = ~(U8_T)0;
                 Unit->mRegIdScope.big_endian = sCache->mFile->big_endian;
@@ -361,37 +391,43 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
                 Unit->mRegIdScope.os_abi = sCache->mFile->os_abi;
                 Unit->mRegIdScope.id_type = REGNUM_DWARF;
                 Info = Unit->mObject;
+                assert(Info->mTag == 0);
                 sCompUnit = Unit;
             }
             else {
-                Info = add_object_info(sDebugSection->addr + dio_gEntryPos);
-                Info->mCompUnit = sCompUnit;
+                Info = add_object_info((ContextAddress)(sDebugSection->addr + dio_gEntryPos));
             }
-            assert(Info->mTag == 0);
-            Info->mTag = Tag;
-            Info->mParent = sParentObject;
+            if (sParentObject) Info->mParent = sParentObject;
             HasChildren = Form == DWARF_ENTRY_HAS_CHILDREN;
             Sibling = 0;
-            Spec = NULL;
-            AOrg = NULL;
+            Skip = Info->mTag != 0;
+            if (Skip) return; /* Object is already loaded */
+            Info->mTag = Tag;
+            Info->mCompUnit = sCompUnit;
         }
         else {
-            if (Spec != NULL) {
-                Info->mFlags |= Spec->mFlags;
-                if (Info->mName == NULL) Info->mName = Spec->mName;
-                if (Info->mType == NULL) Info->mType = Spec->mType;
-            }
-            if (AOrg != NULL) {
-                Info->mFlags |= AOrg->mFlags;
-                if (Info->mName == NULL) Info->mName = AOrg->mName;
-                if (Info->mType == NULL) Info->mType = AOrg->mType;
-            }
             if (Tag == TAG_compile_unit && Sibling == 0) Sibling = sUnitDesc.mUnitOffs + sUnitDesc.mUnitSize;
-            if (Tag == TAG_enumerator && Info->mType == NULL) Info->mType = sParentObject;
             if (sPrevSibling != NULL) sPrevSibling->mSibling = Info;
             else if (sParentObject != NULL) sParentObject->mChildren = Info;
-            else sCache->mCompUnits = Info;
+            else if (Tag == TAG_compile_unit) sCache->mCompUnits = Info;
             sPrevSibling = Info;
+            if (Skip) {
+                if (Sibling != 0) dio_SetPos(Sibling);
+                return;
+            }
+            if (Tag == TAG_enumerator && Info->mType == NULL) Info->mType = sParentObject;
+#if ENABLE_DWARF_LAZY_LOAD
+            if (Sibling != 0) {
+                switch (Info->mTag) {
+                case TAG_global_subroutine:
+                case TAG_subroutine:
+                case TAG_subprogram:
+                    dio_SetPos(Sibling);
+                    return;
+                }
+            }
+#endif
+            Info->mFlags |= DOIF_children_loaded;
             if (Sibling != 0 || HasChildren) {
                 U8_T SiblingPos = Sibling;
                 ObjectInfo * Parent = sParentObject;
@@ -414,18 +450,20 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         break;
     case AT_type:
         dio_ChkRef(Form);
-        Info->mType = add_object_info(dio_gFormData);
+        Info->mType = add_object_info((ContextAddress)dio_gFormData);
+        add_object_reference(dio_gFormSection, Info->mType, NULL);
         break;
     case AT_fund_type:
         dio_ChkData(Form);
-        Info->mType = add_object_info(sDebugSection->addr + dio_GetPos() - dio_gFormDataSize);
+        Info->mType = add_object_info((ContextAddress)(sDebugSection->addr + dio_GetPos() - dio_gFormDataSize));
         Info->mType->mTag = TAG_fund_type;
         Info->mType->mCompUnit = sCompUnit;
         Info->mType->u.mFundType = (U2_T)dio_gFormData;
         break;
     case AT_user_def_type:
         dio_ChkRef(Form);
-        Info->mType = add_object_info(dio_gFormData);
+        Info->mType = add_object_info((ContextAddress)dio_gFormData);
+        add_object_reference(dio_gFormSection, Info->mType, NULL);
         break;
     case AT_mod_fund_type:
         read_mod_fund_type(Form, &Info->mType);
@@ -442,15 +480,13 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         break;
     case AT_specification_v2:
         dio_ChkRef(Form);
-        Spec = add_object_info(dio_gFormData);
+        add_object_reference(dio_gFormSection, add_object_info((ContextAddress)dio_gFormData), Info);
         Info->mFlags |= DOIF_specification;
-        if (Spec->mTag == 0) trace(LOG_ALWAYS, "Invalid AT_specification in %s", sDebugSection->file->name);
         break;
     case AT_abstract_origin:
         dio_ChkRef(Form);
-        AOrg = add_object_info(dio_gFormData);
+        add_object_reference(dio_gFormSection, add_object_info((ContextAddress)dio_gFormData), Info);
         Info->mFlags |= DOIF_abstract_origin;
-        if (AOrg->mTag == 0) trace(LOG_ALWAYS, "Invalid AT_abstract_origin in %s", sDebugSection->file->name);
         break;
     case AT_low_pc:
         dio_ChkAddr(Form);
@@ -498,7 +534,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
             Unit->mLineInfoOffs = dio_gFormData;
             break;
         case AT_base_types:
-            Unit->mBaseTypes = add_comp_unit(dio_gFormData);
+            Unit->mBaseTypes = add_comp_unit((ContextAddress)dio_gFormData);
             break;
         case AT_language:
             dio_ChkData(Form);
@@ -506,6 +542,57 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
             break;
         }
     }
+}
+
+static void read_object_refs(void) {
+    /* Note: this implementation does not support forward references in AT_abstract_origin and AT_specification.
+     * It is not clear if such support is needed. GCC seems never emit such forward references.
+     */
+    while (sObjRefsPos < sObjRefsCnt) {
+        ObjectReference ref = sObjRefs[sObjRefsPos++];
+        if (ref.org->mCompUnit == NULL) {
+            /* TODO: need faster unit search */
+            ObjectInfo * info = sCache->mCompUnits;
+            while (info != NULL) {
+                CompUnit * unit = info->mCompUnit;
+                if (unit->mDesc.mSection == ref.sec) {
+                    U8_T offs = ref.org->mID - ref.sec->addr;
+                    if (unit->mDesc.mUnitOffs <= offs && unit->mDesc.mUnitOffs + unit->mDesc.mUnitSize > offs) {
+                        ref.org->mCompUnit = unit;
+                        break;
+                    }
+                }
+                info = info->mSibling;
+            }
+        }
+        assert(ref.sec == ref.org->mCompUnit->mDesc.mSection);
+        if (ref.org->mTag == 0) {
+            Trap trap;
+            ObjectInfo * obj = ref.org;
+            sCompUnit = obj->mCompUnit;
+            sUnitDesc = sCompUnit->mDesc;
+            sDebugSection = ref.sec;
+            sParentObject = NULL;
+            sPrevSibling = NULL;
+            dio_EnterSection(&sCompUnit->mDesc, sDebugSection, obj->mID - sDebugSection->addr);
+            if (set_trap(&trap)) {
+                dio_ReadEntry(read_object_info, 0);
+                clear_trap(&trap);
+            }
+            dio_ExitSection();
+            sDebugSection = NULL;
+            sCompUnit = NULL;
+            if (trap.error) exception(trap.error);
+        }
+        if (ref.obj != NULL) {
+            assert(ref.org->mTag != 0);
+            if (ref.obj->mName == NULL) ref.obj->mName = ref.org->mName;
+            if (ref.obj->mType == NULL) ref.obj->mType = ref.org->mType;
+            ref.obj->mFlags |= ref.org->mFlags & ~DOIF_children_loaded;
+        }
+    }
+    sObjRefsPos = 0;
+    sObjRefsCnt = 0;
 }
 
 static int cmp_addr_ranges(const void * x, const void * y) {
@@ -575,8 +662,8 @@ static void load_addr_ranges(void) {
                         while (dio_GetPos() % (addr_size * 2) != 0) dio_Skip(1);
                         for (;;) {
                             ELF_Section * range_sec = NULL;
-                            ContextAddress addr = dio_ReadAddressX(&range_sec, addr_size);
-                            ContextAddress size = dio_ReadUX(addr_size);
+                            ContextAddress addr = (ContextAddress)dio_ReadAddressX(&range_sec, addr_size);
+                            ContextAddress size = (ContextAddress)dio_ReadUX(addr_size);
                             if (addr == 0 && size == 0) break;
                             if (size == 0) continue;
                             add_addr_range(range_sec, info->mCompUnit, addr, size);
@@ -613,7 +700,7 @@ static void load_addr_ranges(void) {
                     else {
                         x = base + x;
                         y = base + y;
-                        add_addr_range(sec, unit, x, y - x);
+                        add_addr_range(sec, unit, (ContextAddress)x, (ContextAddress)(y - x));
                     }
                 }
                 dio_ExitSection();
@@ -663,7 +750,7 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, Pu
                 }
                 info = tbl->mNext + tbl->mCnt;
                 h = calc_symbol_name_hash(dio_ReadString());
-                info->mID = debug_info->addr + unit_offs + obj_offs;
+                info->mID = (ContextAddress)(debug_info->addr + unit_offs + obj_offs);
                 info->mNext = tbl->mHash[h];
                 tbl->mHash[h] = tbl->mCnt++;
             }
@@ -681,7 +768,7 @@ static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
     tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
     memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
     while (unit != NULL) {
-        ObjectInfo * obj = unit->mChildren;
+        ObjectInfo * obj = get_dwarf_children(unit);
         while (obj != NULL) {
             if (obj->mFlags & DOIF_external) {
                 unsigned h;
@@ -702,6 +789,22 @@ static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
     }
 }
 
+static void allocate_obj_hash(void) {
+    unsigned idx;
+    U8_T size = 0;
+    ELF_File * file = sCache->mFile;
+    for (idx = 1; idx < file->section_cnt; idx++) {
+        ELF_Section * sec = file->sections + idx;
+        if (sec->name == NULL) continue;
+        if (strcmp(sec->name, ".debug") == 0 || strcmp(sec->name, ".debug_info") == 0) {
+            size += sec->size;
+        }
+    }
+    sCache->mObjectHashSize = (unsigned)(size / 100);
+    if (sCache->mObjectHashSize < 251) sCache->mObjectHashSize = 251;
+    sCache->mObjectHash = (ObjectInfo **)loc_alloc_zero(sizeof(ObjectInfo *) * sCache->mObjectHashSize);
+}
+
 static void load_debug_sections(void) {
     Trap trap;
     unsigned idx;
@@ -716,8 +819,11 @@ static void load_debug_sections(void) {
         ELF_Section * sec = file->sections + idx;
         if (sec->size == 0) continue;
         if (sec->name == NULL) continue;
+        if (sec->type == SHT_NOBITS) continue;
         if (strcmp(sec->name, ".debug") == 0 || strcmp(sec->name, ".debug_info") == 0) {
             if (strcmp(sec->name, ".debug_info") == 0) debug_info = sec;
+            sObjRefsPos = 0;
+            sObjRefsCnt = 0;
             sDebugSection = sec;
             sParentObject = NULL;
             sPrevSibling = NULL;
@@ -730,11 +836,12 @@ static void load_debug_sections(void) {
                 clear_trap(&trap);
             }
             dio_ExitSection();
+            sDebugSection = NULL;
             sParentObject = NULL;
             sPrevSibling = NULL;
             sCompUnit = NULL;
-            sDebugSection = NULL;
             if (trap.error) break;
+            read_object_refs();
         }
         else if (strcmp(sec->name, ".line") == 0) {
             sCache->mDebugLineV1 = sec;
@@ -770,6 +877,43 @@ static void load_debug_sections(void) {
 
     if (trap.error) exception(trap.error);
 }
+
+#if ENABLE_DWARF_LAZY_LOAD
+ObjectInfo * get_dwarf_children(ObjectInfo * obj) {
+    Trap trap;
+    if (obj->mFlags & DOIF_children_loaded) return obj->mChildren;
+    sObjRefsPos = 0;
+    sObjRefsCnt = 0;
+    sCompUnit = obj->mCompUnit;
+    sUnitDesc = sCompUnit->mDesc;
+    sDebugSection = sCompUnit->mDesc.mSection;
+    sCache = (DWARFCache *)sCompUnit->mFile->dwarf_dt_cache;
+    dio_EnterSection(&sCompUnit->mDesc, sDebugSection, obj->mID - sDebugSection->addr);
+    if (set_trap(&trap)) {
+        U8_T end_pos = sCompUnit->mDesc.mUnitOffs + sCompUnit->mDesc.mUnitSize;
+        dio_ReadEntry(NULL, ~(U2_T)0);
+        sParentObject = obj;
+        sPrevSibling = NULL;
+        while (dio_GetPos() < end_pos) {
+            if (!dio_ReadEntry(read_object_info, 0)) break;
+        }
+        obj->mFlags |= DOIF_children_loaded;
+        clear_trap(&trap);
+    }
+    else {
+        /* TODO: dispose obj->mChildren */
+        obj->mChildren = NULL;
+    }
+    dio_ExitSection();
+    sDebugSection = NULL;
+    sParentObject = NULL;
+    sPrevSibling = NULL;
+    sCompUnit = NULL;
+    if (trap.error) exception(trap.error);
+    read_object_refs();
+    return obj->mChildren;
+}
+#endif
 
 static U2_T gop_gAttr = 0;
 static U2_T gop_gForm = 0;
@@ -877,8 +1021,9 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
     }
 
     sCompUnit = Obj->mCompUnit;
-    sCache = (DWARFCache *)sCompUnit->mFile->dwarf_dt_cache;
+    sUnitDesc = sCompUnit->mDesc;
     sDebugSection = sCompUnit->mDesc.mSection;
+    sCache = (DWARFCache *)sCompUnit->mFile->dwarf_dt_cache;
     dio_EnterSection(&sCompUnit->mDesc, sDebugSection, Obj->mID - sDebugSection->addr);
     for (;;) {
         gop_gAttr = Attr;
@@ -906,7 +1051,7 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
         }
         else {
             PropertyValue ValueAddr;
-            ObjectInfo * RefObj = find_object(sCache, gop_gFormData);
+            ObjectInfo * RefObj = find_object(sCache, (ContextAddress)gop_gFormData);
 
             if (RefObj == NULL) exception(ERR_INV_DWARF);
             read_and_evaluate_dwarf_object_property(Ctx, Frame, 0, RefObj, AT_location, &ValueAddr);
@@ -976,8 +1121,8 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
         exception(ERR_SYM_NOT_FOUND);
     }
 
-    sCompUnit = NULL;
     sCache = NULL;
+    sCompUnit = NULL;
     sDebugSection = NULL;
 }
 
@@ -987,7 +1132,7 @@ void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, U8_T Base
     assert(Value->mFrame == Frame);
     assert(Value->mObject == Obj);
     assert(Value->mAttr == Attr);
-    if (Attr == AT_location || Attr == AT_data_member_location || Attr == AT_frame_base) {
+    if (Attr == AT_location || Attr == AT_data_member_location || Attr == AT_string_length || Attr == AT_frame_base) {
         switch (Value->mForm) {
         case FORM_DATA4     :
         case FORM_DATA8     :
@@ -1081,6 +1226,7 @@ DWARFCache * get_dwarf_cache(ELF_File * file) {
         sCache->magic = DWARF_CACHE_MAGIC;
         sCache->mFile = file;
         sCache->mObjectArrayPos = OBJECT_ARRAY_SIZE;
+        allocate_obj_hash();
         if (set_trap(&trap)) {
             dio_LoadAbbrevTable(file);
             load_debug_sections();

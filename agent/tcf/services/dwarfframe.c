@@ -716,7 +716,7 @@ static void generate_commands(void) {
     add_command_sequence(&dwarf_stack_trace_fp, NULL);
 }
 
-static int generate_plt_section_commands(U8_T offs) {
+static void generate_plt_section_commands(U8_T offs) {
     RegisterRules * reg = NULL;
 
     cie_regs.regs_cnt = 0;
@@ -742,7 +742,7 @@ static int generate_plt_section_commands(U8_T offs) {
         reg->rule = RULE_OFFSET;
         reg->offset = -4;
         generate_commands();
-        return 1;
+        break;
     case EM_X86_64:
         rules.cfa_rule = RULE_OFFSET;
         rules.cfa_register = 7; /* rsp */
@@ -763,16 +763,15 @@ static int generate_plt_section_commands(U8_T offs) {
         reg->rule = RULE_OFFSET;
         reg->offset = -8;
         generate_commands();
-        return 1;
+        break;
     case EM_PPC:
         rules.return_address_register = 108; /* LR */
         rules.cfa_rule = RULE_OFFSET;
         rules.cfa_register = 1; /* R1 */
         rules.cfa_offset = 0;
         generate_commands();
-        return 1;
+        break;
     }
-    return 0;
 }
 
 static void read_frame_cie(U8_T fde_pos, U8_T pos) {
@@ -783,11 +782,9 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
 
     rules.cie_pos = pos;
     if (pos >= rules.section->size) {
-        char msg[256];
-        snprintf(msg, sizeof(msg),
+        str_fmt_exception(ERR_INV_DWARF,
             "Invalid CIE pointer 0x%" PRIX64
             " in FDE at 0x%" PRIX64, pos, fde_pos);
-        str_exception(ERR_INV_DWARF, msg);
     }
     dio_SetPos(pos);
     cie_length = dio_ReadU4();
@@ -946,11 +943,9 @@ static void create_search_index(DWARFCache * cache, ELF_Section * section) {
                 continue;
             }
             else {
-                char msg[256];
-                snprintf(msg, sizeof(msg),
+                str_fmt_exception(ERR_INV_DWARF,
                     "Invalid length 0x%" PRIX64
                     " in FDE at 0x%" PRIX64, fde_length, fde_pos);
-                str_exception(ERR_INV_DWARF, msg);
             }
         }
         cie_ref = fde_dwarf64 ? dio_ReadU8() : dio_ReadU4();
@@ -979,22 +974,8 @@ static void create_search_index(DWARFCache * cache, ELF_Section * section) {
     qsort(cache->mFrameInfoRanges, cache->mFrameInfoRangesCnt, sizeof(FrameInfoRange), cmp_frame_info_ranges);
 }
 
-void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * sec, U8_T IP) {
-    DWARFCache * cache = get_dwarf_cache(file);
-    ELF_Section * section = cache->mDebugFrame;
+static void read_frame_info_section(Context * ctx, ELF_File * file, U8_T IP, DWARFCache * cache, ELF_Section * section) {
     unsigned l, h;
-
-    dwarf_stack_trace_regs_cnt = 0;
-    if (dwarf_stack_trace_fp == NULL) {
-        dwarf_stack_trace_fp = (StackTracingCommandSequence *)loc_alloc_zero(sizeof(StackTracingCommandSequence));
-        dwarf_stack_trace_fp->cmds_max = 1;
-    }
-    dwarf_stack_trace_fp->cmds_cnt = 0;
-    dwarf_stack_trace_addr = 0;
-    dwarf_stack_trace_size = 0;
-
-    if (section == NULL && !file->debug_info_file) section = cache->mEHFrame;
-    if (section == NULL) return;
 
     memset(&rules, 0, sizeof(StackFrameRules));
     rules.ctx = ctx;
@@ -1024,10 +1005,47 @@ void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * se
             return;
         }
     }
-    if (sec != NULL && sec->name != NULL && strcmp(sec->name, ".plt") == 0) {
-        assert(IP >= sec->addr);
-        assert(IP < sec->addr + sec->size);
-        if (generate_plt_section_commands(IP - sec->addr)) return;
+}
+
+void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * text_section, U8_T addr) {
+    DWARFCache * cache = get_dwarf_cache(file);
+
+    dwarf_stack_trace_regs_cnt = 0;
+    if (dwarf_stack_trace_fp == NULL) {
+        dwarf_stack_trace_fp = (StackTracingCommandSequence *)loc_alloc_zero(sizeof(StackTracingCommandSequence));
+        dwarf_stack_trace_fp->cmds_max = 1;
+    }
+    dwarf_stack_trace_fp->cmds_cnt = 0;
+    dwarf_stack_trace_addr = 0;
+    dwarf_stack_trace_size = 0;
+
+    if (cache->mDebugFrame) {
+        read_frame_info_section(ctx, file, addr, cache, cache->mDebugFrame);
+        if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+    }
+    if (cache->mEHFrame) {
+        read_frame_info_section(ctx, file, addr, cache, cache->mEHFrame);
+        if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+    }
+    if (file->debug_info_file_name) {
+        file = elf_open(file->debug_info_file_name);
+        if (file != NULL) {
+            cache = get_dwarf_cache(file);
+            if (cache->mDebugFrame) {
+                read_frame_info_section(ctx, file, addr, cache, cache->mDebugFrame);
+                if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+            }
+            if (cache->mEHFrame) {
+                read_frame_info_section(ctx, file, addr, cache, cache->mEHFrame);
+                if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+            }
+        }
+    }
+
+    if (text_section != NULL && text_section->name != NULL && strcmp(text_section->name, ".plt") == 0) {
+        assert(addr >= text_section->addr);
+        assert(addr < text_section->addr + text_section->size);
+        generate_plt_section_commands(addr - text_section->addr);
     }
 }
 

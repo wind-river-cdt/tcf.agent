@@ -149,6 +149,9 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
 static void error(const char * func) {
     int err = errno;
     printf("File    : %s\n", elf_file_name);
+    if (elf_open(elf_file_name)->debug_info_file_name) {
+        printf("Symbols : %s\n", elf_open(elf_file_name)->debug_info_file_name);
+    }
     printf("Address : 0x%" PRIX64 "\n", (uint64_t)pc);
     printf("Function: %s\n", func);
     printf("Error   : %s\n", errno_to_str(err));
@@ -407,6 +410,8 @@ static void next_pc(void) {
         }
 
         test_cnt++;
+        if (test_cnt % 10 == 0) tmp_gc();
+
         if (loaded) {
             struct timespec time_diff;
             clock_gettime(CLOCK_REALTIME, &time_now);
@@ -423,7 +428,7 @@ static void next_pc(void) {
             time_start = time_now;
             loaded = 0;
         }
-        else if (test_cnt >= 1000) {
+        else if (test_cnt >= 10000) {
             print_time(time_start, test_cnt);
             clock_gettime(CLOCK_REALTIME, &time_start);
             test_posted = 1;
@@ -477,10 +482,10 @@ static void next_file(void) {
         }
         r = mem_map.regions + mem_map.region_cnt++;
         memset(r, 0, sizeof(MemoryRegion));
-        r->addr = p->address;
+        r->addr = (ContextAddress)p->address;
         r->file_name = loc_strdup(elf_file_name);
         r->file_offs = p->offset;
-        r->size = p->file_size;
+        r->size = (ContextAddress)p->file_size;
         r->flags = MM_FLAG_R | MM_FLAG_W;
         if (p->flags & PF_X) r->flags |= MM_FLAG_X;
         r->dev = st.st_dev;
@@ -501,8 +506,8 @@ static void next_file(void) {
                 }
                 r = mem_map.regions + mem_map.region_cnt++;
                 memset(r, 0, sizeof(MemoryRegion));
-                r->addr = sec->addr + 0x10000;
-                r->size = sec->size;
+                r->addr = (ContextAddress)(sec->addr + 0x10000);
+                r->size = (ContextAddress)sec->size;
                 r->file_offs = sec->offset;
                 r->bss = strcmp(sec->name, ".bss") == 0;
                 r->dev = st.st_dev;

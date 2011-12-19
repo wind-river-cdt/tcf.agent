@@ -36,7 +36,12 @@ static size_t tmp_alloc_size = 0;
 static LINK tmp_alloc_list = TCF_LIST_INIT(tmp_alloc_list);
 static int tmp_gc_posted = 0;
 
-static void tmp_gc(void * args) {
+static void gc_event(void * args) {
+    tmp_gc_posted = 0;
+    tmp_gc();
+}
+
+void tmp_gc(void) {
     if (!list_is_empty(&tmp_alloc_list)) {
         if (tmp_pool_max < POOL_SIZE) {
             tmp_pool_max += tmp_pool_max > tmp_alloc_size ? tmp_pool_max : tmp_alloc_size;
@@ -59,7 +64,6 @@ static void tmp_gc(void * args) {
         tmp_pool_max /= 2;
         tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
     }
-    tmp_gc_posted = 0;
     tmp_pool_pos = 0;
     tmp_alloc_size = 0;
 }
@@ -68,7 +72,7 @@ void * tmp_alloc(size_t size) {
     void * p = NULL;
     assert(is_dispatch_thread());
     if (!tmp_gc_posted) {
-        post_event(tmp_gc, NULL);
+        post_event(gc_event, NULL);
         tmp_gc_posted = 1;
     }
     if (tmp_pool_pos + size + ALIGNMENT + sizeof(size_t *) <= tmp_pool_max) {
