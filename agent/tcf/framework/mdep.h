@@ -46,6 +46,12 @@
 #  pragma warning(disable:4100) /* unreferenced formal parameter */
 #  pragma warning(disable:4611) /* interaction between '_setjmp' and C++ object destruction is non-portable */
 #  pragma warning(disable:4996) /* 'strcpy': This function or variable may be unsafe */
+#  ifdef _WIN64
+#    pragma warning(disable:4244)
+#    pragma warning(disable:4267)
+#    pragma warning(disable:4305)
+#    pragma warning(disable:4306)
+#  endif
 #  ifdef UNICODE
 /* TCF code uses UTF-8 multibyte character encoding */
 #    undef UNICODE

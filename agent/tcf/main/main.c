@@ -89,7 +89,7 @@ static LONG NTAPI VectoredExceptionHandler(PEXCEPTION_POINTERS x) {
         if (exception_code == EXCEPTION_IN_PAGE_ERROR) {
             int error = ERR_OTHER;
             if (x->ExceptionRecord->NumberParameters >= 3) {
-                ULONG status = x->ExceptionRecord->ExceptionInformation[2];
+                ULONG status = (ULONG)x->ExceptionRecord->ExceptionInformation[2];
                 if (status != 0) error = set_nt_status_errno(status);
             }
             str_exception(error, "In page error");
