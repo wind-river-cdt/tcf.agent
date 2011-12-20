@@ -31,6 +31,7 @@ char * canonic_path_map_file_name(const char * fnm) {
     static size_t buf_max = 0;
 
     buf_pos = 0;
+    if (buf_max == 0) buf = (char *)loc_alloc(buf_max = 0x100);
     for (;;) {
         char ch = *fnm++;
         if (ch == 0) break;
@@ -330,7 +331,11 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
         src = canonic_path_map_file_name(r->src);
         k = strlen(src);
         if (strncmp(src, fnm, k)) continue;
-        if (fnm[k] != 0 && fnm[k] != '/' && fnm[k] != '\\') continue;
+        if (fnm[k] != 0 && fnm[k] != '/' && fnm[k] != '\\') {
+            /* skip this rule only if it's not re-rooting the file-system */
+            if ((k != 1) || (src[0] != '/')) continue;
+            k = 0;
+        }
         j = strlen(r->dst) - 1;
         if (fnm[k] != 0 && (r->dst[j] == '/' || r->dst[j] == '\\')) k++;
         snprintf(buf, sizeof(buf), "%s%s", r->dst, fnm + k);
