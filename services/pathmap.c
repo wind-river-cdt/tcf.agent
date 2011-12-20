@@ -30,6 +30,7 @@ char * canonic_path_map_file_name(const char * fnm) {
     static size_t buf_max = 0;
 
     buf_pos = 0;
+    if (buf_max == 0) buf = (char *)loc_alloc(buf_max = 0x100);
     for (;;) {
         char ch = *fnm++;
         if (ch == 0) break;
