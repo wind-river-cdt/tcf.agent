@@ -215,30 +215,26 @@ static unsigned id2bp_hash(char * id) {
 
 static void get_bi_access_types(BreakInstruction * bi, unsigned * access_types, ContextAddress * access_size) {
     int i;
+    int soft = 1;
     unsigned t = 0;
     ContextAddress sz = 0;
     if (bi->virtual_addr) t |= CTX_BP_ACCESS_VIRTUAL;
     for (i = 0; i < bi->ref_cnt; i++) {
         if (bi->refs[i].cnt) {
+            char * type = bi->refs[i].bp->type;
             int md = bi->refs[i].bp->access_mode;
-            if (md == 0) {
-                t |= CTX_BP_ACCESS_INSTRUCTION;
-            }
-            else {
-                t |= md;
-            }
+            t |= md ? md : CTX_BP_ACCESS_INSTRUCTION;
             if (sz < bi->refs[i].size) sz = bi->refs[i].size;
-            /* TODO: parse type (soft|hw) */
+            if (type == NULL || strcmp(type, "Software") != 0) soft = 0;
         }
     }
+    if (soft) t |= CTX_BP_ACCESS_SOFTWARE;
     *access_types = t;
     *access_size = sz;
 }
 
 static void plant_instruction(BreakInstruction * bi) {
-    int i;
     int error = 0;
-    int soft = 1;
     size_t saved_size = bi->saved_size;
     ErrorReport * rp = NULL;
 
@@ -249,34 +245,17 @@ static void plant_instruction(BreakInstruction * bi) {
     if (bi->cb.address == 0) return;
     assert(is_all_stopped(bi->cb.ctx));
 
+    bi->saved_size = 0;
     get_bi_access_types(bi, &bi->cb.access_types, &bi->cb.length);
 
-    bi->saved_size = 0;
-    if (bi->virtual_addr) {
-        soft = 0;
-    }
-    else {
-        for (i = 0; i < bi->ref_cnt; i++) {
-            char * type = bi->refs[i].bp->type;
-            if (type == NULL || strcmp(type, "Software")) {
-                soft = 0;
-                break;
-            }
-        }
-    }
-    if (!soft && context_plant_breakpoint(&bi->cb) < 0) {
-        if (bi->cb.access_types == CTX_BP_ACCESS_INSTRUCTION && get_error_code(errno) == ERR_UNSUPPORTED) {
-            /* Fall back to software breakpoint type */
-            soft = 1;
-        }
-        else {
-            error = errno;
-        }
-    }
-    if (soft) {
+    if (context_plant_breakpoint(&bi->cb) < 0) error = errno;
+
+    if ((bi->cb.access_types & ~CTX_BP_ACCESS_SOFTWARE) == CTX_BP_ACCESS_INSTRUCTION &&
+            get_error_code(errno) == ERR_UNSUPPORTED) {
         uint8_t * break_inst = get_break_instruction(bi->cb.ctx, &bi->saved_size);
         assert(sizeof(bi->saved_code) >= bi->saved_size);
         assert(!bi->virtual_addr);
+        error = 0;
         planting_instruction = 1;
         if (context_read_mem(bi->cb.ctx, bi->cb.address, bi->saved_code, bi->saved_size) < 0) {
             error = errno;
@@ -286,8 +265,10 @@ static void plant_instruction(BreakInstruction * bi) {
         }
         planting_instruction = 0;
     }
+
     rp = get_error_report(error);
     if (saved_size != bi->saved_size || !compare_error_reports(bi->planting_error, rp)) {
+        int i;
         release_error_report(bi->planting_error);
         bi->planting_error = rp;
         for (i = 0; i < bi->ref_cnt; i++) {
