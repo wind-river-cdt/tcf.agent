@@ -415,6 +415,7 @@ static void loc_var_func(void * args, Symbol * sym) {
                 if (member_class == SYM_CLASS_REFERENCE) {
                     if (get_symbol_address(children[i], &offs) < 0) {
                         if (get_symbol_offset(children[i], &offs) < 0) {
+#if 0
                             int ok = 0;
                             int err = errno;
                             unsigned type_flags;
@@ -422,12 +423,11 @@ static void loc_var_func(void * args, Symbol * sym) {
                                 error("get_symbol_flags");
                             }
                             if (type_flags & SYM_FLAG_EXTERNAL) ok = 1;
-                            /*
                             if (!ok) {
                                 errno = err;
                                 error("get_symbol_offset");
                             }
-                            */
+#endif
                         }
                     }
                 }

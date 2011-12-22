@@ -1257,23 +1257,13 @@ void ini_symbols_lib(void) {
 /*************** Functions for retrieving symbol properties ***************************************/
 
 static int unpack(const Symbol * sym) {
-    ELF_File * file = NULL;
     assert(sym->base == NULL);
     assert(!is_array_type_pseudo_symbol(sym));
     assert(!is_cardinal_type_pseudo_symbol(sym));
     assert(!is_constant_pseudo_symbol(sym));
     assert(sym->obj == NULL || sym->obj->mTag != 0);
-    if (get_sym_context(sym->ctx, sym->frame, 0) < 0) return -1;
-    if (sym->obj != NULL) file = sym->obj->mCompUnit->mFile;
-    if (sym->tbl != NULL) file = sym->tbl->file;
-    if (file != NULL) {
-        DWARFCache * cache = (DWARFCache *)file->dwarf_dt_cache;
-        if (cache == NULL || cache->magic != DWARF_CACHE_MAGIC) {
-            errno = ERR_INV_CONTEXT;
-            return -1;
-        }
-    }
-    return 0;
+    assert(sym->obj == NULL || sym->obj->mCompUnit->mFile->dwarf_dt_cache != NULL);
+    return get_sym_context(sym->ctx, sym->frame, 0);
 }
 
 static U8_T get_default_lower_bound(ObjectInfo * obj) {
