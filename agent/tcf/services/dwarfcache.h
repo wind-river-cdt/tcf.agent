@@ -33,7 +33,7 @@
 #include <tcf/framework/errors.h>
 
 #ifndef ENABLE_DWARF_LAZY_LOAD
-#  define ENABLE_DWARF_LAZY_LOAD 0
+#  define ENABLE_DWARF_LAZY_LOAD 1
 #endif
 
 typedef struct FileInfo FileInfo;
@@ -83,6 +83,7 @@ struct ObjectInfo {
     ObjectInfo * mSibling;
     ObjectInfo * mChildren;
     ObjectInfo * mParent;
+    ObjectInfo * mDefinition;
 
     U2_T mTag;
     U2_T mFlags;
@@ -267,11 +268,11 @@ extern ELF_File * get_dwarf_file(ELF_File * file);
 /* Return DWARF cache for given file, create and populate the cache if needed, throw an exception if error */
 extern DWARFCache * get_dwarf_cache(ELF_File * file);
 
-/* Load chilfren of DWARF object - if not loaded already. Return obj->mChildren */
+/* Load children of DWARF object - if not loaded already. Return obj->mChildren */
 #if ENABLE_DWARF_LAZY_LOAD
 extern ObjectInfo * get_dwarf_children(ObjectInfo * obj);
 #else
-#  define get_dwarf_children(obj) obj->mChildren
+#  define get_dwarf_children(obj) ((obj)->mChildren)
 #endif
 
 /* Return file name hash. The hash is used to search FileInfo. */

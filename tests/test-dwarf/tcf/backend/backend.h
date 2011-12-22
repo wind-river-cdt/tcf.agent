@@ -21,11 +21,4 @@
 #include <tcf/config.h>
 #include <tcf/framework/channel.h>
 
-#define MAX_REGS 2000
-
-struct RegisterData {
-    uint8_t data[MAX_REGS * 8];
-    uint8_t mask[MAX_REGS * 8];
-};
-
 #endif /* D_backend */

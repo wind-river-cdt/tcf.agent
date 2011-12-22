@@ -589,6 +589,9 @@ static void read_object_refs(void) {
             if (ref.obj->mName == NULL) ref.obj->mName = ref.org->mName;
             if (ref.obj->mType == NULL) ref.obj->mType = ref.org->mType;
             ref.obj->mFlags |= ref.org->mFlags & ~DOIF_children_loaded;
+            assert(ref.obj->mDefinition == NULL);
+            ref.obj->mDefinition = ref.org->mDefinition;
+            ref.org->mDefinition = ref.obj;
         }
     }
     sObjRefsPos = 0;
@@ -1026,11 +1029,16 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
     sCache = (DWARFCache *)sCompUnit->mFile->dwarf_dt_cache;
     dio_EnterSection(&sCompUnit->mDesc, sDebugSection, Obj->mID - sDebugSection->addr);
     for (;;) {
-        gop_gAttr = Attr;
+        if (sUnitDesc.mVersion == 1 && Attr == AT_data_member_location) {
+            gop_gAttr = AT_location;
+        }
+        else {
+            gop_gAttr = Attr;
+        }
         gop_gForm = 0;
         gop_gSpecification = 0;
         gop_gAbstractOrigin = 0;
-        dio_ReadEntry(get_object_property_callback, Attr);
+        dio_ReadEntry(get_object_property_callback, gop_gAttr);
         dio_ExitSection();
         if (gop_gForm != 0) break;
         if (gop_gSpecification != 0) dio_EnterSection(&sCompUnit->mDesc, sDebugSection, gop_gSpecification - sDebugSection->addr);
@@ -1117,6 +1125,41 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
                 Value->mForm = FORM_UDATA;
                 Value->mValue = sCompUnit->mDesc.mAddressSize * 2;
                 break;
+            }
+            if (Obj->mTag == TAG_structure_type || Obj->mTag == TAG_class_type || Obj->mTag == TAG_union_type) {
+                /* It is OK to return size 0 if the structure has no data members */
+                int OK = 1;
+                ObjectInfo * c = get_dwarf_children(Obj);
+                while (OK && c != NULL) {
+                    ObjectInfo * d = c;
+                    while (d->mTag == TAG_imported_declaration) {
+                        PropertyValue v;
+                        read_and_evaluate_dwarf_object_property(Ctx, Frame, 0, d, AT_import, &v);
+                        d = find_object(
+                            (DWARFCache *)Obj->mCompUnit->mFile->dwarf_dt_cache,
+                            (ContextAddress)get_numeric_property_value(&v));
+                        if (d == NULL) break;
+                    }
+                    if (d == NULL) {
+                        OK = 0;
+                    }
+                    else {
+                        switch (d->mTag) {
+                        case TAG_typedef:
+                        case TAG_subprogram:
+                        case TAG_template_type_param:
+                            break;
+                        default:
+                            OK = 0;
+                        }
+                    }
+                    c = c->mSibling;
+                }
+                if (OK) {
+                    Value->mForm = FORM_UDATA;
+                    Value->mValue = 0;
+                    break;
+                }
             }
         }
         exception(ERR_SYM_NOT_FOUND);

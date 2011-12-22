@@ -178,37 +178,75 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
     return -1;
 }
 
+/* Return 1 if evaluation of symbol properties requires a stack frame.
+ * Return 0 otherwise.
+ * In case of a doubt, should return 1. */
 static int is_frame_based_object(Symbol * sym) {
     int res = 0;
-    ContextAddress addr = 0;
-    ContextAddress size = 0;
-    Context * org_ctx = sym_ctx;
-    int org_frame = sym_frame;
-    ContextAddress org_ip = sym_ip;
 
-    if (sym->sym_class == SYM_CLASS_REFERENCE) {
-        if (get_symbol_address(sym, &addr) < 0) {
-            res = 1;
-        }
-        else {
-            sym->has_address = 1;
-            sym->address = addr;
+    if (sym->sym_class == SYM_CLASS_FUNCTION && sym->var == NULL) return 0;
+
+    if (sym->sym_class == SYM_CLASS_TYPE && sym->obj != NULL) {
+        ObjectInfo * obj = sym->obj;
+        while (1) {
+            switch (obj->mTag) {
+            case TAG_typedef:
+            case TAG_packed_type:
+            case TAG_const_type:
+            case TAG_volatile_type:
+            case TAG_restrict_type:
+            case TAG_shared_type:
+                if (obj->mType == NULL) break;
+                obj = obj->mType;
+                continue;
+            case TAG_base_type:
+            case TAG_class_type:
+            case TAG_union_type:
+            case TAG_structure_type:
+            case TAG_enumeration_type:
+            case TAG_pointer_type:
+            case TAG_reference_type:
+                return 0;
+            }
+            break;
         }
     }
 
-    if (!res) {
-        if (get_symbol_size(sym, &size) < 0) {
-            res = 1;
+    if (sym->obj != NULL) {
+        ContextAddress addr = 0;
+        ContextAddress size = 0;
+        Context * org_ctx = sym_ctx;
+        int org_frame = sym_frame;
+        ContextAddress org_ip = sym_ip;
+
+        if (sym->sym_class == SYM_CLASS_REFERENCE) {
+            if (sym->obj->mTag == TAG_member || sym->obj->mTag == TAG_inheritance) {
+                if (get_symbol_offset(sym, &addr) < 0) res = 1;
+            }
+            else if (get_symbol_address(sym, &addr) < 0) {
+                res = 1;
+            }
+            else {
+                sym->has_address = 1;
+                sym->address = addr;
+            }
         }
-        else {
-            sym->has_size = 1;
-            sym->size = size;
+
+        if (!res) {
+            if (get_symbol_size(sym, &size) < 0) {
+                res = 1;
+            }
+            else {
+                sym->has_size = 1;
+                sym->size = size;
+            }
         }
+
+        sym_ctx = org_ctx;
+        sym_frame = org_frame;
+        sym_ip = org_ip;
     }
 
-    sym_ctx = org_ctx;
-    sym_frame = org_frame;
-    sym_ip = org_ip;
     return res;
 }
 
@@ -269,9 +307,7 @@ static void object2symbol(ObjectInfo * obj, Symbol ** res) {
     }
     sym->frame = STACK_NO_FRAME;
     sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_PROCESS);
-    if (sym->sym_class != SYM_CLASS_FUNCTION &&
-        sym_frame != STACK_NO_FRAME &&
-        is_frame_based_object(sym)) {
+    if (sym_frame != STACK_NO_FRAME && is_frame_based_object(sym)) {
         sym->frame = sym_frame;
         sym->ctx = sym_ctx;
     }
@@ -387,24 +423,15 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
     return 0;
 }
 
+static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym);
+
 /* If 'sym' represents a declaration, replace it with definition - if possible */
 static ObjectInfo * find_definition(ObjectInfo * decl) {
-    UnitAddressRange * range = NULL;
+    Symbol * sym = NULL;
     if (decl == NULL) return NULL;
     if (!(decl->mFlags & DOIF_declaration)) return decl;
-    range = elf_find_unit(sym_ctx, sym_ip, sym_ip, NULL);
-    if (range != NULL) {
-        ObjectInfo * obj = get_dwarf_children(range->mUnit->mObject);
-        while (obj != NULL) {
-            if (obj->mFlags & DOIF_specification) {
-                U8_T v = 0;
-                if (get_num_prop(obj, AT_specification_v2, &v) && v == decl->mID) {
-                    return obj;
-                }
-            }
-            obj = obj->mSibling;
-        }
-    }
+    if (decl->mDefinition != NULL) return decl->mDefinition;
+    if (map_to_sym_table(decl, &sym) && sym->obj != NULL) return sym->obj;
     return decl;
 }
 
@@ -546,7 +573,8 @@ static int find_by_name_in_sym_table(DWARFCache * cache, const char * name, Symb
                             case TAG_subroutine:
                             case TAG_subprogram:
                             case TAG_variable:
-                                if (obj->mName != NULL && strcmp(obj->mName, name) == 0) {
+                                if ((obj->mFlags & DOIF_external) != 0 &&
+                                        obj->mName != NULL && strcmp(obj->mName, name) == 0) {
                                     object2symbol(obj, res);
                                     found = 1;
                                     cnt++;
@@ -1731,23 +1759,6 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
                 sz = read_string_length(obj);
                 ok = 1;
             }
-            if (!ok && (obj->mTag == TAG_structure_type || obj->mTag == TAG_class_type)) {
-                /* It is OK to return size 0 instead of error if the structure has no data members */
-                ObjectInfo * c = get_dwarf_children(obj);
-                sz = 0;
-                ok = 1;
-                while (ok && c != NULL) {
-                    switch (c->mTag) {
-                    case TAG_subprogram:
-                    case TAG_typedef:
-                    case TAG_template_type_param:
-                        break;
-                    default:
-                        ok = 0;
-                    }
-                    c = c->mSibling;
-                }
-            }
             if (!ok && ref && ref->mTag != TAG_member && ref->mTag != TAG_inheritance) {
                 Trap trap;
                 if (set_trap(&trap)) {
@@ -2029,7 +2040,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
         ObjectInfo * i = get_dwarf_children(obj);
         while (i != NULL) {
             Symbol * x = NULL;
-            object2symbol(i, &x);
+            object2symbol(find_definition(i), &x);
             if (buf_len <= n) {
                 buf_len += 16;
                 buf = (Symbol **)loc_realloc(buf, sizeof(Symbol *) * buf_len);
@@ -2058,9 +2069,18 @@ int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
     if (unpack(sym) < 0) return -1;
     if (obj != NULL && (obj->mTag == TAG_member || obj->mTag == TAG_inheritance)) {
         U8_T v;
-        if (!get_num_prop(obj, AT_data_member_location, &v)) return -1;
-        *offset = (ContextAddress)v;
-        return 0;
+        if (get_num_prop(obj, AT_data_member_location, &v)) {
+            *offset = (ContextAddress)v;
+            return 0;
+        }
+        if (get_num_prop(obj, AT_bit_offset, &v)) {
+            set_errno(ERR_OTHER, "Cannot get member offset: the symbol is a bit field");
+            return -1;
+        }
+        if (obj->mFlags & DOIF_declaration) {
+            set_errno(ERR_OTHER, "Cannot get member offset: the symbol is a declaration");
+            return -1;
+        }
     }
     set_errno(ERR_OTHER, "Symbol does not have a member offset");
     return -1;
@@ -2189,14 +2209,18 @@ int get_symbol_address(const Symbol * sym, ContextAddress * address) {
         return 0;
     }
     if (unpack(sym) < 0) return -1;
-    if (sym->var != NULL) {
+    if (obj != NULL && (obj->mFlags & DOIF_external) == 0 && sym->var != NULL) {
         /* The symbol represents a member of a class instance */
         Trap trap;
         PropertyValue v;
         ContextAddress base = 0;
         ContextAddress offs = 0;
         ObjectInfo * type = get_original_type(sym->var);
-        if (!set_trap(&trap)) return -1;
+        if (!set_trap(&trap)) {
+            if (errno == ERR_SYM_NOT_FOUND) errno = set_errno(ERR_OTHER, "Location attribute not found");
+            set_errno(errno, "Cannot evaluate location of 'this' pointer");
+            return -1;
+        }
         if ((type->mTag != TAG_pointer_type && type->mTag != TAG_mod_pointer) || type->mType == NULL) exception(ERR_INV_CONTEXT);
         read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, 0, sym->var, AT_location, &v);
         base = (ContextAddress)read_cardinal_object_value(&v);

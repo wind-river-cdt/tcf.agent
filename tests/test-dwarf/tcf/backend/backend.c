@@ -42,6 +42,13 @@
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
 #endif
 
+#define MAX_REGS 2000
+
+struct RegisterData {
+    uint8_t data[MAX_REGS * 8];
+    uint8_t mask[MAX_REGS * 8];
+};
+
 static Context * elf_ctx = NULL;
 static MemoryMap mem_map;
 static RegisterDefinition reg_defs[MAX_REGS];
@@ -62,6 +69,104 @@ static struct timespec time_start;
 static char ** files = NULL;
 static unsigned files_max = 0;
 static unsigned files_cnt = 0;
+
+static RegisterDefinition * get_reg_by_dwarf_id(unsigned id) {
+    static RegisterDefinition ** map = NULL;
+    static unsigned map_length = 0;
+
+    if (map == NULL) {
+        RegisterDefinition * r;
+        RegisterDefinition * regs_index = get_reg_definitions(NULL);
+        for (r = regs_index; r->name != NULL; r++) {
+            if (r->dwarf_id >= (int)map_length) map_length = r->dwarf_id + 1;
+        }
+        map = (RegisterDefinition **)loc_alloc_zero(sizeof(RegisterDefinition *) * map_length);
+        for (r = regs_index; r->name != NULL; r++) {
+            if (r->dwarf_id >= 0) map[r->dwarf_id] = r;
+        }
+    }
+    return id < map_length ? map[id] : NULL;
+}
+
+static RegisterDefinition * get_reg_by_eh_frame_id(unsigned id) {
+    static RegisterDefinition ** map = NULL;
+    static unsigned map_length = 0;
+
+    if (map == NULL) {
+        RegisterDefinition * r;
+        RegisterDefinition * regs_index = get_reg_definitions(NULL);
+        for (r = regs_index; r->name != NULL; r++) {
+            if (r->eh_frame_id >= (int)map_length) map_length = r->eh_frame_id + 1;
+        }
+        map = (RegisterDefinition **)loc_alloc_zero(sizeof(RegisterDefinition *) * map_length);
+        for (r = regs_index; r->name != NULL; r++) {
+            if (r->eh_frame_id >= 0) map[r->eh_frame_id] = r;
+        }
+    }
+    return id < map_length ? map[id] : NULL;
+}
+
+RegisterDefinition * get_reg_by_id(Context * ctx, unsigned id, RegisterIdScope * scope) {
+    RegisterDefinition * def = NULL;
+    switch (scope->id_type) {
+    case REGNUM_DWARF: def = get_reg_by_dwarf_id(id); break;
+    case REGNUM_EH_FRAME: def = get_reg_by_eh_frame_id(id); break;
+    }
+    if (def == NULL) set_errno(ERR_OTHER, "Invalid register ID");
+    return def;
+}
+
+int read_reg_bytes(StackFrame * frame, RegisterDefinition * reg_def, unsigned offs, unsigned size, uint8_t * buf) {
+    if (reg_def != NULL && frame != NULL) {
+        if (frame->is_top_frame) {
+            return context_read_reg(frame->ctx, reg_def, offs, size, buf);
+        }
+        if (frame->regs != NULL) {
+            size_t i;
+            uint8_t * r_addr = (uint8_t *)&frame->regs->data + reg_def->offset;
+            uint8_t * m_addr = (uint8_t *)&frame->regs->mask + reg_def->offset;
+            for (i = 0; i < size; i++) {
+                if (m_addr[offs + i] != 0xff) {
+                    errno = ERR_INV_CONTEXT;
+                    return -1;
+                }
+            }
+            if (offs + size > reg_def->size) {
+                errno = ERR_INV_DATA_SIZE;
+                return -1;
+            }
+            memcpy(buf, r_addr + offs, size);
+            return 0;
+        }
+    }
+    errno = ERR_INV_CONTEXT;
+    return -1;
+}
+
+int write_reg_bytes(StackFrame * frame, RegisterDefinition * reg_def, unsigned offs, unsigned size, uint8_t * buf) {
+    if (reg_def != NULL && frame != NULL) {
+        if (frame->is_top_frame) {
+            return context_write_reg(frame->ctx, reg_def, offs, size, buf);
+        }
+        if (frame->regs == NULL && context_has_state(frame->ctx)) {
+            frame->regs = (RegisterData *)loc_alloc_zero(sizeof(RegisterData));
+        }
+        if (frame->regs != NULL) {
+            uint8_t * r_addr = (uint8_t *)&frame->regs->data + reg_def->offset;
+            uint8_t * m_addr = (uint8_t *)&frame->regs->mask + reg_def->offset;
+
+            if (offs + size > reg_def->size) {
+                errno = ERR_INV_DATA_SIZE;
+                return -1;
+            }
+            memcpy(r_addr + offs, buf, size);
+            memset(m_addr + offs, 0xff, size);
+            return 0;
+        }
+    }
+    errno = ERR_INV_CONTEXT;
+    return -1;
+}
 
 RegisterDefinition * get_reg_definitions(Context * ctx) {
     return reg_defs;
@@ -232,6 +337,7 @@ static void loc_var_func(void * args, Symbol * sym) {
     }
     if (get_symbol_size(sym, &size) < 0) {
         int ok = 0;
+        int err = errno;
         if (type != NULL) {
             char * type_name;
             unsigned type_flags;
@@ -246,7 +352,10 @@ static void loc_var_func(void * args, Symbol * sym) {
                 ok = 1;
             }
         }
-        if (!ok) error("get_symbol_size");
+        if (!ok) {
+            errno = err;
+            error("get_symbol_size");
+        }
     }
     if (type != NULL) {
         if (get_symbol_type_class(sym, &type_class) < 0) {
@@ -287,6 +396,48 @@ static void loc_var_func(void * args, Symbol * sym) {
                 int big_endian = 0;
                 if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
                     error("get_symbol_value");
+                }
+            }
+        }
+        else if (type_class == TYPE_CLASS_COMPOSITE) {
+            int i;
+            int count = 0;
+            Symbol ** children = NULL;
+            if (get_symbol_children(type, &children, &count) < 0) {
+                error("get_symbol_children");
+            }
+            for (i = 0; i < count; i++) {
+                int member_class = 0;
+                ContextAddress offs = 0;
+                if (get_symbol_class(children[i], &member_class) < 0) {
+                    error("get_symbol_class");
+                }
+                if (member_class == SYM_CLASS_REFERENCE) {
+                    if (get_symbol_address(children[i], &offs) < 0) {
+                        if (get_symbol_offset(children[i], &offs) < 0) {
+                            int ok = 0;
+                            int err = errno;
+                            unsigned type_flags;
+                            if (get_symbol_flags(children[i], &type_flags) < 0) {
+                                error("get_symbol_flags");
+                            }
+                            if (type_flags & SYM_FLAG_EXTERNAL) ok = 1;
+                            /*
+                            if (!ok) {
+                                errno = err;
+                                error("get_symbol_offset");
+                            }
+                            */
+                        }
+                    }
+                }
+                else if (member_class == SYM_CLASS_VALUE) {
+                    void * value = NULL;
+                    size_t value_size = 0;
+                    int big_endian = 0;
+                    if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
+                        error("get_symbol_value");
+                    }
                 }
             }
         }
@@ -351,8 +502,20 @@ static void next_pc(void) {
         else {
             char * name = NULL;
             char name_buf[0x1000];
+            ContextAddress addr = 0;
+            ContextAddress size = 0;
             if (get_symbol_name(sym, &name) < 0) {
                 error("get_symbol_name");
+            }
+            if (get_symbol_address(sym, &addr) < 0) {
+                error("get_symbol_address");
+            }
+            if (get_symbol_size(sym, &size) < 0) {
+                error("get_symbol_size");
+            }
+            if (pc < addr || pc >= addr + size) {
+                errno = ERR_OTHER;
+                error("invalid symbol address");
             }
             if (name != NULL) {
                 strcpy(name_buf, name);
@@ -484,7 +647,7 @@ static void next_file(void) {
         r->addr = (ContextAddress)p->address;
         r->file_name = loc_strdup(elf_file_name);
         r->file_offs = p->offset;
-        r->size = (ContextAddress)p->file_size;
+        r->size = (ContextAddress)p->mem_size;
         r->flags = MM_FLAG_R | MM_FLAG_W;
         if (p->flags & PF_X) r->flags |= MM_FLAG_X;
         r->dev = st.st_dev;
