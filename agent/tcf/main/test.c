@@ -28,20 +28,11 @@
 #include <assert.h>
 #include <tcf/framework/mdep-threads.h>
 #include <tcf/framework/myalloc.h>
-#include <tcf/framework/trace.h>
 #include <tcf/framework/errors.h>
 #include <tcf/services/diagnostics.h>
 #include <tcf/main/test.h>
 #if defined(_WIN32)
 #  include <system/Windows/tcf/context-win32.h>
-#endif
-
-#if __CYGWIN__
-#  define NOOPTIMIZE
-#elif __GNUC__
-#  define NOOPTIMIZE __attribute__ ((optimize(0)))
-#else
-#  define NOOPTIMIZE
 #endif
 
 #ifdef __cplusplus
@@ -105,12 +96,12 @@ char tcf_test_char = 0;
 short tcf_test_short = 0;
 long tcf_test_long = 0;
 
-NOOPTIMIZE void tcf_test_func3(void) {
+void tcf_test_func3(void) {
     tcf_test_char++;
     usleep(1000);
 }
 
-NOOPTIMIZE int tcf_test_func2(void) {
+int tcf_test_func2(void) {
     int func2_local1 = 1;
     int func2_local2 = 2;
     test_struct func2_local3 = { enum_val3, 153, NULL, 3.14f, 2.71 };
@@ -126,12 +117,12 @@ NOOPTIMIZE int tcf_test_func2(void) {
     return func2_local2 + *func2_local4;
 }
 
-NOOPTIMIZE void tcf_test_func1(void) {
+void tcf_test_func1(void) {
     tcf_test_long++;
     tcf_test_func2();
 }
 
-NOOPTIMIZE void tcf_test_func0(test_enum e) {
+void tcf_test_func0(test_enum e) {
     tcf_test_func1();
 }
 
@@ -142,7 +133,7 @@ char * tcf_test_array = array;
 }
 #endif
 
-static NOOPTIMIZE void * test_sub(void * x) {
+static void * test_sub(void * x) {
     volatile int * test_done = (int *)x;
     while (!*test_done) {
         tcf_test_func0(enum_val3);
@@ -150,7 +141,7 @@ static NOOPTIMIZE void * test_sub(void * x) {
     return NULL;
 }
 
-NOOPTIMIZE void test_proc(void) {
+void test_proc(void) {
     int i;
     pthread_t thread[4];
     int test_done = 0;

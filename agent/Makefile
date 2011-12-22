@@ -72,6 +72,10 @@ $(BINDIR)/tcflog$(EXTEXE): $(BINDIR)/tcf/main/main_log$(EXTOBJ) $(LIBTCF)
 	$(LINK) $(LINK_FLAGS) $(LINK_OUT_F)$@ $(BINDIR)/tcf/main/main_log$(EXTOBJ) \
 		$(LIBTCF) $(LIBS)
 
+$(BINDIR)/tcf/main/test$(EXTOBJ): tcf/main/test.c $(CCDEPS)
+	@$(call MKDIR,$(dir $@))
+	$(CC) $(filter-out -O%,$(CFLAGS)) -O0 $(OUT_OBJ_F)$@ $(NO_LINK_F) $<
+
 $(BINDIR)/%$(EXTOBJ): %.c $(CCDEPS)
 	@$(call MKDIR,$(dir $@))
 	$(CC) $(CFLAGS) $(OUT_OBJ_F)$@ $(NO_LINK_F) $<

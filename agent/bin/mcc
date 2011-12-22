@@ -24,7 +24,7 @@ language=
 machine=
 oval=
 
-while getopts co:D:I:gOp:x:m: name
+while getopts co:D:I:gO:p:x:m: name
 do
     case $name in
     c)
@@ -36,7 +36,7 @@ do
         gflag=1
         ;;
     O)
-        Oflag=1
+        Oflag="$OPTARG"
         ;;
     o)
         oval="$OPTARG"
