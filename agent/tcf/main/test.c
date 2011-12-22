@@ -36,6 +36,11 @@
 #  include <system/Windows/tcf/context-win32.h>
 #endif
 
+#if __GNUC__
+#pragma GCC optimize (0)
+#pragma GCC optimize ("no-omit-frame-pointer")
+#endif
+
 #ifdef __cplusplus
 
 bool tcf_cpp_test_bool = false;

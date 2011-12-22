@@ -17,7 +17,7 @@ RMDIR   = rm -rf $(1)
 ifeq ($(CONF),Debug)
   OPTS += -g
 else
-  OPTS += -O -DNDEBUG
+  OPTS += -O3 -DNDEBUG
 endif
 
 ifeq ($(OPSYS),Windows)

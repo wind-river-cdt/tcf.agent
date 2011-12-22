@@ -8,14 +8,6 @@ ifdef MAKE_INC
 include $(MAKE_INC)
 endif
 
-# frame pointers are needed for agent diagnostics to work properly
-ifeq ($(CC),gcc)
-  OPTS += -fno-omit-frame-pointer
-endif
-ifeq ($(CC),g++)
-  OPTS += -fno-omit-frame-pointer
-endif
-
 ifdef LUADIR
   EXECS += $(BINDIR)/tcflua$(EXTEXE)
   OPTS += -DPATH_LUA="$(LUADIR)" "-I$(LUADIR)/include"
