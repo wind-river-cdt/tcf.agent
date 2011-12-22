@@ -539,14 +539,16 @@ static loc_PEB peb;
 static RTL_USER_PROCESS_PARAMETERS upa;
 
 static int get_process_info(HANDLE prs) {
-    static LONG (NTAPI * QueryInformationProcessProc)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG) = NULL;
+    typedef LONG (NTAPI * QueryInformationProcessProcType)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
+    static QueryInformationProcessProcType QueryInformationProcessProc;
 
     memset(&pbi, 0, sizeof(pbi));
     memset(&peb, 0, sizeof(peb));
     memset(&upa, 0, sizeof(upa));
 
     if (QueryInformationProcessProc == NULL) {
-        *(FARPROC *)&QueryInformationProcessProc = GetProcAddress(GetModuleHandle("NTDLL.DLL"), "ZwQueryInformationProcess");
+        QueryInformationProcessProc = (QueryInformationProcessProcType)GetProcAddress(
+            GetModuleHandle("NTDLL.DLL"), "ZwQueryInformationProcess");
         if (QueryInformationProcessProc == NULL) {
             set_win32_errno(GetLastError());
             return -1;
@@ -744,7 +746,8 @@ static void command_get_children(char * token, Channel * c) {
     }
     else {
         /* Children of the root: processes */
-        static BOOL (WINAPI * EnumProcessesProc)(DWORD *, DWORD, DWORD *) = NULL;
+        typedef BOOL (WINAPI * EnumProcessesProcType)(DWORD *, DWORD, DWORD *);
+        static EnumProcessesProcType EnumProcessesProc;
         HANDLE heap = GetProcessHeap();
         DWORD * prs_ids = NULL;
         int prs_cnt = 0;
@@ -754,7 +757,7 @@ static void command_get_children(char * token, Channel * c) {
                 err = set_win32_errno(GetLastError());
             }
             else {
-                *(FARPROC *)&EnumProcessesProc = GetProcAddress(psapi, "EnumProcesses");
+                EnumProcessesProc = (EnumProcessesProcType)GetProcAddress(psapi, "EnumProcesses");
                 if (EnumProcessesProc == NULL) err = set_win32_errno(GetLastError());
             }
         }
