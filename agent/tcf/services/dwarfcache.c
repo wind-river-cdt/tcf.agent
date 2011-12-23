@@ -1098,6 +1098,9 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
     case FORM_BLOCK4    :
     case FORM_BLOCK     :
     case FORM_STRP      :
+    case FORM_SEC_OFFSET:
+    case FORM_EXPRLOC   :
+    case FORM_REF_SIG8  :
         Value->mAddr = (U1_T *)gop_gFormDataAddr;
         Value->mSize = gop_gFormDataSize;
         break;
@@ -1176,7 +1179,10 @@ void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, U8_T Base
     assert(Value->mFrame == Frame);
     assert(Value->mObject == Obj);
     assert(Value->mAttr == Attr);
-    if (Attr == AT_location || Attr == AT_data_member_location || Attr == AT_string_length || Attr == AT_frame_base) {
+    if (Value->mForm == FORM_EXPRLOC) {
+        dwarf_evaluate_expression(Base, Value);
+    }
+    else if (Attr == AT_location || Attr == AT_data_member_location || Attr == AT_string_length || Attr == AT_frame_base) {
         switch (Value->mForm) {
         case FORM_DATA4     :
         case FORM_DATA8     :
