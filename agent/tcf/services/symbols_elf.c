@@ -184,6 +184,7 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
 static int is_frame_based_object(Symbol * sym) {
     int res = 0;
 
+    if (sym->sym_class == SYM_CLASS_VALUE) return 0;
     if (sym->sym_class == SYM_CLASS_FUNCTION && sym->var == NULL) return 0;
 
     if (sym->sym_class == SYM_CLASS_TYPE && sym->obj != NULL) {
@@ -1788,7 +1789,7 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
         }
     }
     else {
-        errno = set_errno(ERR_OTHER, "Debug info not available");
+        set_errno(ERR_OTHER, "Debug info not available");
         return -1;
     }
     return 0;
@@ -2207,7 +2208,7 @@ int get_symbol_address(const Symbol * sym, ContextAddress * address) {
         ContextAddress offs = 0;
         ObjectInfo * type = get_original_type(sym->var);
         if (!set_trap(&trap)) {
-            if (errno == ERR_SYM_NOT_FOUND) errno = set_errno(ERR_OTHER, "Location attribute not found");
+            if (errno == ERR_SYM_NOT_FOUND) set_errno(ERR_OTHER, "Location attribute not found");
             set_errno(errno, "Cannot evaluate location of 'this' pointer");
             return -1;
         }

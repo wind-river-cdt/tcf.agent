@@ -18,6 +18,7 @@
 
 #if SERVICE_Symbols
 
+#include <assert.h>
 #include <tcf/framework/channel.h>
 #include <tcf/framework/json.h>
 #include <tcf/framework/myalloc.h>
@@ -88,6 +89,10 @@ static void command_get_context_cache_client(void * x) {
         }
         if (sym_class == SYM_CLASS_VALUE) {
             get_symbol_value(sym, &value, &value_size, &big_endian);
+        }
+        if (sym_class == SYM_CLASS_REFERENCE && !has_address && !has_offset) {
+            get_symbol_value(sym, &value, &value_size, &big_endian);
+            assert(value == NULL || update_policy == UPDATE_ON_EXE_STATE_CHANGES);
         }
         get_symbol_flags(sym, &flags);
     }

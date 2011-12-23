@@ -836,7 +836,7 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
     SymInfoCache * c = get_sym_info_cache(sym);
     if (c == NULL) return -1;
     if (!c->has_size) {
-        errno = set_errno(ERR_OTHER, "Debug info not available");
+        set_errno(ERR_OTHER, "Debug info not available");
         return -1;
     }
     *size = c->size;
@@ -883,14 +883,30 @@ int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
 int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big_endian) {
     SymInfoCache * c = get_sym_info_cache(sym);
     if (c == NULL) return -1;
-    if (c->sym_class != SYM_CLASS_VALUE) {
-        errno = ERR_INV_CONTEXT;
+    if (c->sym_class == SYM_CLASS_REFERENCE) {
+        if (!c->has_size) {
+            set_errno(ERR_OTHER, "Symbol size is unknown");
+            return -1;
+        }
+        if (c->has_address) {
+            void * buf = tmp_alloc(c->size);
+            if (context_read_mem(c->update_owner, c->address, buf, c->size) < 0) return -1;
+            *value = buf;
+            *size = c->size;
+            *big_endian = (c->flags & SYM_FLAG_BIG_ENDIAN) != 0;
+            return 0;
+        }
+        set_errno(ERR_OTHER, "Symbol location is unknown");
         return -1;
     }
-    *value = c->value;
-    *size = c->value_size;
-    *big_endian = c->big_endian;
-    return 0;
+    if (c->sym_class == SYM_CLASS_VALUE) {
+        *value = c->value;
+        *size = c->value_size;
+        *big_endian = c->big_endian;
+        return 0;
+    }
+    set_errno(ERR_OTHER, "Invalid symbol class");
+    return -1;
 }
 
 int get_symbol_address(const Symbol * sym, ContextAddress * address) {

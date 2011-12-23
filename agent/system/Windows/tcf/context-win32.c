@@ -581,7 +581,7 @@ static int win32_resume(Context * ctx, int step) {
                     Dr7 |= (REGWORD)3 << (i * 4 + 16);
                 }
                 else {
-                    errno = set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported access mode");
+                    set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported access mode");
                     return -1;
                 }
                 if (bp->length == 1) {
@@ -599,7 +599,7 @@ static int win32_resume(Context * ctx, int step) {
                     Dr7 |= (REGWORD)2 << (i * 4 + 18);
                 }
                 else {
-                    errno = set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported length");
+                    set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported length");
                     return -1;
                 }
             }

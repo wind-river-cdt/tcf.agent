@@ -507,7 +507,7 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
         return 0;
     }
     if (sym->module == 0) {
-        errno = set_errno(ERR_OTHER, "Debug info not available");
+        set_errno(ERR_OTHER, "Debug info not available");
         return -1;
     }
     if (sym->sym_class == SYM_CLASS_REFERENCE || sym->sym_class == SYM_CLASS_FUNCTION) {
