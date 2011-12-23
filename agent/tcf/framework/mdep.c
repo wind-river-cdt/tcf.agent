@@ -1205,12 +1205,14 @@ const char * create_uuid(void) {
 
 #else
 
-/* TODO: better UUID generator */
 const char * create_uuid(void) {
-    static char buf[32];
+    static char buf[40];
     struct timespec time_now;
-    clock_gettime(CLOCK_REALTIME, &time_now);
-    snprintf(buf, sizeof(buf), "%08lX-%08lX-%08X", (long)time_now.tv_sec, time_now.tv_nsec, rand());
+    if (clock_gettime(CLOCK_REALTIME, &time_now)) check_error(errno);
+    if (buf[0] == 0) srand((unsigned int)time_now.tv_sec ^ (unsigned int)time_now.tv_nsec);
+    snprintf(buf, sizeof(buf), "%08x-%04x-4%03x-8%03x-%04x%04x%04x",
+        (int)time_now.tv_sec & 0xffffffff, (int)(time_now.tv_nsec >> 13) & 0xffff,
+        rand() & 0xfff, rand() & 0xfff, rand() & 0xffff, rand() & 0xffff, rand() & 0xffff);
     return buf;
 }
 
