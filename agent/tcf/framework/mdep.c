@@ -1208,6 +1208,7 @@ const char * create_uuid(void) {
 const char * create_uuid(void) {
     static char buf[40];
     struct timespec time_now;
+    memset(&time_now, 0, sizeof(time_now));
     if (clock_gettime(CLOCK_REALTIME, &time_now)) check_error(errno);
     if (buf[0] == 0) srand((unsigned int)time_now.tv_sec ^ (unsigned int)time_now.tv_nsec);
     snprintf(buf, sizeof(buf), "%08x-%04x-4%03x-8%03x-%04x%04x%04x",
