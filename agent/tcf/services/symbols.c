@@ -77,7 +77,7 @@ static void command_get_context_cache_client(void * x) {
         get_symbol_type(sym, &type);
         get_symbol_base_type(sym, &base);
         get_symbol_index_type(sym, &index);
-        get_symbol_containing_type(sym, &container);
+        get_symbol_container(sym, &container);
         has_size = get_symbol_size(sym, &size) == 0;
         has_length = get_symbol_length(sym, &length) == 0;
         if (has_length) {
@@ -163,7 +163,7 @@ static void command_get_context_cache_client(void * x) {
         }
 
         if (container != NULL) {
-            json_write_string(&c->out, "ContainigTypeID");
+            json_write_string(&c->out, "ContainerID");
             write_stream(&c->out, ':');
             json_write_string(&c->out, symbol2id(container));
             write_stream(&c->out, ',');
@@ -619,12 +619,30 @@ static void write_commands(OutputStream * out, Context * ctx, StackFrameRegister
                 write_stream(out, ',');
                 json_write_boolean(out, cmd->args.deref.big_endian);
                 break;
-            case SFT_CMD_USER:
+            case SFT_CMD_LOCATION:
                 write_stream(out, ',');
-                json_write_binary(out, cmd->args.user.code_addr, cmd->args.user.code_size);
+                json_write_binary(out, cmd->args.loc.code_addr, cmd->args.loc.code_size);
                 write_stream(out, ',');
-                /* TODO: SFT_CMD_USER parameters */
                 write_stream(out, '{');
+                json_write_string(out, "Machine");
+                write_stream(out, ':');
+                json_write_long(out, cmd->args.loc.reg_id_scope.machine);
+                write_stream(out, ',');
+                json_write_string(out, "ABI");
+                write_stream(out, ':');
+                json_write_long(out, cmd->args.loc.reg_id_scope.os_abi);
+                write_stream(out, ',');
+                json_write_string(out, "RegIdType");
+                write_stream(out, ':');
+                json_write_long(out, cmd->args.loc.reg_id_scope.id_type);
+                write_stream(out, ',');
+                json_write_string(out, "AddrSize");
+                write_stream(out, ':');
+                json_write_long(out, cmd->args.loc.addr_size);
+                write_stream(out, ',');
+                json_write_string(out, "BigEndian");
+                write_stream(out, ':');
+                json_write_boolean(out, cmd->args.loc.big_endian);
                 write_stream(out, '}');
                 break;
             }

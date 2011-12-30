@@ -1921,7 +1921,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
     return -1;
 }
 
-int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type) {
+int get_symbol_container(const Symbol * sym, Symbol ** container) {
     ObjectInfo * obj = sym->obj;
     if (obj != NULL) {
         if (unpack(sym) < 0) return -1;
@@ -1930,7 +1930,7 @@ int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type) {
             if (get_num_prop(obj, AT_constaining_type, &id)) {
                 ObjectInfo * type = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)id);
                 if (type != NULL) {
-                    object2symbol(type, containing_type);
+                    object2symbol(type, container);
                     return 0;
                 }
             }
@@ -1938,7 +1938,7 @@ int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type) {
             return -1;
         }
         if (obj->mTag == TAG_member && obj->mParent != NULL) {
-            object2symbol(obj->mParent, containing_type);
+            object2symbol(obj->mParent, container);
             return 0;
         }
     }
@@ -2226,27 +2226,15 @@ static int calc_member_offset(ObjectInfo * type, ObjectInfo * member, ContextAdd
 }
 
 static LocationInfo * location_info = NULL;
-static LocationExpressionState * user_command_state = NULL;
+static LocationExpressionState * location_command_state = NULL;
 
-static void user_command_client_op(uint8_t op) {
-    switch (op) {
-#if 0
-    case OP_addr:
-        U8_T addr = dio_ReadAddress(&section);
-        addr = elf_map_to_run_time_address(user_command_state->ctx, Unit->mFile, section, (ContextAddress)addr);
-        if (errno) str_exception(errno, "Cannot get object run-time address");
-        user_command_state->stk[user_command_state->stk_pos++] = addr;
-        break;
-#endif
-    default:
-        str_fmt_exception(ERR_UNSUPPORTED, "Unsupported location expression op 0x%02x", op);
-        break;
-    }
+static void dwarf_location_operation(uint8_t op) {
+    str_fmt_exception(ERR_UNSUPPORTED, "Unsupported location expression op 0x%02x", op);
 }
 
-static int user_command_callback(LocationExpressionState * state) {
-    user_command_state = state;
-    state->client_op = user_command_client_op;
+static int dwarf_location_callback(LocationExpressionState * state) {
+    location_command_state = state;
+    state->client_op = dwarf_location_operation;
     return evaluate_vm_expression(state);
 }
 
@@ -2263,20 +2251,20 @@ static LocationExpressionCommand * add_location_command(int op) {
     return cmd;
 }
 
-static LocationExpressionCommand * add_user_command(PropertyValue * v) {
+static LocationExpressionCommand * add_dwarf_location_command(PropertyValue * v) {
     DWARFExpressionInfo info;
-    LocationExpressionCommand * cmd = add_location_command(SFT_CMD_USER);
+    LocationExpressionCommand * cmd = add_location_command(SFT_CMD_LOCATION);
 
     dwarf_find_expression(v, sym_ip, &info);
     dwarf_transform_expression(sym_ctx, sym_ip, &info);
     location_info->addr = info.code_addr;
     location_info->size = info.code_size;
-    cmd->args.user.code_addr = info.expr_addr;
-    cmd->args.user.code_size = info.expr_size;
-    cmd->args.user.reg_id_scope = v->mObject->mCompUnit->mRegIdScope;
-    cmd->args.user.addr_size = v->mObject->mCompUnit->mDesc.mAddressSize;
-    cmd->args.user.big_endian = v->mBigEndian;
-    cmd->args.user.func = user_command_callback;
+    cmd->args.loc.code_addr = info.expr_addr;
+    cmd->args.loc.code_size = info.expr_size;
+    cmd->args.loc.reg_id_scope = v->mObject->mCompUnit->mRegIdScope;
+    cmd->args.loc.addr_size = v->mObject->mCompUnit->mDesc.mAddressSize;
+    cmd->args.loc.big_endian = v->mBigEndian;
+    cmd->args.loc.func = dwarf_location_callback;
     return cmd;
 }
 
@@ -2308,7 +2296,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
                 read_dwarf_object_property(sym_ctx, sym_frame, obj, AT_use_location, &v);
                 add_location_command(SFT_CMD_ARG)->args.arg_no = 1;
                 add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
-                add_user_command(&v);
+                add_dwarf_location_command(&v);
                 clear_trap(&trap);
                 return 0;
             }
@@ -2336,7 +2324,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
                 case FORM_BLOCK4    :
                 case FORM_BLOCK     :
                     add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
-                    add_user_command(&v);
+                    add_dwarf_location_command(&v);
                     break;
                 }
                 clear_trap(&trap);
@@ -2353,7 +2341,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
             Symbol * s = NULL;
             if (set_trap(&trap)) {
                 read_dwarf_object_property(sym_ctx, sym_frame, obj, AT_location, &v);
-                add_user_command(&v);
+                add_dwarf_location_command(&v);
                 clear_trap(&trap);
                 return 0;
             }

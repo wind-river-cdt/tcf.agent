@@ -191,7 +191,7 @@ extern int get_symbol_base_type(const Symbol * sym, Symbol ** base_type);
 extern int get_symbol_index_type(const Symbol * sym, Symbol ** index_type);
 
 /* Get containing type: field (member) or member pointer - parent structure */
-extern int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type);
+extern int get_symbol_container(const Symbol * sym, Symbol ** container);
 
 /* Get array length (number of elements) */
 extern int get_symbol_length(const Symbol * sym, ContextAddress * length);

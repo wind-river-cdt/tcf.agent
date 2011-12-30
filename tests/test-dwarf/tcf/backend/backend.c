@@ -73,6 +73,8 @@ static char ** files = NULL;
 static unsigned files_max = 0;
 static unsigned files_cnt = 0;
 
+static int line_area_ok = 0;
+
 extern ObjectInfo * get_symbol_object(Symbol * sym);
 
 static RegisterDefinition * get_reg_by_dwarf_id(unsigned id) {
@@ -269,10 +271,25 @@ static void error(const char * func) {
     exit(1);
 }
 
-static void line_numbers_callback(CodeArea * area, void * args) {
+static void addr_to_line_callback(CodeArea * area, void * args) {
     CodeArea * dst = (CodeArea *)args;
-    if (area->start_address > pc || area->end_address <= pc) return;
+    if (area->start_address > pc || area->end_address <= pc) {
+        errno = set_errno(ERR_OTHER, "Invalid line area address");
+        error("address_to_line");
+    }
     *dst = *area;
+}
+
+static void line_to_addr_callback(CodeArea * area, void * args) {
+    CodeArea * org = (CodeArea *)args;
+    if (area->start_line > org->start_line || area->end_line <= org->start_line) {
+        errno = set_errno(ERR_OTHER, "Invalid line area line numbers");
+        error("line_to_address");
+    }
+    if (area->start_address > pc || area->end_address <= pc) return;
+    if (org->start_address == area->start_address || org->end_address == area->end_address) {
+        line_area_ok = 1;
+    }
 }
 
 static void print_time(struct timespec time_start, int cnt) {
@@ -406,9 +423,9 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error("get_symbol_base_type");
             }
         }
-        if (get_symbol_containing_type(type, &container) < 0) {
+        if (get_symbol_container(type, &container) < 0) {
             if (type_class == TYPE_CLASS_MEMBER_PTR) {
-                error("get_symbol_containing_type");
+                error("get_symbol_container");
             }
         }
         if (get_symbol_length(type, &length) < 0) {
@@ -583,38 +600,24 @@ static void next_pc(void) {
             }
         }
 
+        line_area_ok = 0;
         memset(&area, 0, sizeof(area));
-        if (address_to_line(elf_ctx, pc, pc + 1, line_numbers_callback, &area) < 0) {
+        if (address_to_line(elf_ctx, pc, pc + 1, addr_to_line_callback, &area) < 0) {
             error("address_to_line");
         }
         else if (area.start_line > 0) {
-            CodeArea a;
             char elf_file_name[0x1000];
             if (area.start_address > pc || area.end_address <= pc) {
                 errno = set_errno(ERR_OTHER, "Invalid line area address");
                 error("address_to_line");
             }
-            memset(&a, 0, sizeof(a));
             strlcpy(elf_file_name, area.file, sizeof(elf_file_name));
-            if (line_to_address(elf_ctx, elf_file_name, area.start_line, area.start_column, line_numbers_callback, &a) < 0) {
+            if (line_to_address(elf_ctx, elf_file_name, area.start_line, area.start_column, line_to_addr_callback, &area) < 0) {
                 error("line_to_address");
             }
-            if (a.start_line > area.start_line || a.end_line <= area.start_line) {
-                errno = set_errno(ERR_OTHER, "Invalid line area line numbers");
-                error("line_to_address");
-            }
-            if (a.start_address > pc || a.end_address <= pc) {
+            if (!line_area_ok) {
                 errno = set_errno(ERR_OTHER, "Invalid line area address");
                 error("line_to_address");
-            }
-            if (a.start_address != area.start_address || a.end_address != area.end_address) {
-                if (pc < 0x1000) {
-                    /* Bug in GCC: lines in multiple units are mapped to same (invalid) addresses near address zero */
-                }
-                else {
-                    errno = set_errno(ERR_OTHER, "Invalid line area address");
-                    error("line_to_address");
-                }
             }
         }
 

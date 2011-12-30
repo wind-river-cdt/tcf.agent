@@ -591,7 +591,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** type) {
     return 0;
 }
 
-int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type) {
+int get_symbol_container(const Symbol * sym, Symbol ** container) {
     errno = ERR_UNSUPPORTED;
     return -1;
 }

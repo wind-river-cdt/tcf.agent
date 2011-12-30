@@ -173,10 +173,11 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
             }
             else {
                 LineNumbersState * next = get_next_in_text(unit, state);
-                if (next != NULL && next->mLine <= line) {
+                if ((next == NULL ? state->mLine + 1 : next->mLine) <= line) {
                     l = k + 1;
                 }
                 else {
+                    assert(state->mFile == file);
                     while (k > 0) {
                         LineNumbersState * prev = unit->mStatesIndex[k - 1];
                         if (prev->mFile != state->mFile) break;
@@ -286,7 +287,7 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
                 }
                 else {
                     LineNumbersState * next = get_next_in_code(unit, state);
-                    if (next != NULL && next->mAddress <= addr_min) {
+                    if (next == NULL || next->mAddress <= addr_min) {
                         l = k + 1;
                     }
                     else {

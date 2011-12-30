@@ -214,7 +214,7 @@ int id2register(const char * id, Context ** ctx, int * frame, RegisterDefinition
 }
 
 static void location_expression_error(void) {
-    str_exception(ERR_OTHER, "Invalid stack trace program");
+    str_exception(ERR_OTHER, "Invalid location expression");
 }
 
 LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame * frame,
@@ -272,6 +272,17 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
             stk[stk_pos - 2] = stk[stk_pos - 2] - stk[stk_pos - 1];
             stk_pos--;
             break;
+        case SFT_CMD_MUL:
+            if (stk_pos < 2) location_expression_error();
+            stk[stk_pos - 2] = stk[stk_pos - 2] * stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_DIV:
+            if (stk_pos < 2) location_expression_error();
+            if (stk[stk_pos - 1] == 0) str_exception(ERR_OTHER, "Division by zero in location expression");
+            stk[stk_pos - 2] = stk[stk_pos - 2] / stk[stk_pos - 1];
+            stk_pos--;
+            break;
         case SFT_CMD_AND:
             if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] & stk[stk_pos - 1];
@@ -280,6 +291,16 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
         case SFT_CMD_OR:
             if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] | stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_XOR:
+            if (stk_pos < 2) location_expression_error();
+            stk[stk_pos - 2] = stk[stk_pos - 2] ^ stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_NEG:
+            if (stk_pos < 1) location_expression_error();
+            stk[stk_pos - 1] = ~stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_GE:
@@ -316,18 +337,18 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
             if (cmd->args.arg_no >= args_cnt) location_expression_error();
             stk[stk_pos++] = args[cmd->args.arg_no];
             break;
-        case SFT_CMD_USER:
+        case SFT_CMD_LOCATION:
             state->stk = stk;
             state->stk_pos = stk_pos;
             state->stk_max = stk_max;
-            state->reg_id_scope = cmd->args.user.reg_id_scope;
-            state->code = cmd->args.user.code_addr;
-            state->code_len = cmd->args.user.code_size;
+            state->reg_id_scope = cmd->args.loc.reg_id_scope;
+            state->code = cmd->args.loc.code_addr;
+            state->code_len = cmd->args.loc.code_size;
             state->code_pos = 0;
-            state->addr_size = cmd->args.user.addr_size;
-            state->big_endian = cmd->args.user.big_endian;
+            state->addr_size = cmd->args.loc.addr_size;
+            state->big_endian = cmd->args.loc.big_endian;
             state->client_op = NULL;
-            if (cmd->args.user.func(state) < 0) exception(errno);
+            if (cmd->args.loc.func(state) < 0) exception(errno);
             stk_max = state->stk_max;
             stk_pos = state->stk_pos;
             stk = state->stk;

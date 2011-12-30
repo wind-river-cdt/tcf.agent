@@ -60,6 +60,7 @@ typedef struct SymInfoCache {
     char * type_id;
     char * base_type_id;
     char * index_type_id;
+    char * container_id;
     char * register_id;
     char * name;
     Context * update_owner;
@@ -256,6 +257,7 @@ static void free_sym_info_cache(SymInfoCache * c) {
         loc_free(c->type_id);
         loc_free(c->base_type_id);
         loc_free(c->index_type_id);
+        loc_free(c->container_id);
         loc_free(c->register_id);
         loc_free(c->name);
         loc_free(c->value);
@@ -302,7 +304,7 @@ static void free_sft_sequence(StackFrameRegisterLocation * seq) {
         unsigned i = 0;
         while (i < seq->cmds_cnt) {
             LocationExpressionCommand * cmd = seq->cmds + i++;
-            if (cmd->cmd == SFT_CMD_USER) loc_free(cmd->args.user.code_addr);
+            if (cmd->cmd == SFT_CMD_LOCATION) loc_free(cmd->args.loc.code_addr);
         }
         loc_free(seq);
     }
@@ -364,6 +366,7 @@ static void read_context_data(InputStream * inp, const char * name, void * args)
     else if (strcmp(name, "TypeID") == 0) s->type_id = json_read_alloc_string(inp);
     else if (strcmp(name, "BaseTypeID") == 0) s->base_type_id = json_read_alloc_string(inp);
     else if (strcmp(name, "IndexTypeID") == 0) s->index_type_id = json_read_alloc_string(inp);
+    else if (strcmp(name, "ContainerID") == 0) s->container_id = json_read_alloc_string(inp);
     else if (strcmp(name, "Size") == 0) { s->size = json_read_long(inp); s->has_size = 1; }
     else if (strcmp(name, "Length") == 0) { s->length = json_read_long(inp); s->has_length = 1; }
     else if (strcmp(name, "LowerBound") == 0) { s->lower_bound = json_read_int64(inp); s->has_lower_bound = 1; }
@@ -843,9 +846,11 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** type) {
     return 0;
 }
 
-int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type) {
-    errno = ERR_UNSUPPORTED;
-    return -1;
+int get_symbol_container(const Symbol * sym, Symbol ** container) {
+    SymInfoCache * c = get_sym_info_cache(sym);
+    if (c == NULL) return -1;
+    if (c->container_id) return id2symbol(c->container_id, container);
+    return 0;
 }
 
 int get_symbol_size(const Symbol * sym, ContextAddress * size) {
@@ -1087,9 +1092,9 @@ int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
 
 /*************************************************************************************************/
 
-static int trace_cmds_cnt = 0;
-static int trace_cmds_max = 0;
-static LocationExpressionCommand * trace_cmds = NULL;
+static int location_cmds_cnt = 0;
+static int location_cmds_max = 0;
+static LocationExpressionCommand * location_cmds = NULL;
 
 static int trace_regs_cnt = 0;
 static int trace_regs_max = 0;
@@ -1135,16 +1140,25 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     return -1;
 }
 
-static void read_stack_trace_command(InputStream * inp, void * args) {
+static void read_dwarf_location_params(InputStream * inp, const char * nm, void * arg) {
+    LocationExpressionCommand * cmd = (LocationExpressionCommand *)arg;
+    if (strcmp(nm, "Machine") == 0) cmd->args.loc.reg_id_scope.machine = (uint16_t)json_read_long(inp);
+    else if (strcmp(nm, "ABI") == 0) cmd->args.loc.reg_id_scope.os_abi = (uint8_t)json_read_long(inp);
+    else if (strcmp(nm, "RegIdType") == 0) cmd->args.loc.reg_id_scope.id_type = (uint8_t)json_read_long(inp);
+    else if (strcmp(nm, "AddrSize") == 0) cmd->args.loc.addr_size = (size_t)json_read_long(inp);
+    else if (strcmp(nm, "BigEndian") == 0) cmd->args.loc.reg_id_scope.big_endian = cmd->args.loc.big_endian = (int)json_read_long(inp);
+}
+
+static void read_location_command(InputStream * inp, void * args) {
     char id[256];
     Context * ctx = NULL;
     int frame = STACK_NO_FRAME;
     LocationExpressionCommand * cmd = NULL;
-    if (trace_cmds_cnt >= trace_cmds_max) {
-        trace_cmds_max += 16;
-        trace_cmds = (LocationExpressionCommand *)loc_realloc(trace_cmds, trace_cmds_max * sizeof(LocationExpressionCommand));
+    if (location_cmds_cnt >= location_cmds_max) {
+        location_cmds_max += 16;
+        location_cmds = (LocationExpressionCommand *)loc_realloc(location_cmds, location_cmds_max * sizeof(LocationExpressionCommand));
     }
-    cmd = trace_cmds + trace_cmds_cnt++;
+    cmd = location_cmds + location_cmds_cnt++;
     memset(cmd, 0, sizeof(*cmd));
     cmd->cmd = json_read_long(inp);
     switch (cmd->cmd) {
@@ -1163,9 +1177,11 @@ static void read_stack_trace_command(InputStream * inp, void * args) {
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         cmd->args.deref.big_endian = json_read_boolean(inp);
         break;
-    case SFT_CMD_USER:
+    case SFT_CMD_LOCATION:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
-        cmd->args.user.code_addr = (uint8_t *)json_read_alloc_binary(inp, &cmd->args.user.code_size);
+        cmd->args.loc.code_addr = (uint8_t *)json_read_alloc_binary(inp, &cmd->args.loc.code_size);
+        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_read_struct(inp, read_dwarf_location_params, cmd);
         break;
     }
 }
@@ -1175,20 +1191,20 @@ static void read_stack_trace_register(InputStream * inp, const char * id, void *
         trace_regs_max += 16;
         trace_regs = (StackFrameRegisterLocation **)loc_realloc(trace_regs, trace_regs_max * sizeof(StackFrameRegisterLocation *));
     }
-    trace_cmds_cnt = 0;
-    if (json_read_array(inp, read_stack_trace_command, NULL)) {
+    location_cmds_cnt = 0;
+    if (json_read_array(inp, read_location_command, NULL)) {
         Context * ctx = NULL;
         int frame = STACK_NO_FRAME;
         StackFrameRegisterLocation * reg = (StackFrameRegisterLocation *)loc_alloc(
-            sizeof(StackFrameRegisterLocation) + (trace_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
+            sizeof(StackFrameRegisterLocation) + (location_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
         if (id2register(id, &ctx, &frame, &reg->reg) < 0) {
             trace_error = errno;
             loc_free(reg);
         }
         else {
-            reg->cmds_cnt = trace_cmds_cnt;
-            reg->cmds_max = trace_cmds_cnt;
-            memcpy(reg->cmds, trace_cmds, trace_cmds_cnt * sizeof(LocationExpressionCommand));
+            reg->cmds_cnt = location_cmds_cnt;
+            reg->cmds_max = location_cmds_cnt;
+            memcpy(reg->cmds, location_cmds, location_cmds_cnt * sizeof(LocationExpressionCommand));
             trace_regs[trace_regs_cnt++] = reg;
         }
     }
@@ -1219,13 +1235,13 @@ static void validate_frame(Channel * c, void * args, int error) {
                 f->address = addr;
                 f->size = size;
             }
-            trace_cmds_cnt = 0;
-            if (json_read_array(&c->inp, read_stack_trace_command, NULL)) {
-                f->fp = (StackFrameRegisterLocation *)loc_alloc(sizeof(StackFrameRegisterLocation) + (trace_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
+            location_cmds_cnt = 0;
+            if (json_read_array(&c->inp, read_location_command, NULL)) {
+                f->fp = (StackFrameRegisterLocation *)loc_alloc(sizeof(StackFrameRegisterLocation) + (location_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
                 f->fp->reg = NULL;
-                f->fp->cmds_cnt = trace_cmds_cnt;
-                f->fp->cmds_max = trace_cmds_cnt;
-                memcpy(f->fp->cmds, trace_cmds, trace_cmds_cnt * sizeof(LocationExpressionCommand));
+                f->fp->cmds_cnt = location_cmds_cnt;
+                f->fp->cmds_max = location_cmds_cnt;
+                memcpy(f->fp->cmds, location_cmds, location_cmds_cnt * sizeof(LocationExpressionCommand));
             }
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             trace_regs_cnt = 0;

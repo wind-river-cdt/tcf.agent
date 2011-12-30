@@ -85,16 +85,20 @@ typedef struct RegisterIdScope {
 #define SFT_CMD_DEREF           4
 #define SFT_CMD_ADD             5
 #define SFT_CMD_SUB             6
-#define SFT_CMD_AND             7
-#define SFT_CMD_OR              8
-#define SFT_CMD_GE              9
-#define SFT_CMD_GT             10
-#define SFT_CMD_LE             11
-#define SFT_CMD_LT             12
-#define SFT_CMD_SHL            13
-#define SFT_CMD_SHR            14
-#define SFT_CMD_ARG            15
-#define SFT_CMD_USER           16
+#define SFT_CMD_MUL             7
+#define SFT_CMD_DIV             8
+#define SFT_CMD_AND             9
+#define SFT_CMD_OR             10
+#define SFT_CMD_XOR            11
+#define SFT_CMD_NEG            12
+#define SFT_CMD_GE             13
+#define SFT_CMD_GT             14
+#define SFT_CMD_LE             15
+#define SFT_CMD_LT             16
+#define SFT_CMD_SHL            17
+#define SFT_CMD_SHR            18
+#define SFT_CMD_ARG            19
+#define SFT_CMD_LOCATION       20
 
 typedef struct LocationPiece {
     int big_endian;
@@ -155,7 +159,7 @@ struct LocationExpressionCommand {
             size_t code_size;
             size_t addr_size;
             int big_endian;
-        } user;
+        } loc;
         unsigned arg_no;
     } args;
 };
