@@ -198,7 +198,7 @@ static ContextAddress find_module(Context * ctx, ELF_File * exe_file, ELF_File *
         else if (strcmp(name, "l_tls_modid") == 0) offs_l_tls_modid = offs;
     }
     if (offs_l_addr == 0 || offs_l_next == 0 || offs_l_tls_modid == 0)
-        str_exception(errno, "Invalid 'link_map' fields");
+        str_exception(ERR_OTHER, "Invalid 'link_map' fields");
     while (link != 0) {
         ContextAddress l_tls_modid = 0;
         if (elf_read_memory_word(ctx, exe_file, link + offs_l_tls_modid, &l_tls_modid) < 0) exception(errno);

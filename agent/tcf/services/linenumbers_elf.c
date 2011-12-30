@@ -42,7 +42,7 @@
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/pathmap.h>
 
-static int is_absolute_path(char * fnm) {
+static int is_absolute_path(const char * fnm) {
     if (fnm[0] == '/') return 1;
     if (fnm[0] == '\\') return 1;
     if (fnm[0] != 0 && fnm[1] == ':') {
@@ -52,7 +52,7 @@ static int is_absolute_path(char * fnm) {
     return 0;
 }
 
-static int compare_path(Channel * chnl, Context * ctx, char * file, char * pwd, char * dir, char * name) {
+static int compare_path(Channel * chnl, Context * ctx, const char * file, const char * pwd, const char * dir, const char * name) {
     int i, j;
     char buf[FILE_PATH_SIZE];
     char * full_name = NULL;
@@ -61,7 +61,7 @@ static int compare_path(Channel * chnl, Context * ctx, char * file, char * pwd, 
     if (name == NULL) return 0;
 
     if (is_absolute_path(name)) {
-        full_name = name;
+        full_name = (char *)name;
     }
     else if (dir != NULL && is_absolute_path(dir)) {
         snprintf(full_name = buf, sizeof(buf), "%s/%s", dir, name);
@@ -73,7 +73,7 @@ static int compare_path(Channel * chnl, Context * ctx, char * file, char * pwd, 
         snprintf(full_name = buf, sizeof(buf), "%s/%s", pwd, name);
     }
     else {
-        full_name = name;
+        full_name = (char *)name;
     }
     full_name = canonic_path_map_file_name(full_name);
 #if SERVICE_PathMap
@@ -81,6 +81,11 @@ static int compare_path(Channel * chnl, Context * ctx, char * file, char * pwd, 
     full_name = apply_path_map(chnl, ctx, buf, PATH_MAP_TO_CLIENT);
     if (full_name != buf) full_name = canonic_path_map_file_name(full_name);
 #endif
+    while (file[0] == '.') {
+        if (file[1] == '.' && file[2] == '/') file += 3;
+        else if (file[1] == '/') file += 2;
+        else break;
+    }
     i = strlen(file);
     j = strlen(full_name);
     return i <= j && strcmp(file, full_name + j - i) == 0;
@@ -97,18 +102,28 @@ static LineNumbersState * get_next_in_text(CompUnit * unit, LineNumbersState * s
     return next;
 }
 
+static LineNumbersState * get_next_in_code(CompUnit * unit, LineNumbersState * state) {
+    LineNumbersState * next = state + 1;
+    if (next >= unit->mStates + unit->mStatesCnt) return NULL;
+    if (state->mFlags & LINE_EndSequence) return NULL;
+    return next;
+}
+
 static void call_client(CompUnit * unit, LineNumbersState * state,
                         ContextAddress state_addr, LineNumbersCallBack * client, void * args) {
     CodeArea area;
-    LineNumbersState * next = get_next_in_text(unit, state);
+    LineNumbersState * code_next = get_next_in_code(unit, state);
+    LineNumbersState * text_next = get_next_in_text(unit, state);
     FileInfo * file_info = unit->mFiles + state->mFile;
 
-    if (state->mAddress >= (state + 1)->mAddress) return;
+    if (code_next == NULL) return;
+    if (state->mAddress >= code_next->mAddress) return;
+
     memset(&area, 0, sizeof(area));
     area.start_line = state->mLine;
     area.start_column = state->mColumn;
-    area.end_line = next ? next->mLine : state->mLine;
-    area.end_column = next ? next->mColumn : 0;
+    area.end_line = text_next ? text_next->mLine : state->mLine + 1;
+    area.end_column = text_next ? text_next->mColumn : 0;
 
     area.directory = unit->mDir;
     if (state->mFileName != NULL) {
@@ -130,8 +145,8 @@ static void call_client(CompUnit * unit, LineNumbersState * state,
     area.file_mtime = file_info->mModTime;
     area.file_size = file_info->mSize;
     area.start_address = state_addr;
-    area.end_address = (state + 1)->mAddress - state->mAddress + state_addr;
-    if (next != NULL) area.next_address = next->mAddress;
+    area.end_address = code_next->mAddress - state->mAddress + state_addr;
+    if (text_next != NULL) area.next_address = text_next->mAddress;
     area.isa = state->mISA;
     area.is_statement = (state->mFlags & LINE_IsStmt) != 0;
     area.basic_block = (state->mFlags & LINE_BasicBlock) != 0;
@@ -146,7 +161,7 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
                                  LineNumbersCallBack * client, void * args) {
     if (unit->mStatesCnt >= 2) {
         unsigned l = 0;
-        unsigned h = unit->mStatesCnt - 1;
+        unsigned h = unit->mStatesCnt;
         while (l < h) {
             unsigned k = (h + l) / 2;
             LineNumbersState * state = unit->mStatesIndex[k];
@@ -162,20 +177,22 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
                     l = k + 1;
                 }
                 else {
-                    unsigned i = k;
-                    while (i > 0) {
-                        LineNumbersState * prev = unit->mStatesIndex[i - 1];
+                    while (k > 0) {
+                        LineNumbersState * prev = unit->mStatesIndex[k - 1];
                         if (prev->mFile != state->mFile) break;
                         if (prev->mLine != state->mLine) break;
                         if (prev->mColumn != state->mColumn) break;
                         state = prev;
-                        i--;
+                        k--;
                     }
                     for (;;) {
                         ContextAddress addr = elf_map_to_run_time_address(ctx, unit->mFile, unit->mTextSection, state->mAddress);
                         if (errno == 0) call_client(unit, state, addr, client, args);
-                        if (i == k) break;
-                        state = unit->mStatesIndex[++i];
+                        if (++k >= unit->mStatesCnt) break;
+                        state = unit->mStatesIndex[k];
+                        if (state->mFile > file) break;
+                        if (state->mLine > line) break;
+                        if (state->mColumn > column) break;
                     }
                     break;
                 }
@@ -252,12 +269,11 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
         ContextAddress range_rt_addr = 0;
         UnitAddressRange * range = elf_find_unit(ctx, addr0, addr1, &range_rt_addr);
         if (range == NULL) break;
-        assert(range_rt_addr != 0);
         if (!range->mUnit->mLineInfoLoaded) load_line_numbers(range->mUnit);
         if (range->mUnit->mStatesCnt >= 2) {
             CompUnit * unit = range->mUnit;
             unsigned l = 0;
-            unsigned h = unit->mStatesCnt - 1;
+            unsigned h = unit->mStatesCnt;
             ContextAddress addr_min = addr0 - range_rt_addr + range->mAddr;
             ContextAddress addr_max = addr1 - range_rt_addr + range->mAddr;
             if (addr_min < range->mAddr) addr_min = range->mAddr;
@@ -269,9 +285,8 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
                     h = k;
                 }
                 else {
-                    LineNumbersState * next = state + 1;
-                    assert(next->mAddress >= state->mAddress);
-                    if (next->mAddress <= addr_min) {
+                    LineNumbersState * next = get_next_in_code(unit, state);
+                    if (next != NULL && next->mAddress <= addr_min) {
                         l = k + 1;
                     }
                     else {
@@ -279,17 +294,14 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
                             LineNumbersState * prev = unit->mStates + k - 1;
                             if (state->mAddress <= addr_min) break;
                             if (prev->mAddress >= addr_max) break;
-                            next = state;
                             state = prev;
                             k--;
                         }
                         for (;;) {
                             call_client(unit, state, state->mAddress - range->mAddr + range_rt_addr, client, args);
-                            k++;
-                            if (k >= unit->mStatesCnt - 1) break;
+                            if (++k >= unit->mStatesCnt) break;
                             state = unit->mStates + k;
                             if (state->mAddress >= addr_max) break;
-                            next = state + 1;
                         }
                         break;
                     }

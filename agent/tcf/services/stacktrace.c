@@ -109,7 +109,7 @@ static void trace_stack(Context * ctx, StackTrace * stack) {
             break;
         }
 #endif
-        if (frame.fp == 0) {
+        if (frame.is_walked == 0) {
             trace(LOG_STACK, "  *** frame info not available ***");
             loc_free(down.regs);
             memset(&down, 0, sizeof(down));

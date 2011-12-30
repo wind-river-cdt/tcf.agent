@@ -35,6 +35,9 @@
 #include <tcf/services/linenumbers.h>
 #include <tcf/services/memorymap.h>
 #include <tcf/services/dwarfframe.h>
+#include <tcf/services/dwarfcache.h>
+#include <tcf/services/stacktrace.h>
+#include <tcf/services/dwarf.h>
 
 #include <tcf/backend/backend.h>
 
@@ -69,6 +72,8 @@ static struct timespec time_start;
 static char ** files = NULL;
 static unsigned files_max = 0;
 static unsigned files_cnt = 0;
+
+extern ObjectInfo * get_symbol_object(Symbol * sym);
 
 static RegisterDefinition * get_reg_by_dwarf_id(unsigned id) {
     static RegisterDefinition ** map = NULL;
@@ -266,6 +271,7 @@ static void error(const char * func) {
 
 static void line_numbers_callback(CodeArea * area, void * args) {
     CodeArea * dst = (CodeArea *)args;
+    if (area->start_address > pc || area->end_address <= pc) return;
     *dst = *area;
 }
 
@@ -309,6 +315,8 @@ static void loc_var_func(void * args, Symbol * sym) {
     size_t value_size = 0;
     int value_big_endian = 0;
     char * name = NULL;
+    StackFrame * frame_info = NULL;
+    LocationInfo * loc_info = NULL;
 
     if (get_symbol_flags(sym, &flags) < 0) {
         error("get_symbol_flags");
@@ -323,10 +331,32 @@ static void loc_var_func(void * args, Symbol * sym) {
             if (strncmp(errno_to_str(err), "Object location or value info not available", 43) == 0) return;
             if (strncmp(errno_to_str(err), "No object location info found", 29) == 0) return;
             if (strncmp(errno_to_str(err), "Object is not available", 23) == 0) return;
-            if (strncmp(errno_to_str(err), "Division by zero in DWARF", 25) == 0) return;
+            if (strncmp(errno_to_str(err), "Division by zero in location", 28) == 0) return;
             if (strncmp(errno_to_str(err), "Cannot find loader debug", 24) == 0) return;
             errno = err;
-            error("get_symbol_address");
+            error("get_symbol_value");
+        }
+    }
+    else if (get_location_info(sym, &loc_info) < 0) {
+        error("get_location_info");
+    }
+    else if (get_frame_info(elf_ctx, STACK_TOP_FRAME, &frame_info) < 0) {
+        error("get_frame_info");
+    }
+    else {
+        Trap trap;
+        assert(loc_info->cmds_cnt > 0);
+        assert(loc_info->size == 0 || (loc_info->addr <= pc && loc_info->addr + loc_info->size > pc));
+        if (set_trap(&trap)) {
+            LocationExpressionState * state = evaluate_location_expression(elf_ctx, frame_info, loc_info->cmds, loc_info->cmds_cnt, NULL, 0);
+            if (state->stk_pos != 1) str_exception(ERR_OTHER, "invalid location expression stack");
+            if (state->stk[0] != addr) str_fmt_exception(ERR_OTHER,
+                "ID 0x%" PRIX64 ": invalid location expression result 0x%" PRIX64 " != 0x%" PRIX64,
+                get_symbol_object(sym)->mID, state->stk[0], addr);
+            clear_trap(&trap);
+        }
+        else {
+            error("evaluate_location_expression");
         }
     }
     if (get_symbol_class(sym, &symbol_class) < 0) {
@@ -358,29 +388,37 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
     }
     if (type != NULL) {
+        Symbol * container = NULL;
         if (get_symbol_type_class(sym, &type_class) < 0) {
             error("get_symbol_type_class");
         }
         if (get_symbol_flags(type, &flags) < 0) {
             error("get_symbol_flags");
         }
-        if (type_class == TYPE_CLASS_ARRAY) {
-            if (get_symbol_index_type(type, &index_type) < 0) {
+        if (get_symbol_index_type(type, &index_type) < 0) {
+            if (type_class == TYPE_CLASS_ARRAY) {
                 error("get_symbol_index_type");
             }
-            if (get_symbol_base_type(type, &base_type) < 0) {
+        }
+        if (get_symbol_base_type(type, &base_type) < 0) {
+            if (type_class == TYPE_CLASS_ARRAY || type_class == TYPE_CLASS_FUNCTION ||
+                type_class == TYPE_CLASS_POINTER || type_class == TYPE_CLASS_MEMBER_PTR) {
                 error("get_symbol_base_type");
-            }
-            if (get_symbol_length(type, &length) < 0) {
-                error("get_symbol_length");
-            }
-            if (get_symbol_lower_bound(type, &lower_bound) < 0) {
-                error("get_symbol_lower_bound");
             }
         }
-        else if (type_class == TYPE_CLASS_POINTER) {
-            if (get_symbol_base_type(type, &base_type) < 0) {
-                error("get_symbol_base_type");
+        if (get_symbol_containing_type(type, &container) < 0) {
+            if (type_class == TYPE_CLASS_MEMBER_PTR) {
+                error("get_symbol_containing_type");
+            }
+        }
+        if (get_symbol_length(type, &length) < 0) {
+            if (type_class == TYPE_CLASS_ARRAY) {
+                error("get_symbol_length");
+            }
+        }
+        if (type_class == TYPE_CLASS_ARRAY) {
+            if (get_symbol_lower_bound(type, &lower_bound) < 0) {
+                error("get_symbol_lower_bound");
             }
         }
         else if (type_class == TYPE_CLASS_ENUMERATION) {
@@ -450,6 +488,7 @@ static void next_pc(void) {
     ContextAddress lt_addr;
     ELF_File * lt_file;
     ELF_Section * lt_sec;
+    ObjectInfo * func_object = NULL;
     struct timespec time_now;
     Trap trap;
     int test_cnt = 0;
@@ -494,6 +533,7 @@ static void next_pc(void) {
         set_regs_PC(elf_ctx, pc);
         send_context_changed_event(elf_ctx);
 
+        func_object = NULL;
         if (find_symbol_by_addr(elf_ctx, STACK_NO_FRAME, pc, &sym) < 0) {
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
                 error("find_symbol_by_addr");
@@ -504,6 +544,7 @@ static void next_pc(void) {
             char name_buf[0x1000];
             ContextAddress addr = 0;
             ContextAddress size = 0;
+            func_object = get_symbol_object(sym);
             if (get_symbol_name(sym, &name) < 0) {
                 error("get_symbol_name");
             }
@@ -547,15 +588,34 @@ static void next_pc(void) {
             error("address_to_line");
         }
         else if (area.start_line > 0) {
+            CodeArea a;
             char elf_file_name[0x1000];
+            if (area.start_address > pc || area.end_address <= pc) {
+                errno = set_errno(ERR_OTHER, "Invalid line area address");
+                error("address_to_line");
+            }
+            memset(&a, 0, sizeof(a));
             strlcpy(elf_file_name, area.file, sizeof(elf_file_name));
-            if (line_to_address(elf_ctx, elf_file_name, area.start_line, area.start_column, line_numbers_callback, &area) < 0) {
+            if (line_to_address(elf_ctx, elf_file_name, area.start_line, area.start_column, line_numbers_callback, &a) < 0) {
                 error("line_to_address");
             }
-        }
-
-        if (enumerate_symbols(elf_ctx, STACK_TOP_FRAME, loc_var_func, NULL) < 0) {
-            error("enumerate_symbols");
+            if (a.start_line > area.start_line || a.end_line <= area.start_line) {
+                errno = set_errno(ERR_OTHER, "Invalid line area line numbers");
+                error("line_to_address");
+            }
+            if (a.start_address > pc || a.end_address <= pc) {
+                errno = set_errno(ERR_OTHER, "Invalid line area address");
+                error("line_to_address");
+            }
+            if (a.start_address != area.start_address || a.end_address != area.end_address) {
+                if (pc < 0x1000) {
+                    /* Bug in GCC: lines in multiple units are mapped to same (invalid) addresses near address zero */
+                }
+                else {
+                    errno = set_errno(ERR_OTHER, "Invalid line area address");
+                    error("line_to_address");
+                }
+            }
         }
 
         lt_file = NULL;
@@ -569,6 +629,38 @@ static void next_pc(void) {
         }
         else {
             error("get_dwarf_stack_frame_info");
+        }
+
+        if (enumerate_symbols(elf_ctx, STACK_TOP_FRAME, loc_var_func, NULL) < 0) {
+            error("enumerate_symbols");
+        }
+
+        if (func_object != NULL) {
+            if (set_trap(&trap)) {
+                StackFrame * frame = NULL;
+                if (get_frame_info(elf_ctx, STACK_TOP_FRAME, &frame) < 0) exception(errno);
+                if (frame->fp != frame_addr) {
+                    PropertyValue v;
+                    uint64_t addr = 0;
+                    memset(&v, 0, sizeof(v));
+                    read_and_evaluate_dwarf_object_property(elf_ctx, STACK_TOP_FRAME, func_object, AT_frame_base, &v);
+                    if (v.mPieceCnt == 1 && v.mPieces[0].reg != NULL && v.mPieces[0].bit_size == 0) {
+                        if (read_reg_value(frame, v.mPieces[0].reg, &addr) < 0) exception(errno);
+                    }
+                    else {
+                        addr = get_numeric_property_value(&v);
+                    }
+                    if (addr != frame->fp) {
+                        /* AT_frame_base is not valid in prologue and epilogue.
+                        str_exception(ERR_OTHER, "Invalid FP");
+                        */
+                    }
+                }
+                clear_trap(&trap);
+            }
+            else if (trap.error != ERR_SYM_NOT_FOUND) {
+                error("AT_frame_base");
+            }
         }
 
         test_cnt++;
@@ -697,7 +789,12 @@ static void next_file(void) {
         r->dwarf_id = (int16_t)(j == 0 ? -1 : j - 1);
         r->eh_frame_id = r->dwarf_id;
         r->name = reg_names[j];
-        snprintf(reg_names[j], sizeof(reg_names[j]), "R%d", j);
+        if (j == 0) {
+            snprintf(reg_names[j], sizeof(reg_names[j]), "PC");
+        }
+        else {
+            snprintf(reg_names[j], sizeof(reg_names[j]), "R%d", j - 1);
+        }
         r->offset = reg_size;
         r->size = f->elf64 ? 8 : 4;
         if (j == 0) r->role = "PC";
@@ -737,6 +834,7 @@ static void add_dir(const char * dir_name) {
         if (strcmp(e->d_name, ".") == 0) continue;
         if (strcmp(e->d_name, "..") == 0) continue;
         if (strcmp(e->d_name + strlen(e->d_name) - 6, ".debug") == 0) continue;
+        if (strcmp(e->d_name + strlen(e->d_name) - 4, ".txt") == 0) continue;
         snprintf(path, sizeof(path), "%s/%s", dir_name, e->d_name);
         if (stat(path, &st) == 0) {
             if (S_ISDIR(st.st_mode)) {

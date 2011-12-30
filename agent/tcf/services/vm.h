@@ -23,37 +23,7 @@
 
 #include <tcf/framework/context.h>
 
-typedef struct VMState {
-    /* Evaluation context */
-    Context * ctx;
-    int stack_frame;
-    int big_endian;
-    size_t addr_size;
-    uint64_t object_address;
-    RegisterIdScope reg_id_scope;
-
-    /* Code to execute */
-    uint8_t * code;
-    size_t code_pos;
-    size_t code_len;
-
-    /* VM callback */
-    void (*client_op)(uint8_t op);
-
-    /* Result */
-    RegisterDefinition * reg;
-    void * value_addr;
-    size_t value_size;
-    uint32_t piece_offs;
-    uint32_t piece_bits;
-
-    /* Stack */
-    unsigned stk_pos;
-    unsigned stk_max;
-    uint64_t * stk;
-} VMState;
-
-extern int evaluate_vm_expression(VMState * state);
+extern int evaluate_vm_expression(LocationExpressionState * state);
 
 #endif /* ENABLE_DebugContext */
 

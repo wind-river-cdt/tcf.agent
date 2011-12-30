@@ -59,6 +59,7 @@ public:
 int tcf_cpp_test_class::s_int = 1;
 int tcf_cpp_test_class::tcf_cpp_test_class_nested::s_int = 2;
 tcf_cpp_test_class_extension * tcf_cpp_text_ce = (tcf_cpp_test_class_extension *)3;
+int tcf_cpp_test_class_extension::* tcf_cpp_test_member_ptr = &tcf_cpp_test_class_extension::f_int;
 
 extern "C" {
 

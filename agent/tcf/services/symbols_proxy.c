@@ -145,8 +145,8 @@ typedef struct StackFrameCache {
     uint64_t address;
     uint64_t size;
 
-    StackTracingCommandSequence * fp;
-    StackTracingCommandSequence ** regs;
+    StackFrameRegisterLocation * fp;
+    StackFrameRegisterLocation ** regs;
     int regs_cnt;
 
     int disposed;
@@ -297,6 +297,17 @@ static void free_list_sym_cache(ListSymCache * c) {
     }
 }
 
+static void free_sft_sequence(StackFrameRegisterLocation * seq) {
+    if (seq != NULL) {
+        unsigned i = 0;
+        while (i < seq->cmds_cnt) {
+            LocationExpressionCommand * cmd = seq->cmds + i++;
+            if (cmd->cmd == SFT_CMD_USER) loc_free(cmd->args.user.code_addr);
+        }
+        loc_free(seq);
+    }
+}
+
 static void free_stack_frame_cache(StackFrameCache * c) {
     list_remove(&c->link_syms);
     c->disposed = 1;
@@ -305,9 +316,9 @@ static void free_stack_frame_cache(StackFrameCache * c) {
         cache_dispose(&c->cache);
         release_error_report(c->error);
         context_unlock(c->ctx);
-        for (i = 0; i < c->regs_cnt; i++) loc_free(c->regs[i]);
+        for (i = 0; i < c->regs_cnt; i++) free_sft_sequence(c->regs[i]);
+        free_sft_sequence(c->fp);
         loc_free(c->regs);
-        loc_free(c->fp);
         loc_free(c);
     }
 }
@@ -832,6 +843,11 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** type) {
     return 0;
 }
 
+int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type) {
+    errno = ERR_UNSUPPORTED;
+    return -1;
+}
+
 int get_symbol_size(const Symbol * sym, ContextAddress * size) {
     SymInfoCache * c = get_sym_info_cache(sym);
     if (c == NULL) return -1;
@@ -1073,27 +1089,60 @@ int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
 
 static int trace_cmds_cnt = 0;
 static int trace_cmds_max = 0;
-static StackTracingCommand * trace_cmds = NULL;
+static LocationExpressionCommand * trace_cmds = NULL;
 
 static int trace_regs_cnt = 0;
 static int trace_regs_max = 0;
-static StackTracingCommandSequence ** trace_regs = NULL;
+static StackFrameRegisterLocation ** trace_regs = NULL;
 
 static int trace_error = 0;
+
+static LocationInfo * location_info = NULL;
 
 ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
     /* TODO: is_plt_section() in symbols proxy */
     return 0;
 }
 
+static LocationExpressionCommand * add_location_command(int op) {
+    LocationExpressionCommand * cmd = NULL;
+    if (location_info->cmds_cnt >= location_info->cmds_max) {
+        location_info->cmds_max += 4;
+        location_info->cmds = (LocationExpressionCommand *)tmp_realloc(location_info->cmds,
+            sizeof(LocationExpressionCommand) * location_info->cmds_max);
+    }
+    cmd = location_info->cmds + location_info->cmds_cnt++;
+    memset(cmd, 0, sizeof(LocationExpressionCommand));
+    cmd->cmd = op;
+    return cmd;
+}
+
+int get_location_info(const Symbol * sym, LocationInfo ** loc) {
+    SymInfoCache * c = get_sym_info_cache(sym);
+    if (c == NULL) return -1;
+    *loc = location_info = (LocationInfo *)tmp_alloc_zero(sizeof(LocationInfo));
+    if (c->has_address) {
+        add_location_command(SFT_CMD_NUMBER)->args.num = c->address;
+        return 0;
+    }
+    if (c->has_offset) {
+        add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
+        add_location_command(SFT_CMD_NUMBER)->args.num = c->offset;
+        add_location_command(SFT_CMD_ADD);
+        return 0;
+    }
+    set_errno(ERR_OTHER, "No object location info found");
+    return -1;
+}
+
 static void read_stack_trace_command(InputStream * inp, void * args) {
     char id[256];
     Context * ctx = NULL;
     int frame = STACK_NO_FRAME;
-    StackTracingCommand * cmd = NULL;
+    LocationExpressionCommand * cmd = NULL;
     if (trace_cmds_cnt >= trace_cmds_max) {
         trace_cmds_max += 16;
-        trace_cmds = (StackTracingCommand *)loc_realloc(trace_cmds, trace_cmds_max * sizeof(StackTracingCommand));
+        trace_cmds = (LocationExpressionCommand *)loc_realloc(trace_cmds, trace_cmds_max * sizeof(LocationExpressionCommand));
     }
     cmd = trace_cmds + trace_cmds_cnt++;
     memset(cmd, 0, sizeof(*cmd));
@@ -1101,18 +1150,22 @@ static void read_stack_trace_command(InputStream * inp, void * args) {
     switch (cmd->cmd) {
     case SFT_CMD_NUMBER:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
-        cmd->num = json_read_int64(inp);
+        cmd->args.num = json_read_int64(inp);
         break;
     case SFT_CMD_REGISTER:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         json_read_string(inp, id, sizeof(id));
-        if (id2register(id, &ctx, &frame, &cmd->reg) < 0) trace_error = errno;
+        if (id2register(id, &ctx, &frame, &cmd->args.reg) < 0) trace_error = errno;
         break;
     case SFT_CMD_DEREF:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
-        cmd->size = json_read_ulong(inp);
+        cmd->args.deref.size = json_read_ulong(inp);
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
-        cmd->big_endian = json_read_boolean(inp);
+        cmd->args.deref.big_endian = json_read_boolean(inp);
+        break;
+    case SFT_CMD_USER:
+        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        cmd->args.user.code_addr = (uint8_t *)json_read_alloc_binary(inp, &cmd->args.user.code_size);
         break;
     }
 }
@@ -1120,14 +1173,14 @@ static void read_stack_trace_command(InputStream * inp, void * args) {
 static void read_stack_trace_register(InputStream * inp, const char * id, void * args) {
     if (trace_regs_cnt >= trace_regs_max) {
         trace_regs_max += 16;
-        trace_regs = (StackTracingCommandSequence **)loc_realloc(trace_regs, trace_regs_max * sizeof(StackTracingCommandSequence *));
+        trace_regs = (StackFrameRegisterLocation **)loc_realloc(trace_regs, trace_regs_max * sizeof(StackFrameRegisterLocation *));
     }
     trace_cmds_cnt = 0;
     if (json_read_array(inp, read_stack_trace_command, NULL)) {
         Context * ctx = NULL;
         int frame = STACK_NO_FRAME;
-        StackTracingCommandSequence * reg = (StackTracingCommandSequence *)loc_alloc(
-            sizeof(StackTracingCommandSequence) + (trace_cmds_cnt - 1) * sizeof(StackTracingCommand));
+        StackFrameRegisterLocation * reg = (StackFrameRegisterLocation *)loc_alloc(
+            sizeof(StackFrameRegisterLocation) + (trace_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
         if (id2register(id, &ctx, &frame, &reg->reg) < 0) {
             trace_error = errno;
             loc_free(reg);
@@ -1135,7 +1188,7 @@ static void read_stack_trace_register(InputStream * inp, const char * id, void *
         else {
             reg->cmds_cnt = trace_cmds_cnt;
             reg->cmds_max = trace_cmds_cnt;
-            memcpy(reg->cmds, trace_cmds, trace_cmds_cnt * sizeof(StackTracingCommand));
+            memcpy(reg->cmds, trace_cmds, trace_cmds_cnt * sizeof(LocationExpressionCommand));
             trace_regs[trace_regs_cnt++] = reg;
         }
     }
@@ -1168,18 +1221,18 @@ static void validate_frame(Channel * c, void * args, int error) {
             }
             trace_cmds_cnt = 0;
             if (json_read_array(&c->inp, read_stack_trace_command, NULL)) {
-                f->fp = (StackTracingCommandSequence *)loc_alloc(sizeof(StackTracingCommandSequence) + (trace_cmds_cnt - 1) * sizeof(StackTracingCommand));
+                f->fp = (StackFrameRegisterLocation *)loc_alloc(sizeof(StackFrameRegisterLocation) + (trace_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
                 f->fp->reg = NULL;
                 f->fp->cmds_cnt = trace_cmds_cnt;
                 f->fp->cmds_max = trace_cmds_cnt;
-                memcpy(f->fp->cmds, trace_cmds, trace_cmds_cnt * sizeof(StackTracingCommand));
+                memcpy(f->fp->cmds, trace_cmds, trace_cmds_cnt * sizeof(LocationExpressionCommand));
             }
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             trace_regs_cnt = 0;
             if (json_read_struct(&c->inp, read_stack_trace_register, NULL)) {
                 f->regs_cnt = trace_regs_cnt;
-                f->regs = (StackTracingCommandSequence **)loc_alloc(trace_regs_cnt * sizeof(StackTracingCommandSequence *));
-                memcpy(f->regs, trace_regs, trace_regs_cnt * sizeof(StackTracingCommandSequence *));
+                f->regs = (StackFrameRegisterLocation **)loc_alloc(trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
+                memcpy(f->regs, trace_regs, trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
             }
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
@@ -1256,10 +1309,25 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
         Trap trap;
         if (set_trap(&trap)) {
             int i;
-            frame->fp = (ContextAddress)evaluate_stack_trace_commands(ctx, frame, f->fp);
+            LocationExpressionState * state;
+            state = evaluate_location_expression(ctx, frame, f->fp->cmds, f->fp->cmds_cnt, NULL, 0);
+            if (state->stk_pos != 1) str_exception(ERR_OTHER, "Invalid stack trace expression");
+            frame->fp = (ContextAddress)state->stk[0];
+            frame->is_walked = 1;
             for (i = 0; i < f->regs_cnt; i++) {
-                uint64_t v = evaluate_stack_trace_commands(ctx, frame, f->regs[i]);
-                if (write_reg_value(down, f->regs[i]->reg, v) < 0) exception(errno);
+                int ok = 0;
+                uint64_t v = 0;
+                Trap trap_reg;
+                if (set_trap(&trap_reg)) {
+                    /* If a saved register value cannot be evaluated - ignore it */
+                    state = evaluate_location_expression(ctx, frame, f->regs[i]->cmds, f->regs[i]->cmds_cnt, NULL, 0);
+                    if (state->stk_pos == 1) {
+                        v = state->stk[0];
+                        ok = 1;
+                    }
+                    clear_trap(&trap_reg);
+                }
+                if (ok && write_reg_value(down, f->regs[i]->reg, v) < 0) exception(errno);
             }
             clear_trap(&trap);
         }

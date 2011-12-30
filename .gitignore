@@ -15,7 +15,6 @@ agent/vc++
 agent/cmake/msvc-debug
 agent/cmake/msvc-release
 agent/cmake/gcc-release
-agent/cmake/build-gcc-debug.sh
 agent/cmake/gcc-debug
 
 # server/

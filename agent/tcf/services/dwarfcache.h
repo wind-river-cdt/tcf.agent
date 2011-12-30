@@ -28,9 +28,9 @@
 
 #if ENABLE_ELF && ENABLE_DebugContext
 
+#include <tcf/framework/errors.h>
 #include <tcf/services/tcf_elf.h>
 #include <tcf/services/dwarfio.h>
-#include <tcf/framework/errors.h>
 
 #ifndef ENABLE_DWARF_LAZY_LOAD
 #  define ENABLE_DWARF_LAZY_LOAD 1
@@ -40,9 +40,7 @@ typedef struct FileInfo FileInfo;
 typedef struct ObjectInfo ObjectInfo;
 typedef struct PubNamesInfo PubNamesInfo;
 typedef struct PubNamesTable PubNamesTable;
-typedef struct ObjectArray ObjectArray;
 typedef struct SymbolInfo SymbolInfo;
-typedef struct PropertyValuePiece PropertyValuePiece;
 typedef struct PropertyValue PropertyValue;
 typedef struct LineNumbersState LineNumbersState;
 typedef struct CompUnit CompUnit;
@@ -52,8 +50,8 @@ typedef struct FrameInfoRange FrameInfoRange;
 typedef struct DWARFCache DWARFCache;
 
 struct FileInfo {
-    char * mName;
-    char * mDir;
+    const char * mName;
+    const char * mDir;
     U4_T mModTime;
     U4_T mSize;
     unsigned mNameHash;
@@ -71,7 +69,8 @@ struct FileInfo {
 #define DOIF_artificial         0x0004
 #define DOIF_specification      0x0008
 #define DOIF_abstract_origin    0x0010
-#define DOIF_children_loaded    0x0020
+#define DOIF_extension          0x0020
+#define DOIF_children_loaded    0x0040
 
 struct ObjectInfo {
 
@@ -89,7 +88,7 @@ struct ObjectInfo {
     U2_T mFlags;
     CompUnit * mCompUnit;
     ObjectInfo * mType;
-    char * mName;
+    const char * mName;
 
     union {
         U2_T mFundType;
@@ -117,13 +116,6 @@ struct ObjectInfo {
     } u;
 };
 
-#define OBJECT_ARRAY_SIZE 128
-
-struct ObjectArray {
-    ObjectArray * mNext;
-    ObjectInfo mArray[OBJECT_ARRAY_SIZE];
-};
-
 struct PubNamesInfo {
     unsigned mNext;
     ContextAddress mID;
@@ -136,15 +128,6 @@ struct PubNamesTable {
     unsigned mMax;
 };
 
-struct PropertyValuePiece {
-    int mBigEndian;
-    ContextAddress mAddress;
-    RegisterDefinition * mRegister;
-    U1_T * mValue;
-    U4_T mBitOffset;
-    U4_T mBitSize;
-};
-
 struct PropertyValue {
     Context * mContext;
     int mFrame;
@@ -155,8 +138,7 @@ struct PropertyValue {
     U1_T * mAddr;
     size_t mSize;
     int mBigEndian;
-    RegisterDefinition * mRegister;
-    PropertyValuePiece * mPieces;
+    LocationPiece * mPieces;
     U4_T mPieceCnt;
 };
 
@@ -244,7 +226,7 @@ struct DWARFCache {
     ELF_Section * mEHFrame;
     ObjectInfo ** mObjectHash;
     unsigned mObjectHashSize;
-    ObjectArray * mObjectList;
+    struct ObjectArray * mObjectList;
     unsigned mObjectArrayPos;
     UnitAddressRange * mAddrRanges;
     unsigned mAddrRangesCnt;
@@ -288,10 +270,16 @@ extern ObjectInfo * find_object(DWARFCache * cache, ContextAddress ID);
 extern UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ContextAddress addr_min, ContextAddress addr_max);
 
 /*
+ * Read a property of a DWARF object, perform ELF relocations if any.
+ * FORM_ADDR values are mapped to run-time address space.
+ */
+extern void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Obj, U2_T Attr, PropertyValue * Value);
+
+/*
  * Read and evaluate a property of a DWARF object, perform ELF relocations if any.
  * FORM_ADDR values are mapped to run-time address space.
  */
-extern void read_and_evaluate_dwarf_object_property(Context * ctx, int frame, U8_T base, ObjectInfo * obj, U2_T attr_tag, PropertyValue * value);
+extern void read_and_evaluate_dwarf_object_property(Context * ctx, int frame, ObjectInfo * obj, U2_T attr_tag, PropertyValue * value);
 
 /*
  * Convert PropertyValue to a number.

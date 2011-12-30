@@ -71,7 +71,14 @@ struct RegisterDefinition {
     const char *    role;          /* the role the register plays in a program execution */
 };
 
-/* Stack tracing command codes */
+typedef struct RegisterIdScope {
+    uint16_t machine;
+    uint8_t os_abi;
+    uint8_t big_endian;
+    uint8_t id_type;
+} RegisterIdScope;
+
+/* Location expression command codes */
 #define SFT_CMD_NUMBER          1
 #define SFT_CMD_REGISTER        2
 #define SFT_CMD_FP              3
@@ -85,32 +92,73 @@ struct RegisterDefinition {
 #define SFT_CMD_LE             11
 #define SFT_CMD_LT             12
 #define SFT_CMD_SHL            13
+#define SFT_CMD_SHR            14
+#define SFT_CMD_ARG            15
+#define SFT_CMD_USER           16
 
-/* Stack tracing command */
-typedef struct StackTracingCommand {
-    int cmd;
-    int64_t num;
-    size_t size;
+typedef struct LocationPiece {
     int big_endian;
-    RegisterDefinition * reg;
-} StackTracingCommand;
-
-/* Stack tracing command sequence */
-typedef struct StackTracingCommandSequence {
-    RegisterDefinition * reg;
-    int cmds_cnt;
-    int cmds_max;
-    StackTracingCommand cmds[1];
-} StackTracingCommandSequence;
-
-/* Complete stack tracing info for a range of instruction addresses */
-typedef struct StackTracingInfo {
     ContextAddress addr;
-    ContextAddress size;
-    StackTracingCommandSequence * fp;
-    StackTracingCommandSequence ** regs;
-    int reg_cnt;
-} StackTracingInfo;
+    RegisterDefinition * reg;
+    void * value;
+    size_t size;
+    unsigned bit_offs;
+    unsigned bit_size;
+} LocationPiece;
+
+typedef struct LocationExpressionState {
+    /* Evaluation context */
+    Context * ctx;
+    struct StackFrame * stack_frame;
+    RegisterIdScope reg_id_scope;
+    int big_endian;
+    size_t addr_size;
+    uint64_t * args;
+    unsigned args_cnt;
+
+    /* Code to execute */
+    uint8_t * code;
+    size_t code_pos;
+    size_t code_len;
+
+    /* Client callback */
+    void (*client_op)(uint8_t op);
+
+    /* Result */
+    LocationPiece * pieces;
+    unsigned pieces_cnt;
+    unsigned pieces_max;
+
+    /* Evaluation stack */
+    unsigned stk_pos;
+    unsigned stk_max;
+    uint64_t * stk;
+} LocationExpressionState;
+
+typedef struct LocationExpressionCommand LocationExpressionCommand;
+typedef int LocationExpressionCallback(LocationExpressionState *);
+
+/* Location expression command */
+struct LocationExpressionCommand {
+    int cmd;
+    union {
+        int64_t num;
+        RegisterDefinition * reg;
+        struct {
+            size_t size;
+            int big_endian;
+        } deref;
+        struct {
+            LocationExpressionCallback * func;
+            RegisterIdScope reg_id_scope;
+            uint8_t * code_addr;
+            size_t code_size;
+            size_t addr_size;
+            int big_endian;
+        } user;
+        unsigned arg_no;
+    } args;
+};
 
 #define STACK_BOTTOM_FRAME  0
 #define STACK_NO_FRAME      (-1)
@@ -118,18 +166,12 @@ typedef struct StackTracingInfo {
 
 typedef struct StackFrame {
     int is_top_frame;
+    int is_walked;          /* Data collected by: 0 - crawl, 1 - walk */
     int has_reg_data;
     Context * ctx;
     ContextAddress fp;      /* frame address */
     RegisterData * regs;    /* register values */
 } StackFrame;
-
-typedef struct RegisterIdScope {
-    uint16_t machine;
-    uint8_t os_abi;
-    uint8_t big_endian;
-    uint8_t id_type;
-} RegisterIdScope;
 
 /* Return array of CPU register definitions. Last item in the array has name == NULL */
 extern RegisterDefinition * get_reg_definitions(Context * ctx);
@@ -186,8 +228,10 @@ extern uint8_t * get_break_instruction(Context * ctx, size_t * size);
  */
 extern int crawl_stack_frame(StackFrame * frame, StackFrame * down);
 
-/* Execute stack tracing command sequence */
-extern uint64_t evaluate_stack_trace_commands(Context * ctx, StackFrame * frame, StackTracingCommandSequence * cmds);
+/* Execute location expression */
+extern LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame * frame,
+                                             LocationExpressionCommand * cmds, unsigned cmds_cnt,
+                                             uint64_t * args, unsigned args_cnt);
 
 #endif /* ENABLE_DebugContext */
 

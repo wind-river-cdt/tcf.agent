@@ -209,7 +209,7 @@ U4_T dio_ReadULEB128(void) {
     int i = 0;
     for (;; i += 7) {
         U1_T n = dio_ReadU1();
-        Res |= (n & 0x7Fu) << i;
+        Res |= (U4_T)(n & 0x7Fu) << i;
         if ((n & 0x80) == 0) break;
     }
     return Res;
@@ -220,9 +220,9 @@ I4_T dio_ReadSLEB128(void) {
     int i = 0;
     for (;; i += 7) {
         U1_T n = dio_ReadU1();
-        Res |= (n & 0x7Fu) << i;
+        Res |= (U4_T)(n & 0x7Fu) << i;
         if ((n & 0x80) == 0) {
-            Res |= -(n & 0x40) << i;
+            Res |= -(I4_T)(n & 0x40) << i;
             break;
         }
     }
@@ -234,7 +234,7 @@ U8_T dio_ReadU8LEB128(void) {
     int i = 0;
     for (;; i += 7) {
         U1_T n = dio_ReadU1();
-        Res |= (n & 0x7Fu) << i;
+        Res |= (U8_T)(n & 0x7Fu) << i;
         if ((n & 0x80) == 0) break;
     }
     return Res;
@@ -245,9 +245,9 @@ I8_T dio_ReadS8LEB128(void) {
     int i = 0;
     for (;; i += 7) {
         U1_T n = dio_ReadU1();
-        Res |= (n & 0x7Fu) << i;
+        Res |= (U8_T)(n & 0x7Fu) << i;
         if ((n & 0x80) == 0) {
-            Res |= -(n & 0x40) << i;
+            Res |= -(I8_T)(n & 0x40) << i;
             break;
         }
     }
@@ -507,6 +507,7 @@ int dio_ReadEntry(DIO_EntryCallBack CallBack, U2_T TargetAttr) {
             case AT_specification_v1:
             case AT_specification_v2:
             case AT_abstract_origin:
+            case AT_extension:
                 break;
             default:
                 switch (Form) {
@@ -757,6 +758,7 @@ void dio_ChkBlock(U2_T Form, U1_T ** Buf, size_t * Size) {
     case FORM_DATA2     :
     case FORM_DATA4     :
     case FORM_DATA8     :
+    case FORM_EXPRLOC   :
     case FORM_SEC_OFFSET:
         assert(dio_gFormDataAddr >= sSection->data);
         assert((U1_T *)dio_gFormDataAddr < (U1_T *)sSection->data + sSection->size);

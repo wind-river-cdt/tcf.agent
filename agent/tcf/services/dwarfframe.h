@@ -26,8 +26,8 @@
 
 #if ENABLE_ELF && ENABLE_DebugContext
 
-#include <tcf/framework/context.h>
 #include <tcf/services/dwarfcache.h>
+#include <tcf/services/symbols.h>
 
 /*
  * Lookup stack tracing information in ELF file, in .debug_frame and .eh_frame sections.
@@ -46,10 +46,10 @@ extern void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Secti
 extern U8_T dwarf_stack_trace_addr;
 extern U8_T dwarf_stack_trace_size;
 
-extern StackTracingCommandSequence * dwarf_stack_trace_fp;
+extern StackFrameRegisterLocation * dwarf_stack_trace_fp;
 
 extern int dwarf_stack_trace_regs_cnt;
-extern StackTracingCommandSequence ** dwarf_stack_trace_regs;
+extern StackFrameRegisterLocation ** dwarf_stack_trace_regs;
 
 #endif /* ENABLE_ELF && ENABLE_DebugContext */
 

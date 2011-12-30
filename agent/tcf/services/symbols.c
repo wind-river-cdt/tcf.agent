@@ -26,6 +26,7 @@
 #include <tcf/framework/cache.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/symbols.h>
+#include <tcf/services/vm.h>
 
 static const char * SYMBOLS = "Symbols";
 
@@ -47,6 +48,7 @@ static void command_get_context_cache_client(void * x) {
     Symbol * type = NULL;
     Symbol * base = NULL;
     Symbol * index = NULL;
+    Symbol * container = NULL;
     int has_size = 0;
     int has_length = 0;
     int has_lower_bound = 0;
@@ -75,6 +77,7 @@ static void command_get_context_cache_client(void * x) {
         get_symbol_type(sym, &type);
         get_symbol_base_type(sym, &base);
         get_symbol_index_type(sym, &index);
+        get_symbol_containing_type(sym, &container);
         has_size = get_symbol_size(sym, &size) == 0;
         has_length = get_symbol_length(sym, &length) == 0;
         if (has_length) {
@@ -156,6 +159,13 @@ static void command_get_context_cache_client(void * x) {
             json_write_string(&c->out, "IndexTypeID");
             write_stream(&c->out, ':');
             json_write_string(&c->out, symbol2id(index));
+            write_stream(&c->out, ',');
+        }
+
+        if (container != NULL) {
+            json_write_string(&c->out, "ContainigTypeID");
+            write_stream(&c->out, ':');
+            json_write_string(&c->out, symbol2id(container));
             write_stream(&c->out, ',');
         }
 
@@ -586,28 +596,36 @@ typedef struct CommandFindFrameInfo {
     ContextAddress addr;
 } CommandFindFrameInfo;
 
-static void write_commands(OutputStream * out, Context * ctx, StackTracingCommandSequence * seq) {
+static void write_commands(OutputStream * out, Context * ctx, StackFrameRegisterLocation * seq) {
     if (seq != NULL) {
-        int i;
+        unsigned i;
         write_stream(out, '[');
         for (i = 0; i < seq->cmds_cnt; i++) {
-            StackTracingCommand * cmd = seq->cmds + i;
+            LocationExpressionCommand * cmd = seq->cmds + i;
             if (i > 0) write_stream(out, ',');
             json_write_long(out, cmd->cmd);
             switch (cmd->cmd) {
             case SFT_CMD_NUMBER:
                 write_stream(out, ',');
-                json_write_int64(out, cmd->num);
+                json_write_int64(out, cmd->args.num);
                 break;
             case SFT_CMD_REGISTER:
                 write_stream(out, ',');
-                json_write_string(out, register2id(ctx, STACK_NO_FRAME, cmd->reg));
+                json_write_string(out, register2id(ctx, STACK_NO_FRAME, cmd->args.reg));
                 break;
             case SFT_CMD_DEREF:
                 write_stream(out, ',');
-                json_write_ulong(out, cmd->size);
+                json_write_ulong(out, cmd->args.deref.size);
                 write_stream(out, ',');
-                json_write_boolean(out, cmd->big_endian);
+                json_write_boolean(out, cmd->args.deref.big_endian);
+                break;
+            case SFT_CMD_USER:
+                write_stream(out, ',');
+                json_write_binary(out, cmd->args.user.code_addr, cmd->args.user.code_size);
+                write_stream(out, ',');
+                /* TODO: SFT_CMD_USER parameters */
+                write_stream(out, '{');
+                write_stream(out, '}');
                 break;
             }
         }

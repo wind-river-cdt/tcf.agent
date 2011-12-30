@@ -35,6 +35,13 @@
 
 #define OBJ_HASH(Cache,ID) (((U4_T)(ID) + ((U4_T)(ID) >> 8)) % Cache->mObjectHashSize)
 
+#define OBJECT_ARRAY_SIZE 128
+
+typedef struct ObjectArray {
+    struct ObjectArray * mNext;
+    ObjectInfo mArray[OBJECT_ARRAY_SIZE];
+} ObjectArray;
+
 typedef struct ObjectReference {
     ELF_Section * sec;
     ObjectInfo * obj;
@@ -488,6 +495,11 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         add_object_reference(dio_gFormSection, add_object_info((ContextAddress)dio_gFormData), Info);
         Info->mFlags |= DOIF_abstract_origin;
         break;
+    case AT_extension:
+        dio_ChkRef(Form);
+        add_object_reference(dio_gFormSection, add_object_info((ContextAddress)dio_gFormData), Info);
+        Info->mFlags |= DOIF_extension;
+        break;
     case AT_low_pc:
         dio_ChkAddr(Form);
         Info->u.mAddr.mLowPC = (ContextAddress)dio_gFormData;
@@ -586,12 +598,18 @@ static void read_object_refs(void) {
         }
         if (ref.obj != NULL) {
             assert(ref.org->mTag != 0);
+            if (ref.obj->mFlags & DOIF_specification) ref.org->mDefinition = ref.obj;
             if (ref.obj->mName == NULL) ref.obj->mName = ref.org->mName;
             if (ref.obj->mType == NULL) ref.obj->mType = ref.org->mType;
-            ref.obj->mFlags |= ref.org->mFlags & ~DOIF_children_loaded;
-            assert(ref.obj->mDefinition == NULL);
-            ref.obj->mDefinition = ref.org->mDefinition;
-            ref.org->mDefinition = ref.obj;
+            ref.obj->mFlags |= ref.org->mFlags & ~(DOIF_children_loaded | DOIF_declaration | DOIF_specification);
+            if (ref.obj->mFlags & DOIF_external) {
+                ObjectInfo * cls = ref.org;
+                while (cls->mParent != NULL &&
+                    (cls->mParent->mTag == TAG_class_type || cls->mParent->mTag == TAG_structure_type)) {
+                    cls = cls->mParent;
+                }
+                cls->mFlags |= DOIF_external;
+            }
         }
     }
     sObjRefsPos = 0;
@@ -773,7 +791,7 @@ static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
     while (unit != NULL) {
         ObjectInfo * obj = get_dwarf_children(unit);
         while (obj != NULL) {
-            if (obj->mFlags & DOIF_external) {
+            if ((obj->mFlags & DOIF_external) && obj->mDefinition == NULL) {
                 unsigned h;
                 PubNamesInfo * info = NULL;
                 if (tbl->mCnt >= tbl->mMax) {
@@ -926,10 +944,12 @@ static void * gop_gFormDataAddr = NULL;
 static ELF_Section * gop_gFormSection = NULL;
 static U8_T gop_gSpecification = 0;
 static U8_T gop_gAbstractOrigin = 0;
+static U8_T gop_gExtension = 0;
 
 static void get_object_property_callback(U2_T Tag, U2_T Attr, U2_T Form) {
     if (Attr == AT_specification_v2) gop_gSpecification = dio_gFormData;
     if (Attr == AT_abstract_origin) gop_gAbstractOrigin = dio_gFormData;
+    if (Attr == AT_extension) gop_gExtension = dio_gFormData;
     if (Attr != gop_gAttr) return;
     gop_gForm = Form;
     gop_gFormData = dio_gFormData;
@@ -941,8 +961,7 @@ static void get_object_property_callback(U2_T Tag, U2_T Attr, U2_T Form) {
 U8_T get_numeric_property_value(PropertyValue * Value) {
     U8_T Res = 0;
 
-    if (Value->mPieces != NULL || Value->mRegister != NULL ||
-            (Value->mAddr != NULL && Value->mForm == FORM_EXPR_VALUE)) {
+    if (Value->mPieces != NULL) {
         str_exception(ERR_INV_DWARF, "Constant DWARF attribute value expected");
     }
     else if (Value->mAddr != NULL) {
@@ -958,7 +977,7 @@ U8_T get_numeric_property_value(PropertyValue * Value) {
     return Res;
 }
 
-static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Obj, U2_T Attr, PropertyValue * Value) {
+void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Obj, U2_T Attr, PropertyValue * Value) {
 
     memset(Value, 0, sizeof(PropertyValue));
     Value->mContext = Ctx;
@@ -1038,11 +1057,13 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
         gop_gForm = 0;
         gop_gSpecification = 0;
         gop_gAbstractOrigin = 0;
+        gop_gExtension = 0;
         dio_ReadEntry(get_object_property_callback, gop_gAttr);
         dio_ExitSection();
         if (gop_gForm != 0) break;
         if (gop_gSpecification != 0) dio_EnterSection(&sCompUnit->mDesc, sDebugSection, gop_gSpecification - sDebugSection->addr);
         else if (gop_gAbstractOrigin != 0) dio_EnterSection(&sCompUnit->mDesc, sDebugSection, gop_gAbstractOrigin - sDebugSection->addr);
+        else if (gop_gExtension != 0) dio_EnterSection(&sCompUnit->mDesc, sDebugSection, gop_gExtension - sDebugSection->addr);
         else break;
     }
 
@@ -1054,7 +1075,7 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
     case FORM_REF4      :
     case FORM_REF8      :
     case FORM_REF_UDATA :
-        if (Attr == AT_import || Attr == AT_specification_v2) {
+        if (Attr == AT_import || Attr == AT_specification_v2 || Attr == AT_constaining_type) {
             Value->mValue = gop_gFormData;
         }
         else {
@@ -1062,12 +1083,13 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
             ObjectInfo * RefObj = find_object(sCache, (ContextAddress)gop_gFormData);
 
             if (RefObj == NULL) exception(ERR_INV_DWARF);
-            read_and_evaluate_dwarf_object_property(Ctx, Frame, 0, RefObj, AT_location, &ValueAddr);
-            if (ValueAddr.mRegister != NULL) {
+            read_and_evaluate_dwarf_object_property(Ctx, Frame, RefObj, AT_location, &ValueAddr);
+            if (ValueAddr.mPieceCnt == 1 && ValueAddr.mPieces[0].reg != NULL && ValueAddr.mPieces[0].bit_size == 0) {
                 static U1_T Buf[8];
                 StackFrame * Frame = NULL;
+                RegisterDefinition * Register = ValueAddr.mPieces[0].reg;
                 if (get_frame_info(ValueAddr.mContext, ValueAddr.mFrame, &Frame) < 0) exception(errno);
-                if (read_reg_bytes(Frame, ValueAddr.mRegister, 0, ValueAddr.mRegister->size, Buf) < 0) exception(errno);
+                if (read_reg_bytes(Frame, Register, 0, Register->size, Buf) < 0) exception(errno);
                 Value->mAddr = Buf;
                 Value->mSize = ValueAddr.mSize;
                 Value->mBigEndian = ValueAddr.mBigEndian;
@@ -1075,14 +1097,13 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
             else {
                 static U1_T Buf[8];
                 PropertyValue ValueSize;
-                ContextAddress Addr;
                 size_t Size;
 
-                Addr = (ContextAddress)get_numeric_property_value(&ValueAddr);
-                read_and_evaluate_dwarf_object_property(Ctx, Frame, Addr, RefObj, AT_byte_size, &ValueSize);
+                dwarf_expression_obj_addr = get_numeric_property_value(&ValueAddr);
+                read_and_evaluate_dwarf_object_property(Ctx, Frame, RefObj, AT_byte_size, &ValueSize);
                 Size = (size_t)get_numeric_property_value(&ValueSize);
                 if (Size < 1 || Size > sizeof(Buf)) exception(ERR_INV_DATA_TYPE);
-                if (context_read_mem(Ctx, Addr, Buf, Size) < 0) exception(errno);
+                if (context_read_mem(Ctx, (ContextAddress)dwarf_expression_obj_addr, Buf, Size) < 0) exception(errno);
                 Value->mAddr = Buf;
                 Value->mSize = Size;
             }
@@ -1126,7 +1147,7 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
             }
             if (Obj->mTag == TAG_ptr_to_member_type) {
                 Value->mForm = FORM_UDATA;
-                Value->mValue = sCompUnit->mDesc.mAddressSize * 2;
+                Value->mValue = sCompUnit->mDesc.mAddressSize;
                 break;
             }
             if (Obj->mTag == TAG_structure_type || Obj->mTag == TAG_class_type || Obj->mTag == TAG_union_type) {
@@ -1137,7 +1158,7 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
                     ObjectInfo * d = c;
                     while (d->mTag == TAG_imported_declaration) {
                         PropertyValue v;
-                        read_and_evaluate_dwarf_object_property(Ctx, Frame, 0, d, AT_import, &v);
+                        read_and_evaluate_dwarf_object_property(Ctx, Frame, d, AT_import, &v);
                         d = find_object(
                             (DWARFCache *)Obj->mCompUnit->mFile->dwarf_dt_cache,
                             (ContextAddress)get_numeric_property_value(&v));
@@ -1151,6 +1172,14 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
                         case TAG_typedef:
                         case TAG_subprogram:
                         case TAG_template_type_param:
+                        case TAG_class_type:
+                        case TAG_structure_type:
+                        case TAG_union_type:
+                        case TAG_enumeration_type:
+                            break;
+                        case TAG_member:
+                            if (d->mFlags & DOIF_external) break;
+                            OK = 0;
                             break;
                         default:
                             OK = 0;
@@ -1160,6 +1189,7 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
                 }
                 if (OK) {
                     Value->mForm = FORM_UDATA;
+                    Value->mAddr = 0;
                     Value->mValue = 0;
                     break;
                 }
@@ -1173,16 +1203,36 @@ static void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Ob
     sDebugSection = NULL;
 }
 
-void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, U8_T Base, ObjectInfo * Obj, U2_T Attr, PropertyValue * Value) {
+void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Obj, U2_T Attr, PropertyValue * Value) {
     read_dwarf_object_property(Ctx, Frame, Obj, Attr, Value);
     assert(Value->mContext == Ctx);
     assert(Value->mFrame == Frame);
     assert(Value->mObject == Obj);
     assert(Value->mAttr == Attr);
     if (Value->mForm == FORM_EXPRLOC) {
-        dwarf_evaluate_expression(Base, Value);
+        dwarf_evaluate_expression(Value);
     }
-    else if (Attr == AT_location || Attr == AT_data_member_location || Attr == AT_string_length || Attr == AT_frame_base) {
+    else if (Attr == AT_data_member_location) {
+        switch (Value->mForm) {
+        case FORM_DATA1     :
+        case FORM_DATA4     :
+        case FORM_DATA8     :
+        case FORM_SDATA     :
+        case FORM_UDATA     :
+            Value->mValue = dwarf_expression_obj_addr + get_numeric_property_value(Value);
+            Value->mForm = FORM_UDATA;
+            Value->mAddr = NULL;
+            Value->mSize = 0;
+            break;
+        case FORM_BLOCK1    :
+        case FORM_BLOCK2    :
+        case FORM_BLOCK4    :
+        case FORM_BLOCK     :
+            dwarf_evaluate_expression(Value);
+            break;
+        }
+    }
+    else if (Attr == AT_location || Attr == AT_string_length || Attr == AT_frame_base || Attr == AT_use_location) {
         switch (Value->mForm) {
         case FORM_DATA4     :
         case FORM_DATA8     :
@@ -1190,7 +1240,7 @@ void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, U8_T Base
         case FORM_BLOCK2    :
         case FORM_BLOCK4    :
         case FORM_BLOCK     :
-            dwarf_evaluate_expression(Base, Value);
+            dwarf_evaluate_expression(Value);
             break;
         }
     }
@@ -1200,7 +1250,7 @@ void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, U8_T Base
         case FORM_BLOCK2    :
         case FORM_BLOCK4    :
         case FORM_BLOCK     :
-            dwarf_evaluate_expression(Base, Value);
+            dwarf_evaluate_expression(Value);
             break;
         }
     }
@@ -1599,8 +1649,9 @@ UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ContextAddress 
                 first = rp->mAddr + rp->mSize <= addr_min;
             }
             if (first) return rk;
+            h = k;
         }
-        if (rk->mAddr >= addr_min) h = k;
+        else if (rk->mAddr >= addr_min) h = k;
         else l = k + 1;
     }
     return NULL;

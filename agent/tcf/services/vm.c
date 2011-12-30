@@ -25,22 +25,18 @@
 #include <tcf/services/dwarf.h>
 #include <tcf/services/vm.h>
 
-#define check_e_stack(n) { if (state->stk_pos < n) inv_dwarf("Invalid DWARF expression stack"); }
+#define check_e_stack(n) { if (state->stk_pos < n) inv_dwarf("Invalid location expression stack"); }
 
-static VMState * state = NULL;
+static LocationExpressionState * state = NULL;
+static RegisterDefinition * reg_def = NULL;
+static void * value_addr = NULL;
+static size_t value_size = 0;
 static uint8_t * code = NULL;
 static size_t code_pos = 0;
 static size_t code_len = 0;
 
 static void inv_dwarf(const char * msg) {
     str_exception(ERR_INV_DWARF, msg);
-}
-
-static StackFrame * get_stack_frame(void) {
-    StackFrame * info = NULL;
-    if (state->stack_frame == STACK_NO_FRAME) return NULL;
-    if (get_frame_info(state->ctx, state->stack_frame, &info) < 0) exception(errno);
-    return info;
 }
 
 static uint64_t read_memory(uint64_t addr, size_t size) {
@@ -83,7 +79,7 @@ static uint32_t read_u4leb128(void) {
     int i = 0;
     for (;; i += 7) {
         uint8_t n = read_u1();
-        res |= (n & 0x7Fu) << i;
+        res |= (uint32_t)(n & 0x7Fu) << i;
         if ((n & 0x80) == 0) break;
     }
     return res;
@@ -94,7 +90,7 @@ static uint64_t read_u8leb128(void) {
     int i = 0;
     for (;; i += 7) {
         uint8_t n = read_u1();
-        res |= (n & 0x7Fu) << i;
+        res |= (uint64_t)(n & 0x7Fu) << i;
         if ((n & 0x80) == 0) break;
     }
     return res;
@@ -105,9 +101,9 @@ static int64_t read_i8leb128(void) {
     int i = 0;
     for (;; i += 7) {
         uint8_t n = read_u1();
-        res |= (n & 0x7Fu) << i;
+        res |= (uint64_t)(n & 0x7Fu) << i;
         if ((n & 0x80) == 0) {
-            res |= -(n & 0x40) << i;
+            res |= -(int64_t)(n & 0x40) << i;
             break;
         }
     }
@@ -136,19 +132,48 @@ static uint64_t read_ua(void) {
     return 0;
 }
 
-static void set_state(VMState * s) {
+static LocationPiece * add_piece(void) {
+    LocationPiece * piece = NULL;
+    if (state->pieces_cnt >= state->pieces_max) {
+        state->pieces_max += 4;
+        state->pieces = (LocationPiece *)tmp_realloc(state->pieces, state->pieces_max * sizeof(LocationPiece));
+    }
+    piece = state->pieces + state->pieces_cnt++;
+    memset(piece, 0, sizeof(LocationPiece));
+    if (reg_def != NULL) {
+        piece->reg = reg_def;
+        piece->size = reg_def->size;
+        piece->big_endian = reg_def->big_endian;
+    }
+    else if (value_addr != NULL) {
+        piece->value = value_addr;
+        piece->size = value_size;
+        piece->big_endian = state->big_endian;
+    }
+    else if (state->stk_pos == 0) {
+        /* An empty location description represents a piece or all of an object that is
+         * present in the source but not in the object code (perhaps due to optimization). */
+    }
+    else {
+        state->stk_pos--;
+        piece->addr = (ContextAddress)state->stk[state->stk_pos];
+        piece->big_endian = state->big_endian;
+    }
+    reg_def = NULL;
+    value_addr = NULL;
+    return piece;
+}
+
+static void set_state(LocationExpressionState * s) {
     state = s;
     code = state->code;
     code_pos = state->code_pos;
     code_len = state->code_len;
-    state->reg = NULL;
-    state->value_addr = NULL;
-    state->value_size = 0;
-    state->piece_offs = 0;
-    state->piece_bits = 0;
+    reg_def = NULL;
 }
 
-static void get_state(VMState * s) {
+static void get_state(LocationExpressionState * s) {
+    if (reg_def != NULL || value_addr != NULL) add_piece();
     s->code_pos = code_pos;
     state = NULL;
     code = NULL;
@@ -166,9 +191,10 @@ static int is_end_of_loc_expr(void) {
 static void evaluate_expression(void) {
     uint64_t data = 0;
 
-    if (code_len == 0) inv_dwarf("DWARF expression size = 0");
+    if (code_len == 0) inv_dwarf("location expression size = 0");
 
-    while (code_pos < code_len && state->piece_bits == 0) {
+    while (code_pos < code_len) {
+        LocationPiece * piece = NULL;
         uint8_t op = code[code_pos++];
 
         if (state->stk_pos + 4 > state->stk_max) {
@@ -281,7 +307,7 @@ static void evaluate_expression(void) {
         case OP_div:
             check_e_stack(2);
             state->stk_pos--;
-            if (state->stk[state->stk_pos] == 0) inv_dwarf("Division by zero in DWARF expression");
+            if (state->stk[state->stk_pos] == 0) inv_dwarf("Division by zero in location expression");
             state->stk[state->stk_pos - 1] /= state->stk[state->stk_pos];
             break;
         case OP_minus:
@@ -292,7 +318,7 @@ static void evaluate_expression(void) {
         case OP_mod:
             check_e_stack(2);
             state->stk_pos--;
-            if (state->stk[state->stk_pos] == 0) inv_dwarf("Division by zero in DWARF expression");
+            if (state->stk[state->stk_pos] == 0) inv_dwarf("Division by zero in location expression");
             state->stk[state->stk_pos - 1] %= state->stk[state->stk_pos];
             break;
         case OP_mul:
@@ -472,25 +498,25 @@ static void evaluate_expression(void) {
         case OP_reg31:
             {
                 unsigned n = op - OP_reg0;
-                if (!is_end_of_loc_expr()) inv_dwarf("OP_reg must be last instruction");
-                state->reg = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
-                if (state->reg == NULL) exception(errno);
+                if (!is_end_of_loc_expr()) inv_dwarf("OP_reg* must be last instruction");
+                reg_def = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
+                if (reg_def == NULL) exception(errno);
             }
             break;
         case OP_regx:
             {
                 unsigned n = (unsigned)read_u4leb128();
                 if (!is_end_of_loc_expr()) inv_dwarf("OP_regx must be last instruction");
-                state->reg = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
-                if (state->reg == NULL) exception(errno);
+                reg_def = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
+                if (reg_def == NULL) exception(errno);
             }
             break;
         case OP_reg:
             {
                 unsigned n = (unsigned)read_ua();
                 if (!is_end_of_loc_expr()) inv_dwarf("OP_reg must be last instruction");
-                state->reg = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
-                if (state->reg == NULL) exception(errno);
+                reg_def = get_reg_by_id(state->ctx, n, &state->reg_id_scope);
+                if (reg_def == NULL) exception(errno);
             }
             break;
         case OP_breg0:
@@ -528,7 +554,7 @@ static void evaluate_expression(void) {
             {
                 RegisterDefinition * def = get_reg_by_id(state->ctx, op - OP_breg0, &state->reg_id_scope);
                 if (def == NULL) exception(errno);
-                if (read_reg_value(get_stack_frame(), def, state->stk + state->stk_pos) < 0) exception(errno);
+                if (read_reg_value(state->stack_frame, def, state->stk + state->stk_pos) < 0) exception(errno);
                 state->stk[state->stk_pos++] += read_i8leb128();
             }
             break;
@@ -536,7 +562,7 @@ static void evaluate_expression(void) {
             {
                 RegisterDefinition * def = get_reg_by_id(state->ctx, (unsigned)read_u4leb128(), &state->reg_id_scope);
                 if (def == NULL) exception(errno);
-                if (read_reg_value(get_stack_frame(), def, state->stk + state->stk_pos) < 0) exception(errno);
+                if (read_reg_value(state->stack_frame, def, state->stk + state->stk_pos) < 0) exception(errno);
                 state->stk[state->stk_pos++] += read_i8leb128();
             }
             break;
@@ -544,13 +570,13 @@ static void evaluate_expression(void) {
             {
                 RegisterDefinition * def = get_reg_by_id(state->ctx, (unsigned)read_ua(), &state->reg_id_scope);
                 if (def == NULL) exception(errno);
-                if (read_reg_value(get_stack_frame(), def, state->stk + state->stk_pos) < 0) exception(errno);
+                if (read_reg_value(state->stack_frame, def, state->stk + state->stk_pos) < 0) exception(errno);
                 state->stk_pos++;
             }
             break;
         case OP_call_frame_cfa:
             {
-                StackFrame * frame = get_stack_frame();
+                StackFrame * frame = state->stack_frame;
                 if (frame == NULL) str_exception(ERR_INV_ADDRESS, "Stack frame address not available");
                 state->stk[state->stk_pos++] = frame->fp;
             }
@@ -558,46 +584,37 @@ static void evaluate_expression(void) {
         case OP_nop:
             break;
         case OP_push_object_address:
-            state->stk[state->stk_pos++] = state->object_address;
+            if (state->args_cnt == 0) str_exception(ERR_INV_ADDRESS, "Invalid address of containing object");
+            state->stk[state->stk_pos++] = state->args[0];
             break;
         case OP_piece:
-            state->piece_bits = read_u4leb128() * 8;
-            state->piece_offs = 0;
-            if (code_pos < code_len && state->piece_bits == 0) {
-                if (state->reg) state->reg = NULL;
-                else if (state->value_addr) state->value_addr = NULL;
-                else state->stk_pos--;
-            }
+            piece = add_piece();
+            piece->size = read_u4leb128();
             break;
         case OP_bit_piece:
-            state->piece_bits = read_u4leb128();
-            state->piece_offs = read_u4leb128();
-            if (code_pos < code_len && state->piece_bits == 0) {
-                if (state->reg) state->reg = NULL;
-                else if (state->value_addr) state->value_addr = NULL;
-                else state->stk_pos--;
-                state->piece_offs = 0;
-            }
+            piece = add_piece();
+            piece->bit_size = read_u4leb128();
+            piece->bit_offs = read_u4leb128();
             break;
         case OP_implicit_value:
-            state->value_size = read_u4leb128();
-            if (code_pos + state->value_size > code_len) inv_dwarf("Invalid command");
-            state->value_addr = tmp_alloc(state->value_size);
-            memcpy(state->value_addr, code + code_pos, state->value_size);
-            code_pos += state->value_size;
+            value_size = read_u4leb128();
+            if (code_pos + value_size > code_len) inv_dwarf("Invalid command");
+            value_addr = tmp_alloc(value_size);
+            memcpy(value_addr, code + code_pos, value_size);
+            code_pos += value_size;
             if (!is_end_of_loc_expr()) inv_dwarf("OP_implicit_value must be last instruction");
             break;
         case OP_stack_value:
             check_e_stack(1);
             state->stk_pos--;
-            state->value_size = sizeof(uint64_t);
-            state->value_addr = tmp_alloc(state->value_size);
-            memcpy(state->value_addr, state->stk + state->stk_pos, state->value_size);
+            value_size = sizeof(uint64_t);
+            value_addr = tmp_alloc(value_size);
+            memcpy(value_addr, state->stk + state->stk_pos, value_size);
             if (!is_end_of_loc_expr()) inv_dwarf("OP_stack_value must be last instruction");
             if (big_endian_host() != state->big_endian) {
-                size_t i, j, n = state->value_size >> 1;
-                char * p = (char *)state->value_addr;
-                for (i = 0, j = state->value_size - 1; i < n; i++, j--) {
+                size_t i, j, n = value_size >> 1;
+                char * p = (char *)value_addr;
+                for (i = 0, j = value_size - 1; i < n; i++, j--) {
                     char x = p[i];
                     p[i] = p[j];
                     p[j] = x;
@@ -609,7 +626,7 @@ static void evaluate_expression(void) {
         case OP_call_ref:
         default:
             {
-                VMState * s = state;
+                LocationExpressionState * s = state;
                 get_state(s);
                 s->client_op(op);
                 set_state(s);
@@ -618,7 +635,7 @@ static void evaluate_expression(void) {
     }
 }
 
-int evaluate_vm_expression(VMState * vm_state) {
+int evaluate_vm_expression(LocationExpressionState * vm_state) {
     int error = 0;
     Trap trap;
 

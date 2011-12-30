@@ -121,6 +121,7 @@ static size_t context_extension_offset = 0;
 
 static char * tmp_buf = NULL;
 static int tmp_buf_size = 0;
+static LocationInfo * location_info = NULL;
 
 #define SYMBOL_MAGIC 0x34875234
 
@@ -588,6 +589,11 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** type) {
     res->index = index;
     *type = res;
     return 0;
+}
+
+int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type) {
+    errno = ERR_UNSUPPORTED;
+    return -1;
 }
 
 int get_symbol_length(const Symbol * sym, ContextAddress * length) {
@@ -1133,6 +1139,61 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * call_
 }
 
 ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
+    return 0;
+}
+
+static LocationExpressionCommand * add_location_command(int op) {
+    LocationExpressionCommand * cmd = NULL;
+    if (location_info->cmds_cnt >= location_info->cmds_max) {
+        location_info->cmds_max += 4;
+        location_info->cmds = (LocationExpressionCommand *)tmp_realloc(location_info->cmds,
+            sizeof(LocationExpressionCommand) * location_info->cmds_max);
+    }
+    cmd = location_info->cmds + location_info->cmds_cnt++;
+    memset(cmd, 0, sizeof(LocationExpressionCommand));
+    cmd->cmd = op;
+    return cmd;
+}
+
+int get_location_info(const Symbol * sym, LocationInfo ** loc) {
+    DWORD dword = 0;
+    SYMBOL_INFO * info = NULL;
+
+    assert(sym->magic == SYMBOL_MAGIC);
+    *loc = location_info = (LocationInfo *)tmp_alloc_zero(sizeof(LocationInfo));
+
+    if (sym->address != 0) {
+        add_location_command(SFT_CMD_NUMBER)->args.num = sym->address;
+        return 0;
+    }
+
+    if (sym->base || sym->info) {
+        errno = ERR_INV_CONTEXT;
+        return -1;
+    }
+
+    if (get_type_info(sym, TI_GET_OFFSET, &dword) == 0) {
+        add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
+        add_location_command(SFT_CMD_NUMBER)->args.num = dword;
+        add_location_command(SFT_CMD_ADD);
+        return 0;
+    }
+
+    if (get_sym_info(sym, sym->index, &info) < 0) return -1;
+
+    if (is_register(info)) {
+        set_errno(ERR_INV_CONTEXT, "Register variable");
+        return -1;
+    }
+
+    if (is_frame_relative(info)) {
+        add_location_command(SFT_CMD_FP);
+        add_location_command(SFT_CMD_NUMBER)->args.num = info->Address - sizeof(ContextAddress) * 2;
+        add_location_command(SFT_CMD_ADD);
+        return 0;
+    }
+
+    add_location_command(SFT_CMD_NUMBER)->args.num = info->Address;
     return 0;
 }
 

@@ -46,6 +46,7 @@ typedef struct Symbol Symbol;
 #define TYPE_CLASS_COMPOSITE    6
 #define TYPE_CLASS_ENUMERATION  7
 #define TYPE_CLASS_FUNCTION     8
+#define TYPE_CLASS_MEMBER_PTR   9
 
 typedef uint32_t SYM_FLAGS;
 
@@ -74,6 +75,35 @@ typedef uint32_t SYM_FLAGS;
 #define UPDATE_ON_EXE_STATE_CHANGES  1
 
 typedef void EnumerateSymbolsCallBack(void *, Symbol *);
+
+#if ENABLE_DebugContext
+
+typedef struct LocationInfo {
+    ContextAddress addr;
+    ContextAddress size;
+    LocationExpressionCommand * cmds;
+    unsigned cmds_cnt;
+    unsigned cmds_max;
+} LocationInfo;
+
+/* Stack tracing command sequence */
+typedef struct StackFrameRegisterLocation {
+    RegisterDefinition * reg;
+    unsigned cmds_cnt;
+    unsigned cmds_max;
+    LocationExpressionCommand cmds[1];
+} StackFrameRegisterLocation;
+
+/* Complete stack tracing info for a range of instruction addresses */
+typedef struct StackTracingInfo {
+    ContextAddress addr;
+    ContextAddress size;
+    StackFrameRegisterLocation * fp;
+    StackFrameRegisterLocation ** regs;
+    int reg_cnt;
+} StackTracingInfo;
+
+#endif
 
 #if ENABLE_Symbols
 
@@ -119,7 +149,6 @@ extern const char * symbol2id(const Symbol * sym);
  */
 extern int id2symbol(const char * id, Symbol ** sym);
 
-
 /*************** Functions for retrieving symbol properties ***************************************/
 /*
  * Each function retireves one particular attribute of an object or type.
@@ -154,11 +183,15 @@ extern int get_symbol_name(const Symbol * sym, char ** name);
 /* Get value size of the type, in bytes */
 extern int get_symbol_size(const Symbol * sym, ContextAddress * size);
 
-/* Get base type ID */
+/* Get base type: pointer or member pointer - pointed object type,
+ * array - elements type, function - result type */
 extern int get_symbol_base_type(const Symbol * sym, Symbol ** base_type);
 
-/* Get array index type ID */
+/* Get array index type */
 extern int get_symbol_index_type(const Symbol * sym, Symbol ** index_type);
+
+/* Get containing type: field (member) or member pointer - parent structure */
+extern int get_symbol_containing_type(const Symbol * sym, Symbol ** containing_type);
 
 /* Get array length (number of elements) */
 extern int get_symbol_length(const Symbol * sym, ContextAddress * length);
@@ -199,6 +232,9 @@ extern int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol **
  * If not a PLT address return 0;
  */
 extern ContextAddress is_plt_section(Context * ctx, ContextAddress addr);
+
+/* Get object location expression */
+extern int get_location_info(const Symbol * sym, LocationInfo ** info);
 
 /*
  * For given context and its registers in a stack frame,

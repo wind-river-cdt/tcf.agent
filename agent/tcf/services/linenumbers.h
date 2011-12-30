@@ -26,8 +26,8 @@
 #include <tcf/framework/context.h>
 
 typedef struct CodeArea {
-    char * directory;
-    char * file;
+    const char * directory;
+    const char * file;
     uint32_t file_mtime;
     uint32_t file_size;
     ContextAddress start_address;

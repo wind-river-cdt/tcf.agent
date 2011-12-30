@@ -109,15 +109,15 @@ static StackFrameRules rules;
 U8_T dwarf_stack_trace_addr = 0;
 U8_T dwarf_stack_trace_size = 0;
 
-StackTracingCommandSequence * dwarf_stack_trace_fp = NULL;
+StackFrameRegisterLocation * dwarf_stack_trace_fp = NULL;
 
 int dwarf_stack_trace_regs_cnt = 0;
-StackTracingCommandSequence ** dwarf_stack_trace_regs = NULL;
+StackFrameRegisterLocation ** dwarf_stack_trace_regs = NULL;
 
 static int trace_regs_max = 0;
-static int trace_cmds_max = 0;
-static int trace_cmds_cnt = 0;
-static StackTracingCommand * trace_cmds = NULL;
+static unsigned trace_cmds_max = 0;
+static unsigned trace_cmds_cnt = 0;
+static LocationExpressionCommand * trace_cmds = NULL;
 
 static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
     while (reg >= regs->regs_max) {
@@ -423,11 +423,11 @@ static void exec_stack_frame_instruction(void) {
     }
 }
 
-static StackTracingCommand * add_command(int op) {
-    StackTracingCommand * cmd = NULL;
+static LocationExpressionCommand * add_command(int op) {
+    LocationExpressionCommand * cmd = NULL;
     if (trace_cmds_cnt >= trace_cmds_max) {
         trace_cmds_max += 16;
-        trace_cmds = (StackTracingCommand *)loc_realloc(trace_cmds, trace_cmds_max * sizeof(StackTracingCommand));
+        trace_cmds = (LocationExpressionCommand *)loc_realloc(trace_cmds, trace_cmds_max * sizeof(LocationExpressionCommand));
     }
     cmd = trace_cmds + trace_cmds_cnt++;
     memset(cmd, 0, sizeof(*cmd));
@@ -435,15 +435,15 @@ static StackTracingCommand * add_command(int op) {
     return cmd;
 }
 
-static void add_command_sequence(StackTracingCommandSequence ** ptr, RegisterDefinition * reg) {
-    StackTracingCommandSequence * seq = *ptr;
+static void add_command_sequence(StackFrameRegisterLocation ** ptr, RegisterDefinition * reg) {
+    StackFrameRegisterLocation * seq = *ptr;
     if (seq == NULL || seq->cmds_max < trace_cmds_cnt) {
-        *ptr = seq = (StackTracingCommandSequence *)loc_realloc(seq, sizeof(StackTracingCommandSequence) + (trace_cmds_cnt - 1) * sizeof(StackTracingCommand));
+        *ptr = seq = (StackFrameRegisterLocation *)loc_realloc(seq, sizeof(StackFrameRegisterLocation) + (trace_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
         seq->cmds_max = trace_cmds_cnt;
     }
     seq->reg = reg;
     seq->cmds_cnt = trace_cmds_cnt;
-    memcpy(seq->cmds, trace_cmds, trace_cmds_cnt * sizeof(StackTracingCommand));
+    memcpy(seq->cmds, trace_cmds, trace_cmds_cnt * sizeof(LocationExpressionCommand));
 }
 
 static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
@@ -459,52 +459,52 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
                 ContextAddress rt_addr = elf_map_to_run_time_address(
                     rules.ctx, rules.section->file, section, (ContextAddress)lt_addr);
                 if (errno) str_exception(ERR_INV_DWARF, "Cannot get object run-time address");
-                add_command(SFT_CMD_NUMBER)->num = rt_addr;
+                add_command(SFT_CMD_NUMBER)->args.num = rt_addr;
             }
             break;
         case OP_deref:
             {
-                StackTracingCommand * cmd = add_command(SFT_CMD_DEREF);
-                cmd->size = rules.address_size;
-                cmd->big_endian = rules.section->file->big_endian;
+                LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
+                cmd->args.deref.size = rules.address_size;
+                cmd->args.deref.big_endian = rules.section->file->big_endian;
             }
             break;
         case OP_deref_size:
             {
-                StackTracingCommand * cmd = add_command(SFT_CMD_DEREF);
-                cmd->size = dio_ReadU1();
-                cmd->big_endian = rules.section->file->big_endian;
+                LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
+                cmd->args.deref.size = dio_ReadU1();
+                cmd->args.deref.big_endian = rules.section->file->big_endian;
             }
             break;
         case OP_const1u:
-            add_command(SFT_CMD_NUMBER)->num = dio_ReadU1();
+            add_command(SFT_CMD_NUMBER)->args.num = dio_ReadU1();
             break;
         case OP_const1s:
-            add_command(SFT_CMD_NUMBER)->num = (I1_T)dio_ReadU1();
+            add_command(SFT_CMD_NUMBER)->args.num = (I1_T)dio_ReadU1();
             break;
         case OP_const2u:
-            add_command(SFT_CMD_NUMBER)->num = dio_ReadU2();
+            add_command(SFT_CMD_NUMBER)->args.num = dio_ReadU2();
             break;
         case OP_const2s:
-            add_command(SFT_CMD_NUMBER)->num = (I2_T)dio_ReadU2();
+            add_command(SFT_CMD_NUMBER)->args.num = (I2_T)dio_ReadU2();
             break;
         case OP_const4u:
-            add_command(SFT_CMD_NUMBER)->num = dio_ReadU4();
+            add_command(SFT_CMD_NUMBER)->args.num = dio_ReadU4();
             break;
         case OP_const4s:
-            add_command(SFT_CMD_NUMBER)->num = (I4_T)dio_ReadU4();
+            add_command(SFT_CMD_NUMBER)->args.num = (I4_T)dio_ReadU4();
             break;
         case OP_const8u:
-            add_command(SFT_CMD_NUMBER)->num = dio_ReadU8();
+            add_command(SFT_CMD_NUMBER)->args.num = dio_ReadU8();
             break;
         case OP_const8s:
-            add_command(SFT_CMD_NUMBER)->num = (I8_T)dio_ReadU8();
+            add_command(SFT_CMD_NUMBER)->args.num = (I8_T)dio_ReadU8();
             break;
         case OP_constu:
-            add_command(SFT_CMD_NUMBER)->num = dio_ReadU8LEB128();
+            add_command(SFT_CMD_NUMBER)->args.num = dio_ReadU8LEB128();
             break;
         case OP_consts:
-            add_command(SFT_CMD_NUMBER)->num = dio_ReadS8LEB128();
+            add_command(SFT_CMD_NUMBER)->args.num = dio_ReadS8LEB128();
             break;
         case OP_and:
             add_command(SFT_CMD_AND);
@@ -519,7 +519,7 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
             add_command(SFT_CMD_ADD);
             break;
         case OP_plus_uconst:
-            add_command(SFT_CMD_NUMBER)->num = dio_ReadU8LEB128();
+            add_command(SFT_CMD_NUMBER)->args.num = dio_ReadU8LEB128();
             add_command(SFT_CMD_ADD);
             break;
         case OP_ge:
@@ -569,7 +569,7 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
         case OP_lit29:
         case OP_lit30:
         case OP_lit31:
-            add_command(SFT_CMD_NUMBER)->num = op - OP_lit0;
+            add_command(SFT_CMD_NUMBER)->args.num = op - OP_lit0;
             break;
         case OP_breg0:
         case OP_breg1:
@@ -607,9 +607,9 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
                 I8_T offs = dio_ReadS8LEB128();
                 RegisterDefinition * def = get_reg_by_id(rules.ctx, op - OP_breg0, &rules.reg_id_scope);
                 if (def == NULL) str_exception(errno, "Cannot read DWARF frame info");
-                add_command(SFT_CMD_REGISTER)->reg = def;
+                add_command(SFT_CMD_REGISTER)->args.reg = def;
                 if (offs != 0) {
-                    add_command(SFT_CMD_NUMBER)->num = offs;
+                    add_command(SFT_CMD_NUMBER)->args.num = offs;
                     add_command(SFT_CMD_ADD);
                 }
             }
@@ -631,24 +631,24 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
     case RULE_OFFSET:
         add_command(SFT_CMD_FP);
         if (reg->offset != 0) {
-            add_command(SFT_CMD_NUMBER)->num = reg->offset;
+            add_command(SFT_CMD_NUMBER)->args.num = reg->offset;
             add_command(SFT_CMD_ADD);
         }
         if (reg->rule == RULE_OFFSET) {
-            StackTracingCommand * cmd = add_command(SFT_CMD_DEREF);
-            cmd->size = dst_reg_def->size;
-            if (cmd->size > rules.address_size) cmd->size = rules.address_size;
-            cmd->big_endian = rules.section->file->big_endian;
+            LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
+            cmd->args.deref.size = dst_reg_def->size;
+            if (cmd->args.deref.size > rules.address_size) cmd->args.deref.size = rules.address_size;
+            cmd->args.deref.big_endian = rules.section->file->big_endian;
         }
         break;
     case RULE_SAME_VALUE:
         if (src_reg_def == NULL) return;
-        add_command(SFT_CMD_REGISTER)->reg = src_reg_def;
+        add_command(SFT_CMD_REGISTER)->args.reg = src_reg_def;
         break;
     case RULE_REGISTER:
         {
             RegisterDefinition * src_sef = get_reg_by_id(rules.ctx, reg->offset, &rules.reg_id_scope);
-            if (src_sef != NULL) add_command(SFT_CMD_REGISTER)->reg = src_sef;
+            if (src_sef != NULL) add_command(SFT_CMD_REGISTER)->args.reg = src_sef;
         }
         break;
     case RULE_EXPRESSION:
@@ -656,10 +656,10 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
         add_command(SFT_CMD_FP);
         add_dwarf_expression_commands(reg->expression, reg->offset);
         if (reg->rule == RULE_EXPRESSION) {
-            StackTracingCommand * cmd = add_command(SFT_CMD_DEREF);
-            cmd->size = dst_reg_def->size;
-            if (cmd->size > rules.address_size) cmd->size = rules.address_size;
-            cmd->big_endian = rules.section->file->big_endian;
+            LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
+            cmd->args.deref.size = dst_reg_def->size;
+            if (cmd->args.deref.size > rules.address_size) cmd->args.deref.size = rules.address_size;
+            cmd->args.deref.big_endian = rules.section->file->big_endian;
         }
         break;
     default:
@@ -669,7 +669,7 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
     if (dwarf_stack_trace_regs_cnt >= trace_regs_max) {
         int i;
         trace_regs_max += 16;
-        dwarf_stack_trace_regs = (StackTracingCommandSequence **)loc_realloc(dwarf_stack_trace_regs, trace_regs_max * sizeof(StackTracingCommandSequence *));
+        dwarf_stack_trace_regs = (StackFrameRegisterLocation **)loc_realloc(dwarf_stack_trace_regs, trace_regs_max * sizeof(StackFrameRegisterLocation *));
         for (i = dwarf_stack_trace_regs_cnt; i < trace_regs_max; i++) dwarf_stack_trace_regs[i] = NULL;
     }
     if (trace_cmds_cnt == 0) return;
@@ -699,9 +699,9 @@ static void generate_commands(void) {
     case RULE_OFFSET:
         reg_def = get_reg_by_id(rules.ctx, rules.cfa_register, &rules.reg_id_scope);
         if (reg_def != NULL) {
-            add_command(SFT_CMD_REGISTER)->reg = reg_def;
+            add_command(SFT_CMD_REGISTER)->args.reg = reg_def;
             if (rules.cfa_offset != 0) {
-                add_command(SFT_CMD_NUMBER)->num = rules.cfa_offset;
+                add_command(SFT_CMD_NUMBER)->args.num = rules.cfa_offset;
                 add_command(SFT_CMD_ADD);
             }
         }
@@ -1012,7 +1012,7 @@ void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * te
 
     dwarf_stack_trace_regs_cnt = 0;
     if (dwarf_stack_trace_fp == NULL) {
-        dwarf_stack_trace_fp = (StackTracingCommandSequence *)loc_alloc_zero(sizeof(StackTracingCommandSequence));
+        dwarf_stack_trace_fp = (StackFrameRegisterLocation *)loc_alloc_zero(sizeof(StackFrameRegisterLocation));
         dwarf_stack_trace_fp->cmds_max = 1;
     }
     dwarf_stack_trace_fp->cmds_cnt = 0;

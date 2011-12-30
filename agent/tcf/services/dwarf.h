@@ -206,7 +206,17 @@
 #define AT_call_file                0x0058  /* v3 */
 #define AT_call_line                0x0059  /* v3 */
 #define AT_description              0x005a  /* v3 */
+#define AT_object_pointer           0x0064  /* v3 */
 #define AT_endianity                0x0065  /* v3 */
+#define AT_elemental                0x0066  /* v3 */
+#define AT_pure                     0x0067  /* v3 */
+#define AT_recursive                0x0068  /* v3 */
+#define AT_signature                0x0069  /* v4 */
+#define AT_main_subprogram          0x006a  /* v4 */
+#define AT_data_bit_offset          0x006b  /* v4 */
+#define AT_const_expr               0x006c  /* v4 */
+#define AT_enum_class               0x006d  /* v4 */
+#define AT_linkage_name             0x006e  /* v4 */
 #define AT_lo_user_v1               0x0200
 #define AT_hi_user_v1               0x03ff
 #define AT_push_mask                0x0220

@@ -72,6 +72,8 @@
 #define SY_SIZEOF 279
 #define SY_NAME  280
 #define SY_SCOPE 281
+#define SY_PM_D  282
+#define SY_PM_R  283
 
 #define MODE_NORMAL 0
 #define MODE_TYPE   1
@@ -289,7 +291,14 @@ static void next_sy(void) {
         case ';':
         case '?':
         case ',':
+            text_sy = ch;
+            return;
         case '.':
+            if (text_ch == '*') {
+                next_ch();
+                text_sy = SY_PM_D;
+                return;
+            }
             text_sy = ch;
             return;
         case ':':
@@ -303,6 +312,11 @@ static void next_sy(void) {
         case '-':
             if (text_ch == '>') {
                 next_ch();
+                if (text_ch == '*') {
+                    next_ch();
+                    text_sy = SY_PM_R;
+                    return;
+                }
                 text_sy = SY_REF;
                 return;
             }
@@ -1156,14 +1170,33 @@ static void op_deref(int mode, Value * v) {
 }
 
 #if ENABLE_Symbols
-static void find_field(Symbol * sym, ContextAddress offs, const char * name, Symbol ** res, ContextAddress * res_offs) {
+static void evaluate_symbol_address(Symbol * sym, ContextAddress obj_addr, ContextAddress index, ContextAddress * addr) {
+    LocationExpressionState * state = NULL;
+    LocationInfo * loc_info = NULL;
+    StackFrame * stk_info = NULL;
+    uint64_t args[2];
+
+    args[0] = obj_addr;
+    args[1] = index;
+    if (get_location_info(sym, &loc_info) < 0) {
+        error(errno, "Cannot get symbol location expression");
+    }
+    if (get_frame_info(expression_context, expression_frame, &stk_info) < 0) {
+        error(errno, "Cannot get stack frame info");
+    }
+    state = evaluate_location_expression(expression_context, stk_info, loc_info->cmds, loc_info->cmds_cnt, args, 2);
+    if (state->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
+    *addr = (ContextAddress)state->stk[0];
+}
+
+static void find_field(Symbol * class_sym, ContextAddress obj_addr, const char * name, const char * id, Symbol ** field_sym, ContextAddress * field_addr) {
     Symbol ** children = NULL;
     Symbol ** inheritance = NULL;
     int count = 0;
     int h = 0;
     int i;
 
-    if (get_symbol_children(sym, &children, &count) < 0) {
+    if (get_symbol_children(class_sym, &children, &count) < 0) {
         error(errno, "Cannot retrieve field list");
     }
     for (i = 0; i < count; i++) {
@@ -1175,19 +1208,17 @@ static void find_field(Symbol * sym, ContextAddress offs, const char * name, Sym
             if (inheritance == NULL) inheritance = (Symbol **)tmp_alloc(sizeof(Symbol *) * count);
             inheritance[h++] = children[i];
         }
-        else if (strcmp(s, name) == 0) {
-            *res = children[i];
-            *res_offs = offs;
+        else if (name != NULL ? strcmp(s, name) == 0 : strcmp(symbol2id(children[i]), id) == 0) {
+            evaluate_symbol_address(children[i], obj_addr, 0, field_addr);
+            *field_sym = children[i];
             return;
         }
     }
     for (i = 0; i < h; i++) {
         ContextAddress x = 0;
-        if (get_symbol_offset(inheritance[i], &x) < 0) {
-            error(errno, "Cannot retrieve field offset");
-        }
-        find_field(inheritance[i], offs + x, name, res, res_offs);
-        if (*res != NULL) return;
+        evaluate_symbol_address(inheritance[i], obj_addr, 0, &x);
+        find_field(inheritance[i], x, name, id, field_sym, field_addr);
+        if (*field_sym != NULL) return;
     }
 }
 #endif
@@ -1195,6 +1226,7 @@ static void find_field(Symbol * sym, ContextAddress offs, const char * name, Sym
 static void op_field(int mode, Value * v) {
     char * id = NULL;
     char * name = NULL;
+    if (!v->remote) error(ERR_INV_EXPRESSION, "L-value expected");
     if (text_sy == SY_ID) id = (char *)text_val.value;
     else if (text_sy == SY_NAME) name = (char *)text_val.value;
     else error(ERR_INV_EXPRESSION, "Field name expected");
@@ -1204,59 +1236,31 @@ static void op_field(int mode, Value * v) {
 #if ENABLE_Symbols
         Symbol * sym = NULL;
         int sym_class = 0;
-        ContextAddress size = 0;
-        ContextAddress offs = 0;
+        ContextAddress addr = 0;
 
-        if (id != NULL) {
-            if (id2symbol(id, &sym) < 0) error(errno, "Invalid field ID");
-        }
-        else {
-            find_field(v->type, 0, name, &sym, &offs);
-        }
+        find_field(v->type, v->address, name, id, &sym, &addr);
         if (sym == NULL) {
-            error(ERR_SYM_NOT_FOUND, "Symbol not found");
+            error(ERR_SYM_NOT_FOUND, "Invalid field name or ID");
         }
         if (get_symbol_class(sym, &sym_class) < 0) {
             error(errno, "Cannot retrieve symbol class");
         }
         if (sym_class == SYM_CLASS_FUNCTION) {
-            ContextAddress word = 0;
             v->type_class = TYPE_CLASS_CARDINAL;
             get_symbol_type(sym, &v->type);
             if (v->type != NULL) get_array_symbol(v->type, 0, &v->type);
-            if (mode == MODE_NORMAL && get_symbol_address(sym, &word) < 0) {
-                error(errno, "Cannot retrieve symbol address");
-            }
-            set_ctx_word_value(v, word);
+            set_ctx_word_value(v, addr);
             v->function = 1;
         }
         else {
-            ContextAddress x = 0;
-            if (sym_class != SYM_CLASS_REFERENCE) {
-                error(ERR_UNSUPPORTED, "Invalid symbol class");
-            }
+            ContextAddress size = 0;
             if (get_symbol_size(sym, &size) < 0) {
                 error(errno, "Cannot retrieve field size");
             }
-            if (get_symbol_offset(sym, &x) < 0) {
-                error(errno, "Cannot retrieve field offset");
-            }
-            offs += x;
-            if (v->sym != NULL && v->size == 0 && get_symbol_size(v->sym, &v->size) < 0) {
-                error(errno, "Cannot retrieve symbol size");
-            }
-            if (offs + size > v->size) {
-                error(ERR_INV_EXPRESSION, "Invalid field offset and/or size");
-            }
-            if (v->remote) {
-                if (mode != MODE_TYPE) v->address += offs;
-            }
-            else {
-                v->value = (uint8_t *)v->value + offs;
-            }
+            v->address = addr;
+            v->size = size;
             v->sym = NULL;
             v->reg = NULL;
-            v->size = size;
             if (get_symbol_type(sym, &v->type) < 0) {
                 error(errno, "Cannot retrieve symbol type");
             }
@@ -1641,13 +1645,50 @@ static void unary_expression(int mode, Value * v) {
 #endif
 }
 
-static void multiplicative_expression(int mode, Value * v) {
+static void pm_expression(int mode, Value * v) {
     unary_expression(mode, v);
-    while (text_sy == '*' || text_sy == '/' || text_sy == '%') {
+#if ENABLE_Symbols
+    while (text_sy == SY_PM_D || text_sy == SY_PM_R) {
         Value x;
         int sy = text_sy;
         next_sy();
         unary_expression(mode, &x);
+        if (x.type == NULL || x.type_class != TYPE_CLASS_MEMBER_PTR) {
+            error(ERR_INV_EXPRESSION, "Invalid type: pointer to member expected");
+        }
+        if (mode != MODE_SKIP) {
+            ContextAddress obj = 0;
+            ContextAddress ptr = 0;
+            ContextAddress addr = 0;
+            if (sy == SY_PM_D) {
+                if (!v->remote) error(ERR_INV_EXPRESSION, "L-value expected");
+                obj = v->address;
+            }
+            else {
+                obj = (ContextAddress)to_uns(mode, v);
+            }
+            ptr = (ContextAddress)to_uns(mode, &x);
+            evaluate_symbol_address(x.type, obj, ptr, &addr);
+            set_ctx_word_value(v, addr);
+            v->constant = 0;
+            if (get_symbol_base_type(x.type, &v->type) < 0) {
+                error(ERR_INV_EXPRESSION, "Cannot get pointed type");
+            }
+            if (get_symbol_type_class(x.type, &v->type_class) < 0) {
+                error(ERR_INV_EXPRESSION, "Cannot get pointed type class");
+            }
+        }
+    }
+#endif
+}
+
+static void multiplicative_expression(int mode, Value * v) {
+    pm_expression(mode, v);
+    while (text_sy == '*' || text_sy == '/' || text_sy == '%') {
+        Value x;
+        int sy = text_sy;
+        next_sy();
+        pm_expression(mode, &x);
         if (mode != MODE_SKIP) {
             if (!is_number(v) || !is_number(&x)) {
                 error(ERR_INV_EXPRESSION, "Numeric types expected");

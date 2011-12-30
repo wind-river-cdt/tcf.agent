@@ -664,6 +664,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\dwarfecomp.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\dwarfecomp.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\dwarfexpr.c"
 				>
 			</File>

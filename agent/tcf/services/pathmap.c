@@ -46,10 +46,13 @@ char * canonic_path_map_file_name(const char * fnm) {
             if (buf_pos > 0 && *fnm == '.' && (fnm[1] == '/' || fnm[1] == '\\')) {
                 unsigned j = buf_pos - 1;
                 if (j > 0 && buf[j - 1] != '/') {
+                    buf[buf_pos] = 0;
                     while (j > 0 && buf[j - 1] != '/') j--;
-                    buf_pos = j;
-                    fnm += 2;
-                    continue;
+                    if (strcmp(buf + j, "./") && strcmp(buf + j, "../")) {
+                        buf_pos = j;
+                        fnm += 2;
+                        continue;
+                    }
                 }
             }
         }

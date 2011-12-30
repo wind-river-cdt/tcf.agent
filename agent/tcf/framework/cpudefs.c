@@ -213,101 +213,134 @@ int id2register(const char * id, Context ** ctx, int * frame, RegisterDefinition
     return 0;
 }
 
-static void stack_trace_error(void) {
+static void location_expression_error(void) {
     str_exception(ERR_OTHER, "Invalid stack trace program");
 }
 
-uint64_t evaluate_stack_trace_commands(Context * ctx, StackFrame * frame, StackTracingCommandSequence * cmds) {
-    static uint64_t * stk = NULL;
-    static int stk_size = 0;
+LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame * frame,
+                                     LocationExpressionCommand * cmds, unsigned cmd_cnt,
+                                     uint64_t * args, unsigned args_cnt) {
+    unsigned i;
+    unsigned stk_pos = 0;
+    unsigned stk_max = 0;
+    uint64_t * stk = NULL;
+    LocationExpressionState * state = (LocationExpressionState *)tmp_alloc_zero(sizeof(LocationExpressionState));
 
-    int i;
-    int stk_pos = 0;
-
-    for (i = 0; i < cmds->cmds_cnt; i++) {
-        StackTracingCommand * cmd = cmds->cmds + i;
-        if (stk_pos >= stk_size) {
-            stk_size += 4;
-            stk = (uint64_t *)loc_realloc(stk, sizeof(uint64_t) * stk_size);
+    state->ctx = ctx;
+    state->stack_frame = frame;
+    state->args = args;
+    state->args_cnt = args_cnt;
+    for (i = 0; i < cmd_cnt; i++) {
+        LocationExpressionCommand * cmd = cmds + i;
+        if (stk_pos >= stk_max) {
+            stk_max += 4;
+            stk = (uint64_t *)tmp_realloc(stk, sizeof(uint64_t) * stk_max);
         }
         switch (cmd->cmd) {
         case SFT_CMD_NUMBER:
-            stk[stk_pos++] = cmd->num;
+            stk[stk_pos++] = cmd->args.num;
             break;
         case SFT_CMD_REGISTER:
-            if (read_reg_value(frame, cmd->reg, stk + stk_pos) < 0) exception(errno);
+            if (read_reg_value(frame, cmd->args.reg, stk + stk_pos) < 0) exception(errno);
             stk_pos++;
             break;
         case SFT_CMD_FP:
             stk[stk_pos++] = frame->fp;
             break;
         case SFT_CMD_DEREF:
-            if (stk_pos < 1) stack_trace_error();
+            if (stk_pos < 1) location_expression_error();
             {
                 size_t j;
-                size_t size = cmd->size;
+                size_t size = cmd->args.deref.size;
                 uint64_t n = 0;
                 uint8_t buf[8];
 
                 if (context_read_mem(ctx, (ContextAddress)stk[stk_pos - 1], buf, size) < 0) exception(errno);
                 for (j = 0; j < size; j++) {
-                    n = (n << 8) | buf[cmd->big_endian ? j : size - j - 1];
+                    n = (n << 8) | buf[cmd->args.deref.big_endian ? j : size - j - 1];
                 }
                 stk[stk_pos - 1] = n;
             }
             break;
         case SFT_CMD_ADD:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] + stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_SUB:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] - stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_AND:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] & stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_OR:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] | stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_GE:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] >= stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_GT:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] > stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_LE:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] <= stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_LT:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] = stk[stk_pos - 2] < stk[stk_pos - 1];
             stk_pos--;
             break;
         case SFT_CMD_SHL:
-            if (stk_pos < 2) stack_trace_error();
+            if (stk_pos < 2) location_expression_error();
             stk[stk_pos - 2] <<= stk[stk_pos - 1];
             stk_pos--;
             break;
+        case SFT_CMD_SHR:
+            if (stk_pos < 2) location_expression_error();
+            stk[stk_pos - 2] >>= stk[stk_pos - 1];
+            stk_pos--;
+            break;
+        case SFT_CMD_ARG:
+            if (cmd->args.arg_no >= args_cnt) location_expression_error();
+            stk[stk_pos++] = args[cmd->args.arg_no];
+            break;
+        case SFT_CMD_USER:
+            state->stk = stk;
+            state->stk_pos = stk_pos;
+            state->stk_max = stk_max;
+            state->reg_id_scope = cmd->args.user.reg_id_scope;
+            state->code = cmd->args.user.code_addr;
+            state->code_len = cmd->args.user.code_size;
+            state->code_pos = 0;
+            state->addr_size = cmd->args.user.addr_size;
+            state->big_endian = cmd->args.user.big_endian;
+            state->client_op = NULL;
+            if (cmd->args.user.func(state) < 0) exception(errno);
+            stk_max = state->stk_max;
+            stk_pos = state->stk_pos;
+            stk = state->stk;
+            break;
         default:
-            stack_trace_error();
+            location_expression_error();
             break;
         }
     }
-    if (stk_pos == 0) stack_trace_error();
-    return stk[stk_pos - 1];
+    state->stk = stk;
+    state->stk_pos = stk_pos;
+    state->stk_max = stk_max;
+    return state;
 }
 
 #endif /* ENABLE_DebugContext */
