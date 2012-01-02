@@ -84,12 +84,11 @@ extern void post_safe_event(Context * ctx, EventCallBack * done, void * arg);
 extern int safe_context_single_step(Context * ctx);
 
 /*
- * Return 1 if all threads in debuggee are stopped and handling of incoming messages
- * is suspended and it is safe to access debuggee memory, plant breakpoints, etc.
- * 'mem' is memory context, only threads that belong to that memory are checked.
- * if 'mem' = NULL, check all threads.
+ * Return 1 if all threads in a debuggee are stopped and handling of incoming messages
+ * is suspended, and it is safe to access debuggee memory, plant breakpoints, etc.
+ * Only threads that belong to CONTEXT_GROUP_STOP of 'ctx' are checked.
  */
-extern int is_all_stopped(Context * mem);
+extern int is_all_stopped(Context * ctx);
 
 /*
  * Terminate debug context - thread or process.

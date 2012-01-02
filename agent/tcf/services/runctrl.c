@@ -1043,10 +1043,10 @@ int is_all_stopped(Context * ctx) {
     Context * grp = context_get_group(ctx, CONTEXT_GROUP_STOP);
     for (l = context_root.next; l != &context_root; l = l->next) {
         Context * ctx = ctxl2ctxp(l);
-        if (ctx->exited || ctx->exiting) continue;
+        if (ctx->stopped || ctx->exited || ctx->exiting || EXT(ctx)->safe_single_step) continue;
         if (!context_has_state(ctx)) continue;
         if (context_get_group(ctx, CONTEXT_GROUP_STOP) != grp) continue;
-        if (!ctx->stopped) return 0;
+        return 0;
     }
     return 1;
 }
@@ -1759,6 +1759,7 @@ static void event_context_stopped(Context * ctx, void * client_data) {
 static void event_context_started(Context * ctx, void * client_data) {
     ContextExtensionRC * ext = EXT(ctx);
     assert(!ctx->stopped);
+    assert(run_ctrl_lock_cnt == 0 || ext->safe_single_step || ctx->exiting);
     if (ext->intercepted) resume_context_tree(ctx);
     ext->intercepted_by_bp = 0;
     if (safe_event_list) {
