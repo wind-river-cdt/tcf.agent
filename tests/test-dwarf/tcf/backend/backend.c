@@ -558,7 +558,6 @@ static void next_pc(void) {
         }
         else {
             char * name = NULL;
-            char name_buf[0x1000];
             ContextAddress addr = 0;
             ContextAddress size = 0;
             func_object = get_symbol_object(sym);
@@ -576,7 +575,7 @@ static void next_pc(void) {
                 error("invalid symbol address");
             }
             if (name != NULL) {
-                strcpy(name_buf, name);
+                char * name_buf = tmp_strdup(name);
                 if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, name_buf, &sym) < 0) {
                     if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
                         error("find_symbol_by_name");

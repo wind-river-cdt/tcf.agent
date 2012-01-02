@@ -101,7 +101,6 @@ typedef struct RegisterIdScope {
 #define SFT_CMD_LOCATION       20
 
 typedef struct LocationPiece {
-    int big_endian;
     ContextAddress addr;
     RegisterDefinition * reg;
     void * value;

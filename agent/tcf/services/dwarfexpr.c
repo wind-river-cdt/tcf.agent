@@ -123,20 +123,32 @@ static U8_T evaluate_tls_address(U8_T Offset) {
     return addr;
 }
 
-static void evaluate_implicit_pointer(void) {
-    PropertyValue FP;
+static void evaluate_implicit_pointer(uint8_t op) {
+    Trap trap;
+    PropertyValue PV;
     CompUnit * Unit = sValue->mObject->mCompUnit;
-    ObjectInfo * Info = find_object(get_dwarf_cache(Unit->mFile), dio_ReadU4());
+    int ArgSize = op == OP_GNU_implicit_pointer && Unit->mDesc.mVersion < 3 ? Unit->mDesc.mAddressSize : (Unit->mDesc.m64bit ? 8 : 4);
+    ObjectInfo * Info = find_object(get_dwarf_cache(Unit->mFile), dio_ReadUX(ArgSize));
     U4_T Offset = dio_ReadULEB128();
     U8_T DioPos = dio_GetPos();
-    if (Info == NULL) str_exception(ERR_INV_DWARF, "OP_GNU_implicit_pointer: invalid object reference");
-    memset(&FP, 0, sizeof(FP));
-    read_and_evaluate_dwarf_object_property(sState->ctx, sStackFrame, Info, sValue->mAttr, &FP);
-    if (FP.mPieces != NULL) {
+    if (Info == NULL) str_exception(ERR_INV_DWARF, "OP_implicit_pointer: invalid object reference");
+    memset(&PV, 0, sizeof(PV));
+    if (set_trap(&trap)) {
+        read_and_evaluate_dwarf_object_property(sState->ctx, sStackFrame, Info, AT_location, &PV);
+        clear_trap(&trap);
+    }
+    else if (trap.error == ERR_SYM_NOT_FOUND) {
+        read_and_evaluate_dwarf_object_property(sState->ctx, sStackFrame, Info, AT_const_value, &PV);
+    }
+    else {
+        exception(trap.error);
+    }
+    assert(sValue->mBigEndian == PV.mBigEndian);
+    if (PV.mPieces != NULL) {
         U4_T Cnt = 0;
         U4_T BitOffset = 0;
-        while (Cnt < FP.mPieceCnt) {
-            LocationPiece * OrgPiece = FP.mPieces + Cnt++;
+        while (Cnt < PV.mPieceCnt) {
+            LocationPiece * OrgPiece = PV.mPieces + Cnt++;
             if (OrgPiece->bit_size == 0) OrgPiece->bit_size = OrgPiece->size * 8;
             if (BitOffset + OrgPiece->bit_size > Offset * 8) {
                 LocationPiece * Piece = add_piece();
@@ -145,18 +157,31 @@ static void evaluate_implicit_pointer(void) {
                     Piece->bit_offs += Offset * 8 - BitOffset;
                     Piece->bit_size -= Offset * 8 - BitOffset;
                 }
+                if (Piece->bit_offs == 0 && Piece->bit_size % 8 == 0) {
+                    Piece->size = Piece->bit_size / 8;
+                    Piece->bit_size = 0;
+                }
             }
             BitOffset += OrgPiece->bit_size;
         }
     }
+    else if (PV.mAddr != NULL) {
+        LocationPiece * Piece = add_piece();
+        if (Offset > PV.mSize) str_exception(ERR_INV_DWARF, "Invalid OP_GNU_implicit_pointer");
+        Piece->size = PV.mSize - Offset;
+        Piece->value = PV.mAddr + Offset;
+    }
+    else if (PV.mForm == FORM_EXPR_VALUE) {
+        sState->stk[sState->stk_pos++] = PV.mValue + Offset;
+    }
     else {
         LocationPiece * Piece = add_piece();
-        if (Offset > sizeof(FP.mValue)) str_exception(ERR_INV_DWARF, "Invalid OP_GNU_implicit_pointer");
-        Piece->big_endian = big_endian_host();
-        Piece->size = sizeof(FP.mValue);
-        Piece->value = (U1_T *)tmp_alloc(sizeof(FP.mValue));
-        Piece->bit_offs = Offset * 8;
-        Piece->bit_size = (sizeof(FP.mValue) - Offset) * 8;
+        U1_T * Buf = (U1_T *)tmp_alloc(sizeof(PV.mValue));
+        if (Offset > sizeof(PV.mValue)) str_exception(ERR_INV_DWARF, "Invalid OP_GNU_implicit_pointer");
+        memcpy(Buf, &PV.mValue, sizeof(PV.mValue));
+        if (big_endian_host() != PV.mBigEndian) swap_bytes(Buf, Piece->size);
+        Piece->size = sizeof(PV.mValue) - Offset;
+        Piece->value = Buf + Offset;
     }
     dio_EnterSection(&Unit->mDesc, sSection, DioPos);
 }
@@ -187,8 +212,9 @@ static void client_op(uint8_t op) {
         if (sState->stk_pos == 0) str_exception(ERR_INV_DWARF, "Invalid DWARF expression stack");
         sState->stk[sState->stk_pos - 1] = evaluate_tls_address(sState->stk[sState->stk_pos - 1]);
         break;
+    case OP_implicit_pointer:
     case OP_GNU_implicit_pointer:
-        evaluate_implicit_pointer();
+        evaluate_implicit_pointer(op);
         break;
     default:
         str_fmt_exception(ERR_UNSUPPORTED, "Unsupported DWARF expression op 0x%02x", op);
@@ -262,8 +288,8 @@ void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo *
     }
 }
 
-void dwarf_evaluate_expression(PropertyValue * v) {
-    CompUnit * Unit = v->mObject->mCompUnit;
+void dwarf_evaluate_expression(PropertyValue * PV) {
+    CompUnit * Unit = PV->mObject->mCompUnit;
     LocationExpressionState * OrgState = sState;
     ELF_Section * OrgSection = sSection;
     U8_T OrgSectionOffs = sSectionOffs;
@@ -272,12 +298,12 @@ void dwarf_evaluate_expression(PropertyValue * v) {
     U8_T IP = 0;
     U8_T args[2];
 
-    sValue = v;
+    sValue = PV;
     sStackFrame = sValue->mFrame;
     sState = (LocationExpressionState *)tmp_alloc_zero(sizeof(LocationExpressionState));
     sState->stk = (U8_T *)tmp_alloc(sizeof(U8_T) * (sState->stk_max = 8));
     sState->ctx = sValue->mContext;
-    sState->stack_frame = get_stack_frame(v);
+    sState->stack_frame = get_stack_frame(PV);
     sState->addr_size = Unit->mDesc.mAddressSize;
     sState->big_endian = Unit->mFile->big_endian;
     sState->reg_id_scope = Unit->mRegIdScope;

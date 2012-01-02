@@ -143,12 +143,10 @@ static LocationPiece * add_piece(void) {
     if (reg_def != NULL) {
         piece->reg = reg_def;
         piece->size = reg_def->size;
-        piece->big_endian = reg_def->big_endian;
     }
     else if (value_addr != NULL) {
         piece->value = value_addr;
         piece->size = value_size;
-        piece->big_endian = state->big_endian;
     }
     else if (state->stk_pos == 0) {
         /* An empty location description represents a piece or all of an object that is
@@ -157,7 +155,6 @@ static LocationPiece * add_piece(void) {
     else {
         state->stk_pos--;
         piece->addr = (ContextAddress)state->stk[state->stk_pos];
-        piece->big_endian = state->big_endian;
     }
     reg_def = NULL;
     value_addr = NULL;

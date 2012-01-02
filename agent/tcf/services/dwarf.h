@@ -384,14 +384,13 @@
 #define OP_push_object_address      0x97
 #define OP_call2                    0x98
 #define OP_call4                    0x99
-#define OP_calli                    0x9a  /* typo? */
-#define OP_ref                      0x9a
 #define OP_call_ref                 0x9a
 #define OP_form_tls_address         0x9b
 #define OP_call_frame_cfa           0x9c
 #define OP_bit_piece                0x9d
 #define OP_implicit_value           0x9e /* v4 */
 #define OP_stack_value              0x9f /* v4 */
+#define OP_implicit_pointer         0xa0
 #define OP_lo_user                  0xe0
 #define OP_hi_user                  0xff
 /* GCC extensions */
@@ -399,6 +398,15 @@
 #define OP_GNU_uninit               0xf0
 #define OP_GNU_encoded_addr         0xf1
 #define OP_GNU_implicit_pointer     0xf2
+#define OP_GNU_entry_value          0xf3
+#define OP_GNU_const_type           0xf4
+#define OP_GNU_regval_type          0xf5
+#define OP_GNU_deref_type           0xf6
+#define OP_GNU_convert              0xf7
+#define OP_GNU_reinterpret          0xf9
+#define OP_GNU_parameter_ref        0xfa
+/* TCF extensions */
+#define OP_TCF_offset               0xff
 
 #define FT_char                     0x0001
 #define FT_signed_char              0x0002

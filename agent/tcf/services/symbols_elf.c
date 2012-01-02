@@ -1429,23 +1429,26 @@ static void read_object_value(PropertyValue * v, void ** value, size_t * size, i
             LocationPiece * piece = v->mPieces + n++;
             U4_T piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
             U4_T piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
-            U1_T * pbf = (U1_T *)tmp_alloc(piece_size);
+            U1_T * pbf = NULL;
             if (bf_size < bf_offs / 8 + piece_size + 1) {
                 bf_size = bf_offs / 8 + piece_size + 1;
                 bf = (U1_T *)tmp_realloc(bf, bf_size);
             }
             if (piece->reg) {
                 StackFrame * frame = NULL;
+                assert(piece->reg->size >= piece_size);
+                pbf = (U1_T *)tmp_alloc(piece->reg->size);
                 if (get_frame_info(v->mContext, v->mFrame, &frame) < 0) exception(errno);
-                if (read_reg_bytes(frame, piece->reg, 0, piece_size, pbf) < 0) exception(errno);
+                if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
+                if (!piece->reg->big_endian != !v->mBigEndian) swap_bytes(pbf, piece->reg->size);
             }
             else if (piece->value) {
-                memcpy(pbf, piece->value, piece_size);
+                pbf = (U1_T *)piece->value;
             }
             else {
+                pbf = (U1_T *)tmp_alloc(piece_size);
                 if (context_read_mem(v->mContext, piece->addr, pbf, piece_size) < 0) exception(errno);
             }
-            if (!piece->big_endian != !v->mBigEndian) swap_bytes(pbf, piece_size);
             for (i = piece->bit_offs; i < piece->bit_offs + piece_bits;  i++) {
                 if (pbf[i / 8] & (1u << (i % 8))) {
                     bf[bf_offs / 8] |=  (1u << (bf_offs % 8));
@@ -1478,11 +1481,20 @@ static void read_object_value(PropertyValue * v, void ** value, size_t * size, i
         else if (v->mAttr == AT_string_length) val_size = v->mObject->mCompUnit->mDesc.mAddressSize;
         else str_exception(ERR_INV_DWARF, "Unknown object size");
         bf = (U1_T *)tmp_alloc((size_t)val_size);
-        if (context_read_mem(sym_ctx, (ContextAddress)v->mValue, bf, (size_t)val_size) < 0) exception(errno);
+        if (v->mForm == FORM_EXPR_VALUE) {
+            if (context_read_mem(sym_ctx, (ContextAddress)v->mValue, bf, (size_t)val_size) < 0) exception(errno);
+            *big_endian = v->mBigEndian;
+        }
+        else {
+            U1_T * p = (U1_T *)&v->mValue;
+            if (val_size > sizeof(v->mValue)) str_exception(ERR_INV_DWARF, "Unknown object size");
+            if (big_endian_host()) p += (size_t)val_size;
+            memcpy(bf, p, (size_t)val_size);
+            *big_endian = big_endian_host();
+        }
         if (bit_size % 8 != 0) bf[bit_size / 8] &= (1 << (bit_size % 8)) - 1;
-        *value = bf;
         *size = (size_t)val_size;
-        *big_endian = v->mBigEndian;
+        *value = bf;
     }
 }
 

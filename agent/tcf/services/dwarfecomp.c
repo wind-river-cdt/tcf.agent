@@ -182,6 +182,46 @@ static void op_fbreg(void) {
     add(OP_add);
 }
 
+static void op_implicit_pointer(U1_T op) {
+    Trap trap;
+    PropertyValue pv;
+    DWARFExpressionInfo info;
+    CompUnit * unit = expr->object->mCompUnit;
+    int arg_size = unit->mDesc.m64bit ? 8 : 4;
+    ObjectInfo * ref_obj = NULL;
+    U4_T offset = 0;
+    U8_T dio_pos = 0;
+
+    expr_pos++;
+    if (op == OP_GNU_implicit_pointer && unit->mDesc.mVersion < 3) arg_size = unit->mDesc.mAddressSize;
+    dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
+    dio_EnterSection(&expr->unit->mDesc, expr->section, dio_pos);
+    ref_obj = find_object(get_dwarf_cache(unit->mFile), dio_ReadUX(arg_size));
+    offset = dio_ReadULEB128();
+    expr_pos += (size_t)(dio_GetPos() - dio_pos);
+    dio_ExitSection();
+
+    if (ref_obj == NULL) str_exception(ERR_INV_DWARF, "OP_implicit_pointer: invalid object reference");
+
+    memset(&pv, 0, sizeof(pv));
+    if (set_trap(&trap)) {
+        read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_location, &pv);
+        clear_trap(&trap);
+    }
+    else if (trap.error == ERR_SYM_NOT_FOUND) {
+        read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_const_value, &pv);
+    }
+    else {
+        exception(trap.error);
+    }
+    dwarf_find_expression(&pv, expr_ip, &info);
+    add_expression(&info);
+    if (offset != 0) {
+        add(OP_TCF_offset);
+        add_uleb128(offset);
+    }
+}
+
 static void add_expression(DWARFExpressionInfo * info) {
     DWARFExpressionInfo * org_expr = expr;
     size_t org_expr_pos = expr_pos;
@@ -306,9 +346,12 @@ static void add_expression(DWARFExpressionInfo * info) {
         case OP_addr:
             op_addr();
             break;
+        case OP_implicit_pointer:
+        case OP_GNU_implicit_pointer:
+            op_implicit_pointer(op);
+            break;
         case OP_form_tls_address:
         case OP_GNU_push_tls_address:
-        case OP_GNU_implicit_pointer:
         case OP_call2:
         case OP_call4:
         case OP_call_ref:
