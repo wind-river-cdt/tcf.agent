@@ -456,6 +456,11 @@ static int find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Cont
         if (obj->mName != NULL && !(obj->mFlags & DOIF_specification)) {
             if (strcmp(obj->mName, name) == 0) {
                 object2symbol(obj, &sym_cur);
+                if (ip == 0) {
+                    sym_cur->obj = find_definition(sym_cur->obj);
+                    *sym = sym_cur;
+                    return 1;
+                }
             }
             if (parent->mTag == TAG_subprogram) {
                 if (obj->mID == obj_ptr || (obj_ptr == 0 && obj->mTag == TAG_formal_parameter &&
