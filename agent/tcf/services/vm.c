@@ -385,7 +385,7 @@ static void evaluate_expression(void) {
         case OP_bra:
             check_e_stack(1);
             {
-                unsigned offs = (int16_t)read_u2();
+                size_t offs = (int16_t)read_u2();
                 if (state->stk[state->stk_pos - 1]) {
                     code_pos += offs;
                     if (code_pos > code_len) inv_dwarf("Invalid command");

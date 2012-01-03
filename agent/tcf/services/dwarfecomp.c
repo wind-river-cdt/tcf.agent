@@ -29,9 +29,19 @@
 #include <tcf/services/dwarf.h>
 #include <tcf/services/dwarfecomp.h>
 
+typedef struct JumpInfo {
+    U1_T op;
+    I2_T offs;
+    size_t size;
+    size_t src_pos;
+    size_t dst_pos;
+    struct JumpInfo * next;
+} JumpInfo;
+
 static U1_T * buf = NULL;
 static size_t buf_pos = 0;
 static size_t buf_max = 0;
+static JumpInfo * jumps = NULL;
 static DWARFExpressionInfo * expr = NULL;
 static size_t expr_pos = 0;
 static Context * expr_ctx = NULL;
@@ -222,9 +232,20 @@ static void op_implicit_pointer(U1_T op) {
     }
 }
 
+static void adjust_jumps(void) {
+    JumpInfo * i = jumps;
+    while (i != NULL) {
+        if (i->op == OP_bra || i->op == OP_skip) {
+            str_exception(ERR_OTHER, "OP_skip/OP_bra not supported yet");
+        }
+        i = i->next;
+    }
+}
+
 static void add_expression(DWARFExpressionInfo * info) {
     DWARFExpressionInfo * org_expr = expr;
     size_t org_expr_pos = expr_pos;
+    JumpInfo * org_jumps = jumps;
 
     if (expr != NULL && info->code_size) {
         if (expr->code_size) {
@@ -248,7 +269,10 @@ static void add_expression(DWARFExpressionInfo * info) {
 
     expr = info;
     expr_pos = 0;
+    jumps = NULL;
     while (expr_pos < info->expr_size) {
+        size_t op_src_pos = expr_pos;
+        size_t op_dst_pos = buf_pos;
         U1_T op = info->expr_addr[expr_pos];
         switch (op) {
         case OP_const1u:
@@ -318,7 +342,18 @@ static void add_expression(DWARFExpressionInfo * info) {
             break;
         case OP_bra:
         case OP_skip:
-            str_exception(ERR_UNSUPPORTED, "OP_bra/OP_skip not supported yet");
+            {
+                uint16_t x0 = info->expr_addr[expr_pos + 1];
+                uint16_t x1 = info->expr_addr[expr_pos + 2];
+                JumpInfo * i = (JumpInfo *)tmp_alloc_zero(sizeof(JumpInfo));
+                i->op = op;
+                i->offs = expr->unit->mFile->big_endian ? (x0 << 8) | x1 : x0 | (x1 << 8);
+                i->src_pos = expr_pos;
+                i->dst_pos = buf_pos;
+                i->next = jumps;
+                jumps = i;
+                copy(3);
+            }
             break;
         case OP_bregx:
         case OP_bit_piece:
@@ -362,9 +397,21 @@ static void add_expression(DWARFExpressionInfo * info) {
             expr_pos++;
             break;
         }
+        if (buf_pos - op_dst_pos != expr_pos - op_src_pos) {
+            JumpInfo * i = (JumpInfo *)tmp_alloc_zero(sizeof(JumpInfo));
+            assert(op != OP_bra && op != OP_skip);
+            i->op = op;
+            i->offs = (I2_T)(buf_pos - op_dst_pos) - (I2_T)(expr_pos - op_src_pos);
+            i->src_pos = op_src_pos;
+            i->dst_pos = op_dst_pos;
+            i->next = jumps;
+            jumps = i;
+        }
     }
+    adjust_jumps();
     expr = org_expr;
     expr_pos = org_expr_pos;
+    jumps = org_jumps;
 }
 
 void dwarf_transform_expression(Context * ctx, ContextAddress ip, DWARFExpressionInfo * info) {
@@ -374,12 +421,14 @@ void dwarf_transform_expression(Context * ctx, ContextAddress ip, DWARFExpressio
     expr_ctx = ctx;
     expr_ip = ip;
     expr = NULL;
+    jumps = NULL;
     add_expression(info);
     info->expr_addr = buf;
     info->expr_size = buf_pos;
     buf_pos = 0;
     buf_max = 0;
     buf = NULL;
+    jumps = NULL;
     expr = NULL;
     expr_pos = 0;
     expr_ctx = NULL;
