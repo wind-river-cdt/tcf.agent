@@ -42,7 +42,7 @@ CCDEPS += $(EXTRA_CCDEPS)
 
 override CFLAGS += $(OPTS)
 
-$(LIBTCF) : $(OFILES)
+$(BINDIR)/libtcf$(EXTLIB) : $(OFILES)
 	$(AR) $(AR_FLAGS) $(AR_OUT_F)$@ $^
 	$(RANLIB)
 

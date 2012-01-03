@@ -302,7 +302,7 @@ static int update_rule(PathMapRule * r, PathMapRuleAttribute * new_attrs) {
 }
 
 static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
-    unsigned i, j, k;
+    unsigned i, k;
     static char buf[FILE_PATH_SIZE];
 
     for (i = 0; i < m->rules_cnt; i++) {
@@ -339,8 +339,10 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
             if ((k != 1) || (src[0] != '/')) continue;
             k = 0;
         }
-        j = strlen(r->dst) - 1;
-        if (fnm[k] != 0 && (r->dst[j] == '/' || r->dst[j] == '\\')) k++;
+        if (r->dst[0] != 0) {
+            size_t j = strlen(r->dst) - 1;
+            if (fnm[k] != 0 && (r->dst[j] == '/' || r->dst[j] == '\\')) k++;
+        }
         snprintf(buf, sizeof(buf), "%s%s", r->dst, fnm + k);
         if (mode != PATH_MAP_TO_LOCAL || stat(buf, &st) == 0) return buf;
     }
