@@ -282,7 +282,8 @@ static void addr_to_line_callback(CodeArea * area, void * args) {
 
 static void line_to_addr_callback(CodeArea * area, void * args) {
     CodeArea * org = (CodeArea *)args;
-    if (area->start_line > org->start_line || area->end_line <= org->start_line) {
+    if (area->start_line > org->start_line || (area->start_line == org->start_line && area->start_column > org->start_column) ||
+        area->end_line < org->start_line || (area->end_line == org->start_line && area->end_column <= org->start_column)) {
         errno = set_errno(ERR_OTHER, "Invalid line area line numbers");
         error("line_to_address");
     }
@@ -605,12 +606,11 @@ static void next_pc(void) {
             error("address_to_line");
         }
         else if (area.start_line > 0) {
-            char elf_file_name[0x1000];
+            char * elf_file_name = tmp_strdup(area.file);
             if (area.start_address > pc || area.end_address <= pc) {
                 errno = set_errno(ERR_OTHER, "Invalid line area address");
                 error("address_to_line");
             }
-            strlcpy(elf_file_name, area.file, sizeof(elf_file_name));
             if (line_to_address(elf_ctx, elf_file_name, area.start_line, area.start_column, line_to_addr_callback, &area) < 0) {
                 error("line_to_address");
             }

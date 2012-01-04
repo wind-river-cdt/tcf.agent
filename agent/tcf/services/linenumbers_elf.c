@@ -91,12 +91,14 @@ static int compare_path(Channel * chnl, Context * ctx, const char * file, const 
     return i <= j && strcmp(file, full_name + j - i) == 0;
 }
 
-static LineNumbersState * get_next_in_text(CompUnit * unit, LineNumbersState * state) {
-    LineNumbersState * next = unit->mStates + state->mNext;
-    if (state->mNext == 0) return NULL;
+static LineNumbersState * get_next_in_text(CompUnit * unit, unsigned index) {
+    LineNumbersState * state = unit->mStatesIndex[index++];
+    LineNumbersState * next = NULL;
+    if (index >= unit->mStatesCnt) return NULL;
+    next = unit->mStatesIndex[index++];
     while (next->mLine == state->mLine && next->mColumn == state->mColumn) {
-        if (next->mNext == 0) return NULL;
-        next = unit->mStates + next->mNext;
+        if (index >= unit->mStatesCnt) return NULL;
+        next = unit->mStatesIndex[index++];
     }
     if (state->mFile != next->mFile) return NULL;
     return next;
@@ -110,10 +112,9 @@ static LineNumbersState * get_next_in_code(CompUnit * unit, LineNumbersState * s
 }
 
 static void call_client(CompUnit * unit, LineNumbersState * state,
+                        LineNumbersState * code_next, LineNumbersState * text_next,
                         ContextAddress state_addr, LineNumbersCallBack * client, void * args) {
     CodeArea area;
-    LineNumbersState * code_next = get_next_in_code(unit, state);
-    LineNumbersState * text_next = get_next_in_text(unit, state);
     FileInfo * file_info = unit->mFiles + state->mFile;
 
     if (code_next == NULL) return;
@@ -168,12 +169,14 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
             if (state->mFile < file) {
                 l = k + 1;
             }
-            else if (state->mFile > file || state->mLine > line) {
+            else if (state->mFile > file || state->mLine > line || (state->mLine == line && state->mColumn > column)) {
                 h = k;
             }
             else {
-                LineNumbersState * next = get_next_in_text(unit, state);
-                if ((next == NULL ? state->mLine + 1 : next->mLine) <= line) {
+                LineNumbersState * next = get_next_in_text(unit, k);
+                U4_T next_line = next ? next->mLine : state->mLine + 1;
+                U4_T next_column = next ? next->mColumn : 0;
+                if (next_line < line || (next_line == line && next_column <= column)) {
                     l = k + 1;
                 }
                 else {
@@ -188,7 +191,19 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
                     }
                     for (;;) {
                         ContextAddress addr = elf_map_to_run_time_address(ctx, unit->mFile, unit->mTextSection, state->mAddress);
-                        if (errno == 0) call_client(unit, state, addr, client, args);
+                        if (errno == 0) {
+                            LineNumbersState * code_next = get_next_in_code(unit, state);
+                            if (code_next != NULL) {
+                                LineNumbersState * text_next = get_next_in_text(unit, k);
+                                U4_T next_line = text_next ? text_next->mLine : state->mLine + 1;
+                                U4_T next_column = text_next ? text_next->mColumn : 0;
+                                if (next_line > line || (next_line == line && next_column > column)) {
+                                    assert(state->mLine <= line);
+                                    assert(state->mLine < line || state->mColumn <= column);
+                                    call_client(unit, state, code_next, text_next, addr, client, args);
+                                }
+                            }
+                        }
                         if (++k >= unit->mStatesCnt) break;
                         state = unit->mStatesIndex[k];
                         if (state->mFile > file) break;
@@ -299,7 +314,11 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
                             k--;
                         }
                         for (;;) {
-                            call_client(unit, state, state->mAddress - range->mAddr + range_rt_addr, client, args);
+                            LineNumbersState * code_next = get_next_in_code(unit, state);
+                            if (code_next != NULL) {
+                                LineNumbersState * text_next = get_next_in_text(unit, k);
+                                call_client(unit, state, code_next, text_next, state->mAddress - range->mAddr + range_rt_addr, client, args);
+                            }
                             if (++k >= unit->mStatesCnt) break;
                             state = unit->mStates + k;
                             if (state->mAddress >= addr_max) break;
