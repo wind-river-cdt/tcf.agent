@@ -71,6 +71,7 @@ struct FileInfo {
 #define DOIF_abstract_origin    0x0010
 #define DOIF_extension          0x0020
 #define DOIF_children_loaded    0x0040
+#define DOIF_find_mark          0x0080
 
 struct ObjectInfo {
 

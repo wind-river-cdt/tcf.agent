@@ -443,6 +443,7 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
 
 static int find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, ContextAddress ip, const char * name, Symbol ** sym) {
     Symbol * sym_imp = NULL;  /* Imported from a namespace */
+    Symbol * sym_ren = NULL;  /* Imported by renaming from a namespace */
     Symbol * sym_enu = NULL;  /* Enumeration constant */
     Symbol * sym_cur = NULL;  /* Found in current scope */
     Symbol * sym_base = NULL; /* Found in base class (inherited) */
@@ -480,6 +481,7 @@ static int find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Cont
         }
         switch (obj->mTag) {
         case TAG_enumeration_type:
+            if (sym_cur != NULL) break;
             find_in_object_tree(obj, 0, 0, name, &sym_enu);
             break;
         case TAG_global_subroutine:
@@ -493,15 +495,30 @@ static int find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Cont
             }
             break;
         case TAG_inheritance:
+            if (sym_cur != NULL) break;
             find_in_object_tree(obj->mType, 0, 0, name, &sym_base);
             break;
         case TAG_imported_module:
-            {
+            if (sym_cur != NULL) break;
+            find_in_object_tree(obj, 0, 0, name, &sym_ren);
+            if (sym_ren == NULL) {
                 PropertyValue p;
                 ObjectInfo * module;
                 read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_import, &p);
                 module = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
-                if (module != NULL) find_in_object_tree(module, 0, 0, name, &sym_imp);
+                if (module != NULL && (module->mFlags & DOIF_find_mark) == 0) {
+                    Trap trap;
+                    if (set_trap(&trap)) {
+                        module->mFlags |= DOIF_find_mark;
+                        find_in_object_tree(module, 0, 0, name, &sym_imp);
+                        clear_trap(&trap);
+                        module->mFlags &= ~DOIF_find_mark;
+                    }
+                    else {
+                        module->mFlags &= ~DOIF_find_mark;
+                        exception(trap.error);
+                    }
+                }
             }
             break;
         }
@@ -511,6 +528,7 @@ static int find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Cont
     if (*sym == NULL) *sym = sym_base;
     if (*sym == NULL) *sym = sym_this;
     if (*sym == NULL) *sym = sym_enu;
+    if (*sym == NULL) *sym = sym_ren;
     if (*sym == NULL) *sym = sym_imp;
 
     if (*sym == NULL && (parent->mFlags & DOIF_extension)) {
