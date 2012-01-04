@@ -28,10 +28,12 @@
 #include <tcf/framework/exceptions.h>
 #include <tcf/services/dwarf.h>
 #include <tcf/services/dwarfecomp.h>
+#include <tcf/services/elf-loader.h>
 
 typedef struct JumpInfo {
     U1_T op;
-    I2_T offs;
+    I2_T delta;
+    I2_T jump_offs;
     size_t size;
     size_t src_pos;
     size_t dst_pos;
@@ -111,7 +113,12 @@ static void op_addr(void) {
     addr = (ContextAddress)dio_ReadAddress(&section);
     expr_pos += (size_t)(dio_GetPos() - pos);
     dio_ExitSection();
-    addr = elf_map_to_run_time_address(expr_ctx, expr->unit->mFile, section, addr);
+    if (expr_pos < expr->expr_size && expr->expr_addr[expr_pos] == OP_GNU_push_tls_address) {
+        /* Bug in some versions of GCC: OP_addr used instead of OP_const, don't relocate */
+    }
+    else {
+        addr = elf_map_to_run_time_address(expr_ctx, expr->unit->mFile, section, addr);
+    }
     if (errno) str_exception(errno, "Cannot get object run-time address");
     add(OP_constu);
     add_uleb128(addr);
@@ -192,10 +199,11 @@ static void op_fbreg(void) {
     add(OP_add);
 }
 
-static void op_implicit_pointer(U1_T op) {
+static void op_implicit_pointer(void) {
     Trap trap;
     PropertyValue pv;
     DWARFExpressionInfo info;
+    U1_T op = expr->expr_addr[expr_pos];
     CompUnit * unit = expr->object->mCompUnit;
     int arg_size = unit->mDesc.m64bit ? 8 : 4;
     ObjectInfo * ref_obj = NULL;
@@ -232,11 +240,58 @@ static void op_implicit_pointer(U1_T op) {
     }
 }
 
+static void op_push_tls_address(void) {
+    U8_T addr = 0;
+    expr_pos++;
+    if (expr_pos == 1 && expr_pos < expr->expr_size) {
+        /* This looks like a bug in GCC: offset sometimes is emitted after OP_GNU_push_tls_address */
+        U1_T op = expr->expr_addr[expr_pos];
+        switch (op) {
+        case OP_const4u: copy(5); break;
+        case OP_const8u: copy(9); break;
+        case OP_constu:  add(op); expr_pos++; copy_leb128(); break;
+        }
+    }
+    if (!context_has_state(expr_ctx)) str_exception(ERR_INV_CONTEXT,
+        "Thread local variable, but context is not a thread");
+    addr = get_tls_address(expr_ctx, expr->object->mCompUnit->mFile);
+    if (addr != 0) {
+        add(OP_constu);
+        add_uleb128(addr);
+        add(OP_add);
+    }
+}
+
 static void adjust_jumps(void) {
     JumpInfo * i = jumps;
     while (i != NULL) {
         if (i->op == OP_bra || i->op == OP_skip) {
-            str_exception(ERR_OTHER, "OP_skip/OP_bra not supported yet");
+            int delta = 0;
+            JumpInfo * j = jumps;
+            while (j != NULL) {
+                if (i->jump_offs > 0) {
+                    if (j->src_pos > i->src_pos && j->src_pos < i->src_pos + i->jump_offs) {
+                        delta += j->delta;
+                    }
+                }
+                else {
+                    if (j->src_pos > i->src_pos + i->jump_offs && j->src_pos < i->src_pos) {
+                        delta -= j->delta;
+                    }
+                }
+                j = j->next;
+            }
+            if (delta != 0) {
+                U2_T new_offs = (U2_T)(i->jump_offs + delta);
+                if (expr->unit->mFile->big_endian) {
+                    buf[i->dst_pos + 1] = (U1_T)((new_offs >> 8) & 0xffu);
+                    buf[i->dst_pos + 2] = (U1_T)(new_offs & 0xffu);
+                }
+                else {
+                    buf[i->dst_pos + 1] = (U1_T)(new_offs & 0xffu);
+                    buf[i->dst_pos + 2] = (U1_T)((new_offs >> 8) & 0xffu);
+                }
+            }
         }
         i = i->next;
     }
@@ -343,16 +398,19 @@ static void add_expression(DWARFExpressionInfo * info) {
         case OP_bra:
         case OP_skip:
             {
-                uint16_t x0 = info->expr_addr[expr_pos + 1];
-                uint16_t x1 = info->expr_addr[expr_pos + 2];
-                JumpInfo * i = (JumpInfo *)tmp_alloc_zero(sizeof(JumpInfo));
-                i->op = op;
-                i->offs = expr->unit->mFile->big_endian ? (x0 << 8) | x1 : x0 | (x1 << 8);
-                i->src_pos = expr_pos;
-                i->dst_pos = buf_pos;
-                i->next = jumps;
-                jumps = i;
-                copy(3);
+                U2_T x0 = info->expr_addr[expr_pos + 1];
+                U2_T x1 = info->expr_addr[expr_pos + 2];
+                U2_T offs = expr->unit->mFile->big_endian ? (x0 << 8) | x1 : x0 | (x1 << 8);
+                if (offs != 0) {
+                    JumpInfo * i = (JumpInfo *)tmp_alloc_zero(sizeof(JumpInfo));
+                    i->op = op;
+                    i->jump_offs = (I2_T)offs;
+                    i->src_pos = op_src_pos;
+                    i->dst_pos = op_dst_pos;
+                    i->next = jumps;
+                    jumps = i;
+                    copy(3);
+                }
             }
             break;
         case OP_bregx:
@@ -383,25 +441,29 @@ static void add_expression(DWARFExpressionInfo * info) {
             break;
         case OP_implicit_pointer:
         case OP_GNU_implicit_pointer:
-            op_implicit_pointer(op);
+            op_implicit_pointer();
             break;
         case OP_form_tls_address:
         case OP_GNU_push_tls_address:
+            op_push_tls_address();
+            break;
         case OP_call2:
         case OP_call4:
         case OP_call_ref:
             str_fmt_exception(ERR_OTHER, "Unsupported DWARF expression op 0x%02x", op);
             break;
         default:
+            if (op >= OP_lo_user) {
+                str_fmt_exception(ERR_OTHER, "Unsupported DWARF expression op 0x%02x", op);
+            }
             add(op);
             expr_pos++;
             break;
         }
         if (buf_pos - op_dst_pos != expr_pos - op_src_pos) {
             JumpInfo * i = (JumpInfo *)tmp_alloc_zero(sizeof(JumpInfo));
-            assert(op != OP_bra && op != OP_skip);
             i->op = op;
-            i->offs = (I2_T)(buf_pos - op_dst_pos) - (I2_T)(expr_pos - op_src_pos);
+            i->delta = (I2_T)(buf_pos - op_dst_pos) - (I2_T)(expr_pos - op_src_pos);
             i->src_pos = op_src_pos;
             i->dst_pos = op_dst_pos;
             i->next = jumps;
