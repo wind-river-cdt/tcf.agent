@@ -58,6 +58,7 @@ int main(int argc, char ** argv) {
     int mode = 1; /* interactive */
     const char * host_name = "localhost";
     const char * command = NULL;
+    const char * log_level = NULL;
     const char * log_name = "-";
     const char * script_name = NULL;
 
@@ -107,7 +108,8 @@ int main(int argc, char ** argv) {
                 }
                 switch (c) {
                 case 'l':
-                    log_mode = strtol(s, 0, 0);
+                    log_level = s;
+                    parse_trace_mode(log_level, &log_mode);
                     break;
 
                 case 'L':
@@ -173,6 +175,13 @@ int main(int argc, char ** argv) {
 #if ENABLE_Plugins
     plugins_load(proto, NULL);
 #endif
+
+    /* Reparse log level in case initialization cause additional
+     * levels to be registered */
+    if (parse_trace_mode(log_level, &log_mode) != 0) {
+        fprintf(stderr, "Cannot parse log level: %s\n", log_level);
+        exit(1);
+    }
 
     /* Process events - must run on the initial thread since ptrace()
      * returns ECHILD otherwise, thinking we are not the owner. */
