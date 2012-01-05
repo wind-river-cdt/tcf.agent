@@ -1206,6 +1206,11 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
     return 0;
 }
 
+const char * get_symbol_file_name(MemoryRegion * module) {
+    errno = 0;
+    return NULL;
+}
+
 static void event_context_exited(Context * ctx, void * client_data) {
     unsigned i;
     SymbolCacheEntry ** symbol_cache = EXT(ctx)->symbol_cache;

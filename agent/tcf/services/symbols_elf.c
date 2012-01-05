@@ -1301,6 +1301,16 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
     return 0;
 }
 
+const char * get_symbol_file_name(MemoryRegion * module) {
+    int error = 0;
+    ELF_File * file = module ? elf_open_memory_region_file(module, &error) : NULL;
+    errno = error;
+    if (file == NULL && module == NULL) return NULL;
+    if (file == NULL) return module->file_name;
+    if (file->debug_info_file_name) return file->debug_info_file_name;
+    return file->name;
+}
+
 void ini_symbols_lib(void) {
 }
 

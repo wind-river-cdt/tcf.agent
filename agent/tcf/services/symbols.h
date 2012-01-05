@@ -255,6 +255,11 @@ extern int get_next_stack_frame(StackFrame * frame, StackFrame * down);
 extern int get_stack_tracing_info(Context * ctx, ContextAddress addr, StackTracingInfo ** info);
 
 /*
+ * Get name of a symbol file that is used for a given module.
+ */
+extern const char * get_symbol_file_name(MemoryRegion * module);
+
+/*
  * Initialize symbol service.
  */
 extern void ini_symbols_service(Protocol * proto);

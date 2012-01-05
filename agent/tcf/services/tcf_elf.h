@@ -496,6 +496,11 @@ extern void swap_bytes(void * buf, size_t size);
 extern ELF_File * elf_open(const char * file_name);
 
 /*
+ * Open ELF file that is mapped in the given memory region.
+ */
+extern ELF_File * elf_open_memory_region_file(MemoryRegion * module, int * error);
+
+/*
  * Load section data into memory.
  * section->data is set to section data address in memory.
  * Data will stay in memory at least until file is closed.

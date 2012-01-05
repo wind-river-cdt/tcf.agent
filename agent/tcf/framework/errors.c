@@ -54,6 +54,7 @@
 
 typedef struct ReportBuffer {
     ErrorReport pub; /* public part of error report */
+    int posix_code;
     int refs;
     int gets;
 } ReportBuffer;
@@ -442,6 +443,7 @@ int get_error_code(int no) {
         switch (m->source) {
         case SRC_REPORT:
         case SRC_MESSAGE:
+            if (m->report != NULL && m->report->posix_code != 0) return m->report->posix_code;
             no = m->error;
             continue;
         }
@@ -513,6 +515,7 @@ ErrorReport * get_error_report(int err) {
         }
 
         if (err < STD_ERR_BASE || err > ERR_MESSAGE_MAX) {
+            report->posix_code = err;
             add_report_prop_int(report, "AltCode", err);
 #if defined(_MSC_VER)
             add_report_prop_str(report, "AltOrg", "MSC");

@@ -1356,6 +1356,11 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
     return 0;
 }
 
+const char * get_symbol_file_name(MemoryRegion * module) {
+    errno = 0;
+    return NULL;
+}
+
 /*************************************************************************************************/
 
 static void flush_syms(Context * ctx, int mode) {

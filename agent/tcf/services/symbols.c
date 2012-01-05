@@ -25,6 +25,7 @@
 #include <tcf/framework/exceptions.h>
 #include <tcf/framework/cache.h>
 #include <tcf/services/stacktrace.h>
+#include <tcf/services/memorymap.h>
 #include <tcf/services/symbols.h>
 #include <tcf/services/vm.h>
 
@@ -711,6 +712,92 @@ static void command_find_frame_info(char * token, Channel * c) {
     cache_enter(command_find_frame_info_cache_client, c, &args, sizeof(args));
 }
 
+typedef struct CommandSymFileInfo {
+    char token[256];
+    char id[256];
+    ContextAddress addr;
+} CommandSymFileInfo;
+
+static void command_get_sym_file_info_cache_client(void * x) {
+    int err = 0;
+    MemoryMap * client_map = NULL;
+    MemoryMap * target_map = NULL;
+    MemoryRegion * region = NULL;
+    Channel * c = cache_channel();
+    CommandSymFileInfo * args = (CommandSymFileInfo *)x;
+    const char * sym_file = NULL;
+    Context * ctx = NULL;
+    int sym_error = 0;
+
+    ctx = id2ctx(args->id);
+    if (ctx == NULL) err = ERR_INV_CONTEXT;
+    if (!err && memory_map_get(ctx, &client_map, &target_map) < 0) err = errno;
+
+    if (!err) {
+        unsigned i;
+        for (i = 0; i < client_map->region_cnt; i++) {
+            MemoryRegion * r = client_map->regions + i;
+            if (r->addr <= args->addr && r->addr + r->size > args->addr) region = r;
+        }
+        if (region == NULL) {
+            for (i = 0; i < target_map->region_cnt; i++) {
+                MemoryRegion * r = target_map->regions + i;
+                if (r->addr <= args->addr && r->addr + r->size > args->addr) region = r;
+            }
+        }
+
+        sym_file = get_symbol_file_name(region);
+        sym_error = errno;
+    }
+
+    cache_exit();
+
+    write_stringz(&c->out, "R");
+    write_stringz(&c->out, args->token);
+    write_errno(&c->out, err);
+    if (region != NULL) {
+        write_stream(&c->out, '{');
+        json_write_string(&c->out, "Addr");
+        write_stream(&c->out, ':');
+        json_write_uint64(&c->out, region->addr);
+        write_stream(&c->out, ',');
+        json_write_string(&c->out, "Size");
+        write_stream(&c->out, ':');
+        json_write_uint64(&c->out, region->size);
+        if (sym_file != NULL) {
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "FileName");
+            write_stream(&c->out, ':');
+            json_write_string(&c->out, sym_file);
+        }
+        if (sym_error != 0) {
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "FileError");
+            write_stream(&c->out, ':');
+            write_error_object(&c->out, sym_error);
+        }
+        write_stream(&c->out, '}');
+        write_stream(&c->out, 0);
+    }
+    else {
+        write_stringz(&c->out, "null");
+    }
+    write_stream(&c->out, MARKER_EOM);
+}
+
+static void command_get_sym_file_info(char * token, Channel * c) {
+    CommandSymFileInfo args;
+
+    json_read_string(&c->inp, args.id, sizeof(args.id));
+    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    args.addr = (ContextAddress)json_read_uint64(&c->inp);
+    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+
+    strlcpy(args.token, token, sizeof(args.token));
+    cache_enter(command_get_sym_file_info_cache_client, c, &args, sizeof(args));
+}
+
 void ini_symbols_service(Protocol * proto) {
     static int ini_done = 0;
     if (!ini_done) {
@@ -725,6 +812,7 @@ void ini_symbols_service(Protocol * proto) {
     add_command_handler(proto, SYMBOLS, "list", command_list);
     add_command_handler(proto, SYMBOLS, "getArrayType", command_get_array_type);
     add_command_handler(proto, SYMBOLS, "findFrameInfo", command_find_frame_info);
+    add_command_handler(proto, SYMBOLS, "getSymFileInfo", command_get_sym_file_info);
 }
 
 #endif /* SERVICE_Symbols */

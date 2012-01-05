@@ -757,7 +757,7 @@ static ELF_File * find_open_file_by_inode(dev_t dev, ino_t ino, int64_t mtime) {
     return NULL;
 }
 
-static ELF_File * open_memory_region_file(MemoryRegion * r, int * error) {
+ELF_File * elf_open_memory_region_file(MemoryRegion * r, int * error) {
     ELF_File * file = NULL;
     ino_t ino = r->ino;
     dev_t dev = r->dev;
@@ -793,8 +793,7 @@ static void search_regions(MemoryMap * map, ContextAddress addr0, ContextAddress
         MemoryRegion * r = map->regions + i;
         if (r->file_name == NULL) continue;
         if (r->addr == 0 && r->size == 0 && r->file_offs == 0 && r->sect_name == NULL) {
-            int error = 0;
-            ELF_File * file = open_memory_region_file(r, &error);
+            ELF_File * file = elf_open_memory_region_file(r, NULL);
             if (file != NULL) {
                 unsigned j;
                 for (j = 0; j < file->pheader_cnt; j++) {
@@ -816,8 +815,7 @@ static void search_regions(MemoryMap * map, ContextAddress addr0, ContextAddress
             }
         }
         else if (r->addr <= addr1 && r->size == 0 && r->sect_name != NULL) {
-            int error = 0;
-            ELF_File * file = open_memory_region_file(r, &error);
+            ELF_File * file = elf_open_memory_region_file(r, NULL);
             if (file != NULL) {
                 unsigned j;
                 for (j = 0; j < file->section_cnt; j++) {
@@ -887,7 +885,7 @@ ELF_File * elf_open_inode(Context * ctx, dev_t dev, ino_t ino, int64_t mtime) {
     if (get_map(ctx, 0, ~(ContextAddress)0, &elf_map) < 0) return NULL;
     for (i = 0; i < elf_map.region_cnt; i++) {
         MemoryRegion * r = elf_map.regions + i;
-        file = open_memory_region_file(r, &error);
+        file = elf_open_memory_region_file(r, &error);
         if (file == NULL) continue;
         if (file->dev == dev && file->ino == ino && file->mtime == mtime) return file;
         if (file->debug_info_file_name == NULL) continue;
@@ -925,13 +923,13 @@ ELF_File * elf_list_next(Context * ctx) {
     assert(elf_list.region_cnt > 0);
     while (elf_list_pos < elf_list.region_cnt) {
         int error = 0;
-        ELF_File * file = open_memory_region_file(elf_list.regions + elf_list_pos++, &error);
+        ELF_File * file = elf_open_memory_region_file(elf_list.regions + elf_list_pos++, &error);
         if (file != NULL) {
             if (file->listed) continue;
             file->listed = 1;
             return file;
         }
-        if (error) {
+        if (error && get_error_code(error) != ENOENT) {
             errno = error;
             return NULL;
         }
@@ -959,7 +957,7 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
         ELF_File * file = NULL;
         assert(r->addr <= addr_max);
         assert(r->addr + r->size > addr_min);
-        file = open_memory_region_file(r, &error);
+        file = elf_open_memory_region_file(r, &error);
         if (error) exception(error);
         if (r->sect_name == NULL) {
             for (j = 0; range == NULL && j < file->pheader_cnt; j++) {
@@ -1038,7 +1036,7 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
             int error = 0;
             ELF_File * exec = NULL;
             if (!file->debug_info_file) continue;
-            exec = open_memory_region_file(r, &error);
+            exec = elf_open_memory_region_file(r, &error);
             if (exec == NULL) continue;
             if (exec->debug_info_file_name == NULL) continue;
             if (strcmp(exec->debug_info_file_name, file->name) != 0) continue;
@@ -1083,7 +1081,7 @@ ContextAddress elf_map_to_link_time_address(Context * ctx, ContextAddress addr, 
         ELF_File * f = NULL;
         assert(r->addr <= addr);
         assert(r->addr + r->size > addr);
-        f = open_memory_region_file(r, NULL);
+        f = elf_open_memory_region_file(r, NULL);
         if (f == NULL) continue;
         if (r->sect_name == NULL) {
             unsigned j;

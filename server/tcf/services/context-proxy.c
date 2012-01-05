@@ -657,7 +657,7 @@ void create_context_proxy(Channel * host, Channel * target, int forward_pm) {
     add_event_handler2(target, MEMORY_MAP, "changed", event_memory_map_changed, p);
     if (forward_pm) add_command_handler2(host->protocol, PATH_MAP, "set", command_path_map_set, p);
     /* Retirve initial set of run control contexts */
-    protocol_send_command(p->target, "RunControl", "getChildren", validate_peer_cache_children, p);
+    protocol_send_command(p->target, RUN_CONTROL, "getChildren", validate_peer_cache_children, p);
     write_stringz(&p->target->out, "null");
     write_stream(&p->target->out, MARKER_EOM);
     p->rc_pending_cnt++;
@@ -676,7 +676,7 @@ static void read_rc_children_item(InputStream * inp, void * args) {
         ContextCache * c = (ContextCache *)loc_alloc_zero(sizeof(ContextCache));
         strcpy(c->id, id);
         c->peer = p;
-        protocol_send_command(p->target, "RunControl", "getContext", validate_peer_cache_context, c);
+        protocol_send_command(p->target, RUN_CONTROL, "getContext", validate_peer_cache_context, c);
         json_write_string(&p->target->out, c->id);
         write_stream(&p->target->out, 0);
         write_stream(&p->target->out, MARKER_EOM);
@@ -753,7 +753,7 @@ static void validate_peer_cache_context(Channel * c, void * args, int error) {
                 free_context_cache(x);
             }
             else if (x->has_state) {
-                protocol_send_command(p->target, "RunControl", "getState", validate_peer_cache_state, x);
+                protocol_send_command(p->target, RUN_CONTROL, "getState", validate_peer_cache_state, x);
                 json_write_string(&p->target->out, x->id);
                 write_stream(&p->target->out, 0);
                 write_stream(&p->target->out, MARKER_EOM);
@@ -761,7 +761,7 @@ static void validate_peer_cache_context(Channel * c, void * args, int error) {
             }
             else {
                 add_context_cache(p, x);
-                protocol_send_command(p->target, "RunControl", "getChildren", validate_peer_cache_children, p);
+                protocol_send_command(p->target, RUN_CONTROL, "getChildren", validate_peer_cache_children, p);
                 json_write_string(&p->target->out, x->id);
                 write_stream(&p->target->out, 0);
                 write_stream(&p->target->out, MARKER_EOM);
@@ -814,7 +814,7 @@ static void validate_peer_cache_state(Channel * c, void * args, int error) {
                     on_context_suspended(x);
                     send_context_stopped_event(x->ctx);
                 }
-                protocol_send_command(p->target, "RunControl", "getChildren", validate_peer_cache_children, p);
+                protocol_send_command(p->target, RUN_CONTROL, "getChildren", validate_peer_cache_children, p);
                 json_write_string(&p->target->out, x->id);
                 write_stream(&p->target->out, 0);
                 write_stream(&p->target->out, MARKER_EOM);
@@ -998,7 +998,7 @@ static void read_memory_map_item(InputStream * inp, void * args) {
         char * fnm = apply_path_map(cache->peer->host, cache->ctx, m->file_name, PATH_MAP_TO_LOCAL);
         if (fnm != m->file_name) {
             loc_free(m->file_name);
-            m->file_name = loc_strdup(fnm);
+            m->file_name = loc_strdup(canonic_path_map_file_name(fnm));
         }
         if (m->file_name != NULL && stat(m->file_name, &buf) == 0) {
             m->dev = buf.st_dev;
@@ -1006,8 +1006,7 @@ static void read_memory_map_item(InputStream * inp, void * args) {
             mem_buf_pos++;
         }
         else if (m->file_name != NULL) {
-            trace(LOG_ELF, "Object file not found: %s", m->file_name);
-            loc_free(m->file_name);
+            mem_buf_pos++;
         }
     }
 }
@@ -1056,7 +1055,7 @@ int context_get_memory_map(Context * ctx, MemoryMap * map) {
     if (cache->pending_get_mmap != NULL) cache_wait(&cache->mmap_cache);
     if (cache->mmap_is_valid == 0 && cache->peer != NULL) {
         Channel * c = cache->peer->target;
-        cache->pending_get_mmap = protocol_send_command(c, "MemoryMap", "get", validate_memory_map_cache, cache);
+        cache->pending_get_mmap = protocol_send_command(c, MEMORY_MAP, "get", validate_memory_map_cache, cache);
         json_write_string(&c->out, cache->id);
         write_stream(&c->out, 0);
         write_stream(&c->out, MARKER_EOM);

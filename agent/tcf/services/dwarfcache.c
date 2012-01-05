@@ -791,7 +791,7 @@ static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
     while (unit != NULL) {
         ObjectInfo * obj = get_dwarf_children(unit);
         while (obj != NULL) {
-            if ((obj->mFlags & DOIF_external) && obj->mDefinition == NULL) {
+            if ((obj->mFlags & DOIF_external) && obj->mDefinition == NULL && obj->mName != NULL) {
                 unsigned h;
                 PubNamesInfo * info = NULL;
                 if (tbl->mCnt >= tbl->mMax) {
