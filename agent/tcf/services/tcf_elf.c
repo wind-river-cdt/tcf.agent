@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -482,6 +482,7 @@ static ELF_File * create_elf_cache(const char * file_name) {
                         p->type = phdr.p_type;
                         p->offset = phdr.p_offset;
                         p->address = phdr.p_vaddr;
+                        p->physical_address = phdr.p_paddr;
                         p->file_size = phdr.p_filesz;
                         p->mem_size = phdr.p_memsz;
                         p->flags = phdr.p_flags;
@@ -595,6 +596,7 @@ static ELF_File * create_elf_cache(const char * file_name) {
                         p->type = phdr.p_type;
                         p->offset = phdr.p_offset;
                         p->address = phdr.p_vaddr;
+                        p->physical_address = phdr.p_paddr;
                         p->file_size = phdr.p_filesz;
                         p->mem_size = phdr.p_memsz;
                         p->flags = phdr.p_flags;
