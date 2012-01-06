@@ -122,6 +122,7 @@ struct BreakInstruction {
 };
 
 struct EvaluationArgs {
+    int in_cache;
     BreakpointInfo * bp;
     Context * ctx;
 };
@@ -821,7 +822,7 @@ static void post_location_evaluation_request(Context * ctx, BreakpointInfo * bp)
 }
 
 static void expr_cache_enter(CacheClient * client, BreakpointInfo * bp, Context * ctx) {
-    LINK * l = NULL;
+    int cnt = 0;
     EvaluationArgs args;
 
     args.bp = bp;
@@ -834,26 +835,53 @@ static void expr_cache_enter(CacheClient * client, BreakpointInfo * bp, Context 
     }
 
     if (*bp->id) {
-        l = bp->link_clients.next;
+        LINK * l = bp->link_clients.next;
+        assert(!list_is_empty(&bp->link_clients));
         while (l != &bp->link_clients) {
             BreakpointRef * br = link_bp2br(l);
             Channel * c = br->channel;
             assert(br->bp == bp);
-            cache_enter_cnt++;
-            run_ctrl_lock();
-            if (c == NULL) {
-                client(&args);
-            }
-            else {
+            if (c != NULL) {
                 assert(!is_channel_closed(c));
+                run_ctrl_lock();
+                cache_enter_cnt++;
+                args.in_cache = 1;
                 cache_enter(client, c, &args, sizeof(args));
+                cnt++;
             }
             l = l->next;
         }
     }
-    else {
+#if ENABLE_LineNumbersProxy && ENABLE_SymbolsProxy
+    if (cnt == 0) {
+        LINK * l = channel_root.next;
+        while (l != &channel_root) {
+            Channel * c = chanlink2channelp(l);
+            if (!is_channel_closed(c)) {
+                int i;
+                int has_symbols = 0;
+                int has_line_numbers = 0;
+                for (i = 0; i < c->peer_service_cnt; i++) {
+                    char * nm = c->peer_service_list[i];
+                    if (strcmp(nm, "Symbols") == 0) has_symbols = 1;
+                    if (strcmp(nm, "LineNumbers") == 0) has_line_numbers = 1;
+                }
+                if (has_symbols && has_line_numbers) {
+                    run_ctrl_lock();
+                    cache_enter_cnt++;
+                    args.in_cache = 1;
+                    cache_enter(client, c, &args, sizeof(args));
+                    cnt++;
+                }
+            }
+            l = l->next;
+        }
+    }
+#endif
+    if (cnt == 0) {
         cache_enter_cnt++;
         run_ctrl_lock();
+        args.in_cache = 0;
         client(&args);
     }
 }
@@ -885,7 +913,6 @@ static void free_bp(BreakpointInfo * bp) {
         loc_free(attr->value);
         loc_free(attr);
     }
-    assert(list_is_empty(&bp->link_clients));
     loc_free(bp);
 }
 
@@ -1055,7 +1082,7 @@ static void done_evaluation(void) {
 }
 
 static void expr_cache_exit(EvaluationArgs * args) {
-    if (*args->bp->id) cache_exit();
+    if (args->in_cache) cache_exit();
     done_evaluation();
     run_ctrl_unlock();
 }
@@ -1307,8 +1334,10 @@ static void event_replant_breakpoints(void * arg) {
         if (req->bp_cnt > 0) {
             int i;
             for (i = 0; i < req->bp_cnt; i++) {
-                req->bp_arr[i].condition_ok = 0;
-                expr_cache_enter(evaluate_condition, req->bp_arr[i].bp, ctx);
+                ConditionEvaluationRequest * r = req->bp_arr + i;
+                r->condition_ok = 0;
+                if (is_disabled(r->bp)) continue;
+                expr_cache_enter(evaluate_condition, r->bp, ctx);
             }
         }
     }

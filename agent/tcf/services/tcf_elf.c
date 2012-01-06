@@ -958,7 +958,10 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
         assert(r->addr <= addr_max);
         assert(r->addr + r->size > addr_min);
         file = elf_open_memory_region_file(r, &error);
-        if (error) exception(error);
+        if (error) {
+            if (get_error_code(error) == ENOENT) continue;
+            exception(error);
+        }
         if (r->sect_name == NULL) {
             for (j = 0; range == NULL && j < file->pheader_cnt; j++) {
                 U8_T offs_min = 0;
