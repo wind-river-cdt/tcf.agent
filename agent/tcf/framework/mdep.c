@@ -582,7 +582,25 @@ const char * get_user_home(void) {
     }
     if (!WideCharToMultiByte(CP_UTF8, 0, w_buf, -1, a_buf, sizeof(a_buf), NULL, NULL)) {
         set_win32_errno(GetLastError());
-        return 0;
+        return NULL;
+    }
+    return a_buf;
+}
+
+#define MAX_USER_NAME 256
+
+const char * get_user_name(void) {
+    DWORD size = MAX_USER_NAME;
+    WCHAR w_buf[MAX_USER_NAME];
+    static char a_buf[MAX_USER_NAME];
+    if (a_buf[0] != 0) return a_buf;
+    if (!GetUserNameW(w_buf, &size)) {
+        set_win32_errno(GetLastError());
+        return NULL;
+    }
+    if (!WideCharToMultiByte(CP_UTF8, 0, w_buf, -1, a_buf, sizeof(a_buf), NULL, NULL)) {
+        set_win32_errno(GetLastError());
+        return NULL;
     }
     return a_buf;
 }
@@ -665,6 +683,11 @@ const char * get_user_home(void) {
     return "/";
 }
 
+const char * get_user_name(void) {
+    errno = ERR_UNSUPPORTED;
+    return NULL;
+}
+
 void ini_mdep(void) {
     pthread_attr_init(&pthread_create_attr);
     pthread_attr_setstacksize(&pthread_create_attr, 0x8000);
@@ -690,6 +713,11 @@ const char * get_os_name(void) {
 const char * get_user_home(void) {
     static char buf[] = "C:";
     return buf;
+}
+
+const char * get_user_name(void) {
+    errno = ERR_UNSUPPORTED;
+    return NULL;
 }
 
 void ini_mdep(void) {
@@ -785,6 +813,10 @@ const char * get_user_home(void) {
         strcpy(buf, pwd->pw_dir);
     }
     return buf;
+}
+
+const char * get_user_name(void) {
+    return getlogin();
 }
 
 int tkill(pid_t pid, int signal) {

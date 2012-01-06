@@ -381,6 +381,9 @@ extern const char * get_os_name(void);
 /* Get user home directory path */
 extern const char * get_user_home(void);
 
+/* Get user name as known to the system */
+extern const char * get_user_name(void);
+
 /* Create new UUID - Universally Unique IDentifier */
 extern const char * create_uuid(void);
 

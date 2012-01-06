@@ -167,11 +167,13 @@ int is_channel_closed(Channel * c) {
 PeerServer * channel_peer_from_url(const char * url) {
     int i;
     const char * s;
+    const char * user = get_user_name();
     char transport[16];
     PeerServer * ps = peer_server_alloc();
 
     peer_server_addprop(ps, loc_strdup("Name"), loc_strdup("TCF Agent"));
     peer_server_addprop(ps, loc_strdup("OSName"), loc_strdup(get_os_name()));
+    if (user != NULL) peer_server_addprop(ps, loc_strdup("UserName"), loc_strdup(user));
     peer_server_addprop(ps, loc_strdup("AgentID"), loc_strdup(get_agent_id()));
 
     s = url;
