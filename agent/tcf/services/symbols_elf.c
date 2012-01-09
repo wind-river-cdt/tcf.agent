@@ -433,11 +433,25 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
     return 0;
 }
 
-/* If 'sym' represents a declaration, replace it with definition - if possible */
+static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, const char * name, Symbol ** sym);
+
+/* If 'decl' represents a declaration, replace it with definition - if possible */
 static ObjectInfo * find_definition(ObjectInfo * decl) {
     if (decl == NULL) return NULL;
-    if (!(decl->mFlags & DOIF_declaration)) return decl;
+    if ((decl->mFlags & DOIF_declaration) == 0) return decl;
     if (decl->mDefinition != NULL) return decl->mDefinition;
+    if ((decl->mFlags & DOIF_external) != 0 && decl->mName != NULL) {
+        int found = 0;
+        Symbol * sym = NULL;
+        DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
+        if (cache->mPubNames.mHash != NULL) {
+            found = find_by_name_in_pub_names(cache, &cache->mPubNames, decl->mName, &sym);
+            if (!found && cache->mPubTypes.mHash != NULL) {
+                found = find_by_name_in_pub_names(cache, &cache->mPubTypes, decl->mName, &sym);
+            }
+        }
+        if (found && sym->obj != NULL) return sym->obj;
+    }
     return decl;
 }
 
@@ -558,6 +572,7 @@ static int find_in_dwarf(const char * name, Symbol ** sym) {
 }
 
 static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, const char * name, Symbol ** sym) {
+    ObjectInfo * decl = NULL;
     unsigned n = tbl->mHash[calc_symbol_name_hash(name)];
     while (n != 0) {
         ContextAddress id = tbl->mNext[n].mID;
@@ -565,10 +580,19 @@ static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, co
         if (obj == NULL || obj->mName == NULL)
             str_exception(ERR_INV_DWARF, "Invalid .debug_pubnames section");
         if (strcmp(obj->mName, name) == 0) {
-            object2symbol(obj, sym);
-            return 1;
+            if (obj->mFlags & DOIF_declaration) {
+                decl = obj;
+            }
+            else {
+                object2symbol(obj, sym);
+                return 1;
+            }
         }
         n = tbl->mNext[n].mNext;
+    }
+    if (decl != NULL) {
+        object2symbol(decl, sym);
+        return 1;
     }
     return 0;
 }
@@ -1469,9 +1493,13 @@ static void read_object_value(PropertyValue * v, void ** value, size_t * size, i
             }
             if (piece->reg) {
                 StackFrame * frame = NULL;
-                assert(piece->reg->size >= piece_size);
-                pbf = (U1_T *)tmp_alloc(piece->reg->size);
                 if (get_frame_info(v->mContext, v->mFrame, &frame) < 0) exception(errno);
+                if (piece->reg->size < piece_size) {
+                    pbf = (U1_T *)tmp_alloc_zero(piece_size);
+                }
+                else {
+                    pbf = (U1_T *)tmp_alloc(piece->reg->size);
+                }
                 if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
                 if (!piece->reg->big_endian != !v->mBigEndian) swap_bytes(pbf, piece->reg->size);
             }
