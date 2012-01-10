@@ -166,7 +166,10 @@ int main(int argc, char ** argv) {
                 }
                 switch (c) {
                 case 'l':
-                    log_mode = strtol(s, 0, 0);
+                    if (parse_trace_mode(s, &log_mode) != 0) {
+                        fprintf(stderr, "Cannot parse log level: %s\n", s);
+                        exit(1);
+                    }
                     break;
 
                 case 'L':

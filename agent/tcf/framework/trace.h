@@ -23,6 +23,7 @@
 #include <tcf/config.h>
 #include <stdio.h>
 
+/* Always update trace.c when adding or removing predefined log levels */
 #define LOG_ALWAYS      0x0
 #define LOG_ALLOC       0x1
 #define LOG_EVENTCORE   0x2
@@ -63,6 +64,18 @@ extern FILE * log_file;
 #endif
 
 #endif /* ENABLE_Trace */
+
+struct trace_mode {
+    int mode;
+    const char * name;
+    const char * description;
+};
+
+extern struct trace_mode trace_mode_table[];
+
+extern int parse_trace_mode(const char * mode, int * result);
+
+extern int add_trace_mode(int mode, const char * name, const char * description);
 
 extern void ini_trace(void);
 

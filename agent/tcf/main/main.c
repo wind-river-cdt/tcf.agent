@@ -125,21 +125,8 @@ static const char * help_text[] = {
     "  -t               run in diagnostic mode",
 #endif
     "  -L<file>         enable logging, use -L- to send log to stderr",
-    "  -l<number>       set log level, the value is bitwise OR of:",
-    "       0x0001          memory allocation and deallocation",
-    "       0x0002          main event queue",
-    "       0x0004          waitpid() events",
-    "       0x0008          low-level debugger events",
-    "       0x0020          communication protocol",
-    "       0x0040          debugger actions",
-    "       0x0080          discovery",
-    "       0x0100          async I/O",
-    "       0x0200          proxy state",
-    "       0x0400          proxy traffic",
-    "       0x0800          ELF reader",
-    "       0x1000          LUA interpreter",
-    "       0x2000          stack trace service",
-    "       0x4000          plugins",
+    "  -l<level>        set log level, the level is comma separated list of:",
+    "@",
     "  -s<url>          set agent listening port and protocol, default is TCP::1534",
     "  -S               print server properties in Json format to stdout",
     "  -I<idle-seconds> exit if are no connections for the specified time",
@@ -154,7 +141,19 @@ static const char * help_text[] = {
 
 static void show_help(void) {
     const char ** p = help_text;
-    while (*p != NULL) fprintf(stderr, "%s\n", *p++);
+    while (*p != NULL) {
+        if (**p == '@') {
+            struct trace_mode * tm = trace_mode_table;
+            while (tm->mode != 0) {
+                fprintf(stderr, "      %-12s %s (%#x)\n", tm->name, tm->description, tm->mode);
+                tm++;
+            }
+            p++;
+        }
+        else {
+            fprintf(stderr, "%s\n", *p++);
+        }
+    }
 }
 #endif
 
@@ -166,6 +165,7 @@ int main(int argc, char ** argv) {
     int ind;
     int daemon = 0;
     const char * log_name = NULL;
+    const char * log_level = NULL;
 #endif
     int interactive = 0;
     int print_server_properties = 0;
@@ -241,7 +241,8 @@ int main(int argc, char ** argv) {
                     break;
 
                 case 'l':
-                    log_mode = strtol(s, 0, 0);
+                    log_level = s;
+                    parse_trace_mode(log_level, &log_mode);
                     break;
 
                 case 'L':
@@ -285,6 +286,13 @@ int main(int argc, char ** argv) {
 #endif
 
     ini_services(proto, bcg);
+
+    /* Reparse log level in case initialization cause additional
+     * levels to be registered */
+    if (parse_trace_mode(log_level, &log_mode) != 0) {
+        fprintf(stderr, "Cannot parse log level: %s\n", log_level);
+        exit(1);
+    }
     if (ini_server(url, proto, bcg) < 0) {
         fprintf(stderr, "Cannot create TCF server: %s\n", errno_to_str(errno));
         exit(1);

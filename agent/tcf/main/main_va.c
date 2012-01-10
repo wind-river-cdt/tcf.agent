@@ -58,6 +58,7 @@ int tcf_va(void) {
 int main(int argc, char ** argv) {
     int c;
     int ind;
+    const char * log_level = NULL;
     const char * log_name = NULL;
 #endif
     const char * url = "TCP:";
@@ -102,7 +103,8 @@ int main(int argc, char ** argv) {
                 }
                 switch (c) {
                 case 'l':
-                    log_mode = strtol(s, 0, 0);
+                    log_level = s;
+                    parse_trace_mode(log_level, &log_mode);
                     break;
 
                 case 'L':
@@ -162,6 +164,13 @@ int main(int argc, char ** argv) {
     /* Load dynamic libraries */
     plugins_load(proto, NULL);
 #endif
+
+    /* Reparse log level in case initialization cause additional
+     * levels to be registered */
+    if (parse_trace_mode(log_level, &log_mode) != 0) {
+        fprintf(stderr, "Cannot parse log level: %s\n", log_level);
+        exit(1);
+    }
 
     discovery_start();
 

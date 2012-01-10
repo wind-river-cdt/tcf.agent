@@ -36,6 +36,25 @@ int log_mode = LOG_EVENTS | LOG_CHILD | LOG_WAITPID | LOG_CONTEXT | LOG_PROTOCOL
 
 FILE * log_file = NULL;
 
+#define MAX_TRACE_MODES 40
+
+struct trace_mode trace_mode_table[MAX_TRACE_MODES + 1] = {
+    { LOG_ALLOC, "alloc", "memory allocation and deallocation" },
+    { LOG_EVENTCORE, "eventcore", "main event queue" },
+    { LOG_WAITPID, "waitpid", "waitpid() events" },
+    { LOG_EVENTS, "events", "low-level debugger events" },
+    { LOG_PROTOCOL, "protocol", "communication protocol" },
+    { LOG_CONTEXT, "context", "debugger actions" },
+    { LOG_DISCOVERY, "discovery", "discovery" },
+    { LOG_ASYNCREQ, "asyncreq", "async I/O" },
+    { LOG_PROXY, "proxy", "proxy state" },
+    { LOG_TCFLOG, "tcflog", "proxy traffic" },
+    { LOG_ELF, "elf", "ELF reader" },
+    { LOG_LUA, "lua", "LUA interpreter" },
+    { LOG_STACK, "stack", "stack trace service" },
+    { LOG_PLUGIN, "plugin", "plugins" }
+};
+
 static pthread_mutex_t mutex;
 
 int print_trace(int mode, const char * fmt, ...) {
@@ -84,6 +103,66 @@ int print_trace(int mode, const char * fmt, ...) {
 }
 
 #endif /* ENABLE_Trace */
+
+int parse_trace_mode(const char * mode, int * result) {
+#if ENABLE_Trace
+    int rval = 0;
+
+    *result = 0;
+    if (*mode == '\0') return 0;
+    for(;;) {
+        if (*mode >= '0' && *mode <= '9') {
+            char * endptr;
+            *result |= strtoul(mode, &endptr, 0);
+            mode = endptr;
+        }
+        else {
+            struct trace_mode *entry;
+            const char * endptr = mode;
+            while (*endptr != '\0' && *endptr != ',') endptr++;
+            for (entry = trace_mode_table; entry->mode; entry++) {
+                if (strncmp(mode, entry->name, endptr - mode) == 0 &&
+                    entry->name[endptr - mode] == '\0')
+                    break;
+            }
+            if (entry->mode == 0) rval = 1;
+            *result |= entry->mode;
+            mode = endptr;
+        }
+        if (*mode != ',') break;
+        mode++;
+    }
+    if (*mode != '\0') return 1;
+    return rval;
+#else
+    *result = 0;
+    return 0;
+#endif /* ENABLE_Trace */
+}
+
+int add_trace_mode(int mode, const char * name, const char * description) {
+#if ENABLE_Trace
+    int i;
+    int busy = 0;
+
+    for (i = 0; i < MAX_TRACE_MODES; i++) {
+        if (trace_mode_table[i].mode == 0) {
+            if (mode == 0) {
+                /* Set mode to first unused bit. */
+                mode = ~busy;
+                if (mode == 0) break;
+                mode &= ~(mode - 1);
+            }
+            trace_mode_table[i].mode = mode;
+            trace_mode_table[i].name = name;
+            trace_mode_table[i].description = description;
+            return 0;
+        }
+        busy |= trace_mode_table[i].mode;
+    }
+#endif /* ENABLE_Trace */
+    return 0;
+}
 
 void open_log_file(const char * log_name) {
 #if ENABLE_Trace
