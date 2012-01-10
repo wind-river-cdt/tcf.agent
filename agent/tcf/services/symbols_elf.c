@@ -1394,12 +1394,15 @@ static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
     int found = 0;
     if (obj->mFlags & DOIF_external) {
         Trap trap;
+        DWARFCache * cache = get_dwarf_cache(obj->mCompUnit->mFile);
         if (set_trap(&trap)) {
             PropertyValue p;
-            DWARFCache * cache = get_dwarf_cache(obj->mCompUnit->mFile);
             read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
             if (p.mAddr != NULL) found = find_by_name_in_sym_table(cache, (char *)p.mAddr, sym);
             clear_trap(&trap);
+        }
+        else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
+            found = find_by_name_in_sym_table(cache, obj->mName, sym);
         }
     }
     return found;
