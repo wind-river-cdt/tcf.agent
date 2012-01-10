@@ -464,6 +464,7 @@ struct ELF_Section {
     unsigned sym_addr_max;
 
     /* Symbol by name search index */
+    unsigned sym_names_hash_size;
     unsigned * sym_names_hash;
     unsigned * sym_names_next;
 };
@@ -478,8 +479,6 @@ struct ELF_PHeader {
     U4_T flags;
     U4_T align;
 };
-
-#define SYM_HASH_SIZE (32 * MEM_USAGE_FACTOR - 1)
 
 /*
  * Swap bytes in a buffer.

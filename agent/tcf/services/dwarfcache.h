@@ -119,10 +119,11 @@ struct ObjectInfo {
 
 struct PubNamesInfo {
     unsigned mNext;
-    ContextAddress mID;
+    ObjectInfo * mObject;
 };
 
 struct PubNamesTable {
+    unsigned mHashSize;
     unsigned * mHash;
     PubNamesInfo * mNext;
     unsigned mCnt;

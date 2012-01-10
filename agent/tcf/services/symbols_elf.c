@@ -573,10 +573,9 @@ static int find_in_dwarf(const char * name, Symbol ** sym) {
 
 static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, const char * name, Symbol ** sym) {
     ObjectInfo * decl = NULL;
-    unsigned n = tbl->mHash[calc_symbol_name_hash(name)];
+    unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
     while (n != 0) {
-        ContextAddress id = tbl->mNext[n].mID;
-        ObjectInfo * obj = find_object(cache, id);
+        ObjectInfo * obj = tbl->mNext[n].mObject;
         if (obj == NULL || obj->mName == NULL)
             str_exception(ERR_INV_DWARF, "Invalid .debug_pubnames section");
         if (strcmp(obj->mName, name) == 0) {
@@ -601,13 +600,14 @@ static void create_symbol_names_hash(ELF_Section * tbl) {
     unsigned i;
     unsigned sym_size = tbl->file->elf64 ? sizeof(Elf64_Sym) : sizeof(Elf32_Sym);
     unsigned sym_cnt = (unsigned)(tbl->size / sym_size);
-    tbl->sym_names_hash = (unsigned *)loc_alloc_zero(SYM_HASH_SIZE * sizeof(unsigned));
+    tbl->sym_names_hash_size = sym_cnt;
+    tbl->sym_names_hash = (unsigned *)loc_alloc_zero(sym_cnt * sizeof(unsigned));
     tbl->sym_names_next = (unsigned *)loc_alloc_zero(sym_cnt * sizeof(unsigned));
     for (i = 0; i < sym_cnt; i++) {
         ELF_SymbolInfo sym;
         unpack_elf_symbol_info(tbl, i, &sym);
         if (sym.bind == STB_GLOBAL && sym.name != NULL && sym.section_index != SHN_UNDEF) {
-            unsigned h = calc_symbol_name_hash(sym.name);
+            unsigned h = calc_symbol_name_hash(sym.name) % sym_cnt;
             tbl->sym_names_next[i] = tbl->sym_names_hash[h];
             tbl->sym_names_hash[h] = i;
         }
@@ -624,7 +624,7 @@ static int find_by_name_in_sym_table(DWARFCache * cache, const char * name, Symb
         ELF_Section * tbl = cache->mFile->sections + m;
         if (tbl->sym_count == 0) continue;
         if (tbl->sym_names_hash == NULL) create_symbol_names_hash(tbl);
-        n = tbl->sym_names_hash[h];
+        n = tbl->sym_names_hash[h % tbl->sym_names_hash_size];
         while (n) {
             ELF_SymbolInfo sym_info;
             unpack_elf_symbol_info(tbl, n, &sym_info);

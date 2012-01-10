@@ -1178,7 +1178,7 @@ unsigned calc_symbol_name_hash(const char * s) {
         if (g) h ^= g >> 24;
         h &= ~g;
     }
-    return h % SYM_HASH_SIZE;
+    return h;
 }
 
 int cmp_symbol_names(const char * x, const char * y) {

@@ -737,8 +737,8 @@ static void load_addr_ranges(void) {
 }
 
 static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, PubNamesTable * tbl) {
-    tbl->mMax = (unsigned)(pub_names->size / 16) + 16;
-    tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * SYM_HASH_SIZE);
+    tbl->mHashSize = tbl->mMax = (unsigned)(pub_names->size / 16) + 16;
+    tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * tbl->mHashSize);
     tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
     memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
     dio_EnterSection(NULL, pub_names, 0);
@@ -770,8 +770,8 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, Pu
                     tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
                 }
                 info = tbl->mNext + tbl->mCnt;
-                h = calc_symbol_name_hash(dio_ReadString());
-                info->mID = (ContextAddress)(debug_info->addr + unit_offs + obj_offs);
+                h = calc_symbol_name_hash(dio_ReadString()) % tbl->mHashSize;
+                info->mObject = find_object(sCache, (ContextAddress)(debug_info->addr + unit_offs + obj_offs));
                 info->mNext = tbl->mHash[h];
                 tbl->mHash[h] = tbl->mCnt++;
             }
@@ -784,23 +784,22 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, Pu
 
 static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
     ObjectInfo * unit = sCache->mCompUnits;
-    tbl->mMax = (unsigned)(debug_info->size / 256) + 16;
-    tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * SYM_HASH_SIZE);
+    tbl->mHashSize = tbl->mMax = (unsigned)(debug_info->size / 256) + 16;
+    tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * tbl->mHashSize);
     tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
     memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
     while (unit != NULL) {
         ObjectInfo * obj = get_dwarf_children(unit);
         while (obj != NULL) {
             if ((obj->mFlags & DOIF_external) && obj->mDefinition == NULL && obj->mName != NULL) {
-                unsigned h;
+                unsigned h = calc_symbol_name_hash(obj->mName) % tbl->mHashSize;
                 PubNamesInfo * info = NULL;
                 if (tbl->mCnt >= tbl->mMax) {
                     tbl->mMax = tbl->mMax * 3 / 2;
                     tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
                 }
                 info = tbl->mNext + tbl->mCnt;
-                h = calc_symbol_name_hash(obj->mName);
-                info->mID = obj->mID;
+                info->mObject = obj;
                 info->mNext = tbl->mHash[h];
                 tbl->mHash[h] = tbl->mCnt++;
             }
@@ -821,7 +820,7 @@ static void allocate_obj_hash(void) {
             size += sec->size;
         }
     }
-    sCache->mObjectHashSize = (unsigned)(size / 100);
+    sCache->mObjectHashSize = (unsigned)(size / 53);
     if (sCache->mObjectHashSize < 251) sCache->mObjectHashSize = 251;
     sCache->mObjectHash = (ObjectInfo **)loc_alloc_zero(sizeof(ObjectInfo *) * sCache->mObjectHashSize);
 }
