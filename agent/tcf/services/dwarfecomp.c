@@ -262,6 +262,41 @@ static void op_push_tls_address(void) {
     }
 }
 
+static void op_call() {
+    U8_T id = 0;
+    DIO_UnitDescriptor * desc = &expr->unit->mDesc;
+    U8_T dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
+    ObjectInfo * ref_obj = NULL;
+    DWARFExpressionInfo info;
+    PropertyValue pv;
+
+    dio_EnterSection(desc, expr->section, dio_pos);
+    switch (expr->expr_addr[expr_pos]) {
+    case OP_call2:
+        id = desc->mSection->addr + desc->mUnitOffs + dio_ReadU2();
+        break;
+    case OP_call4:
+        id = desc->mSection->addr + desc->mUnitOffs + dio_ReadU4();
+        break;
+    case OP_call_ref:
+        {
+            ELF_Section * section = NULL;
+            int size = desc->m64bit ? 8 : 4;
+            if (desc->mVersion < 3) size = desc->mAddressSize;
+            id = dio_ReadAddressX(&section, size);
+        }
+        break;
+    }
+    expr_pos += (size_t)(dio_GetPos() - dio_pos);
+    dio_ExitSection();
+
+    ref_obj = find_object(get_dwarf_cache(expr->unit->mFile), id);
+    if (ref_obj == NULL) str_exception(ERR_INV_DWARF, "Invalid reference in OP_call");
+    read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_location, &pv);
+    dwarf_find_expression(&pv, expr_ip, &info);
+    add_expression(&info);
+}
+
 static void adjust_jumps(void) {
     JumpInfo * i = jumps;
     while (i != NULL) {
@@ -450,7 +485,7 @@ static void add_expression(DWARFExpressionInfo * info) {
         case OP_call2:
         case OP_call4:
         case OP_call_ref:
-            str_fmt_exception(ERR_OTHER, "Unsupported DWARF expression op 0x%02x", op);
+            op_call();
             break;
         default:
             if (op >= OP_lo_user) {

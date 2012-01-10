@@ -186,8 +186,54 @@ static void evaluate_implicit_pointer(uint8_t op) {
     dio_EnterSection(&Unit->mDesc, sSection, DioPos);
 }
 
+static void evaluate_call(U8_T ID) {
+    PropertyValue PV;
+    U8_T DioPos = dio_GetPos();
+    uint8_t * OrgCode = sState->code;
+    size_t OrgCodePos = sState->code_pos;
+    size_t OrgCodeLen = sState->code_len;
+    ELF_Section * OrgSection = sSection;
+    U8_T OrgSectionOffs = sSectionOffs;
+    PropertyValue * OrgValue = sValue;
+    CompUnit * Unit = sValue->mObject->mCompUnit;
+    ObjectInfo * Obj = find_object(get_dwarf_cache(Unit->mFile), ID);
+    DWARFExpressionInfo Info;
+    U8_T IP = 0;
+
+    if (Obj == NULL) str_exception(ERR_INV_DWARF, "Invalid reference in OP_call");
+    read_dwarf_object_property(sValue->mContext, sValue->mFrame, Obj, AT_location, &PV);
+
+    sValue = &PV;
+
+    if (sValue->mPieces != NULL || sValue->mAddr == NULL || sValue->mSize == 0) {
+        str_exception(ERR_INV_DWARF, "Invalid DWARF expression reference");
+    }
+    if (sValue->mForm == FORM_DATA4 || sValue->mForm == FORM_DATA8) {
+        if (sValue->mFrame == STACK_NO_FRAME) str_exception(ERR_INV_CONTEXT, "Need stack frame");
+        if (read_reg_value(sState->stack_frame, get_PC_definition(sValue->mContext), &IP) < 0) exception(errno);
+    }
+
+    dwarf_find_expression(sValue, IP, &Info);
+    sState->code = Info.expr_addr;
+    sState->code_len = Info.expr_size;
+    sState->code_pos = 0;
+    sSection = Info.section;
+    sSectionOffs = Info.expr_addr - (U1_T *)sSection->data;
+    if (evaluate_vm_expression(sState) < 0) exception(errno);
+    assert(sState->code_pos == sState->code_len);
+
+    sState->code = OrgCode;
+    sState->code_pos = OrgCodePos;
+    sState->code_len = OrgCodeLen;
+    sSection = OrgSection;
+    sSectionOffs = OrgSectionOffs;
+    sValue = OrgValue;
+    dio_EnterSection(&Unit->mDesc, sSection, DioPos);
+}
+
 static void client_op(uint8_t op) {
-    dio_EnterSection(&sValue->mObject->mCompUnit->mDesc, sSection, sSectionOffs + sState->code_pos);
+    CompUnit * Unit = sValue->mObject->mCompUnit;
+    dio_EnterSection(&Unit->mDesc, sSection, sSectionOffs + sState->code_pos);
     switch (op) {
     case OP_addr:
         sState->stk[sState->stk_pos++] = read_address();
@@ -215,6 +261,20 @@ static void client_op(uint8_t op) {
     case OP_implicit_pointer:
     case OP_GNU_implicit_pointer:
         evaluate_implicit_pointer(op);
+        break;
+    case OP_call2:
+        evaluate_call(Unit->mDesc.mSection->addr + Unit->mDesc.mUnitOffs + dio_ReadU2());
+        break;
+    case OP_call4:
+        evaluate_call(Unit->mDesc.mSection->addr + Unit->mDesc.mUnitOffs + dio_ReadU4());
+        break;
+    case OP_call_ref:
+        {
+            ELF_Section * Section = NULL;
+            int Size = Unit->mDesc.m64bit ? 8 : 4;
+            if (Unit->mDesc.mVersion < 3) Size = Unit->mDesc.mAddressSize;
+            evaluate_call(dio_ReadAddressX(&Section, Size));
+        }
         break;
     default:
         str_fmt_exception(ERR_UNSUPPORTED, "Unsupported DWARF expression op 0x%02x", op);
