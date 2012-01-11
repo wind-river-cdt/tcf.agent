@@ -289,10 +289,11 @@ int main(int argc, char ** argv) {
 
     /* Reparse log level in case initialization cause additional
      * levels to be registered */
-    if (parse_trace_mode(log_level, &log_mode) != 0) {
+    if (log_level != NULL && parse_trace_mode(log_level, &log_mode) != 0) {
         fprintf(stderr, "Cannot parse log level: %s\n", log_level);
         exit(1);
     }
+
     if (ini_server(url, proto, bcg) < 0) {
         fprintf(stderr, "Cannot create TCF server: %s\n", errno_to_str(errno));
         exit(1);
