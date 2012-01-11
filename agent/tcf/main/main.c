@@ -287,12 +287,14 @@ int main(int argc, char ** argv) {
 
     ini_services(proto, bcg);
 
+#if !defined(_WRS_KERNEL)
     /* Reparse log level in case initialization cause additional
      * levels to be registered */
     if (log_level != NULL && parse_trace_mode(log_level, &log_mode) != 0) {
         fprintf(stderr, "Cannot parse log level: %s\n", log_level);
         exit(1);
     }
+#endif
 
     if (ini_server(url, proto, bcg) < 0) {
         fprintf(stderr, "Cannot create TCF server: %s\n", errno_to_str(errno));
