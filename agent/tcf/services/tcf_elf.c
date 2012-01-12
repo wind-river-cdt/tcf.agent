@@ -925,13 +925,14 @@ ELF_File * elf_list_next(Context * ctx) {
     assert(elf_list.region_cnt > 0);
     while (elf_list_pos < elf_list.region_cnt) {
         int error = 0;
-        ELF_File * file = elf_open_memory_region_file(elf_list.regions + elf_list_pos++, &error);
+        MemoryRegion * r = elf_list.regions + elf_list_pos++;
+        ELF_File * file = elf_open_memory_region_file(r, &error);
         if (file != NULL) {
             if (file->listed) continue;
             file->listed = 1;
             return file;
         }
-        if (error && get_error_code(error) != ENOENT) {
+        if (error && r->id == NULL && get_error_code(error) != ENOENT) {
             errno = error;
             return NULL;
         }
@@ -961,6 +962,7 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
         assert(r->addr + r->size > addr_min);
         file = elf_open_memory_region_file(r, &error);
         if (error) {
+            if (r->id != NULL) continue;
             if (get_error_code(error) == ENOENT) continue;
             exception(error);
         }
@@ -1038,10 +1040,9 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
         }
         if (!same_file) {
             /* Check if the memory map entry has a separate debug info file */
-            int error = 0;
             ELF_File * exec = NULL;
             if (!file->debug_info_file) continue;
-            exec = elf_open_memory_region_file(r, &error);
+            exec = elf_open_memory_region_file(r, NULL);
             if (exec == NULL) continue;
             if (exec->debug_info_file_name == NULL) continue;
             if (strcmp(exec->debug_info_file_name, file->name) != 0) continue;

@@ -1421,7 +1421,7 @@ static void stop_all_timer(void * args) {
     post_event(run_safe_events, NULL);
 }
 
-static void sync_run_state() {
+static void sync_run_state(void) {
     int err_cnt = 0;
     LINK * l;
     LINK p;

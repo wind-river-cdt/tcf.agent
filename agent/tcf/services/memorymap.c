@@ -120,7 +120,6 @@ static void update_context_client_map(Context * ctx) {
     ContextExtensionMM * ext = EXT(ctx);
     Context * syms = get_sym_context(ctx);
     int equ = 1;
-    unsigned i = 0;
     unsigned k = 0;
     LINK * l;
     LINK maps;
@@ -130,6 +129,7 @@ static void update_context_client_map(Context * ctx) {
     list_init(&maps);
     find_maps(&maps, syms);
     for (l = maps.next; equ && l != &maps; l = l->next) {
+        unsigned i = 0;
         ClientMap * m = ctx2map(l);
         for (i = 0; equ && i < m->map.region_cnt; i++) {
             MemoryRegion * x = m->map.regions + i;
@@ -152,9 +152,11 @@ static void update_context_client_map(Context * ctx) {
             }
         }
     }
+    if (k < ext->client_map.region_cnt) equ = 0;
     if (!equ) {
         context_clear_memory_map(&ext->client_map);
         for (l = maps.next; l != &maps; l = l->next) {
+            unsigned i = 0;
             ClientMap * m = ctx2map(l);
             for (i = 0; i < m->map.region_cnt; i++) {
                 MemoryRegion * x = m->map.regions + i;

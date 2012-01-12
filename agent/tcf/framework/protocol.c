@@ -427,7 +427,7 @@ ReplyHandlerInfo * protocol_send_command(Channel * c, const char * service, cons
     rh->c = c;
     rh->handler = handler;
     rh->client_data = client_data;
-    if (c->peer_service_list == NULL) {
+    if (is_channel_closed(c) || c->peer_service_list == NULL) {
         post_event(send_command_failed, rh);
     }
     else {

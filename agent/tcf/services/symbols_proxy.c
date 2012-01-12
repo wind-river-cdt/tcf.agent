@@ -350,6 +350,7 @@ static void free_symbols_cache(SymbolsCache * syms) {
 }
 
 static Channel * get_channel(SymbolsCache * syms) {
+    if (is_channel_closed(syms->channel)) exception(ERR_CHANNEL_CLOSED);
     if (!syms->service_available) str_exception(ERR_SYM_NOT_FOUND, "Symbols service not available");
     return syms->channel;
 }
@@ -408,7 +409,6 @@ static void validate_context(Channel * c, void * args, int error) {
     s->error_get_context = get_error_report(error);
     cache_notify(&s->cache);
     if (s->disposed) free_sym_info_cache(s);
-    if (trap.error) exception(trap.error);
 }
 
 static SymInfoCache * get_sym_info_cache(const Symbol * sym) {
@@ -459,7 +459,6 @@ static void validate_find(Channel * c, void * args, int error) {
     assert(f->error != NULL || f->id != NULL);
     cache_notify(&f->cache);
     if (f->disposed) free_find_sym_cache(f);
-    if (trap.error) exception(trap.error);
 }
 
 int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const char * name, Symbol ** sym) {
@@ -673,7 +672,6 @@ static void validate_list(Channel * c, void * args, int error) {
     f->error = get_error_report(error);
     cache_notify(&f->cache);
     if (f->disposed) free_list_sym_cache(f);
-    if (trap.error) exception(trap.error);
 }
 
 int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func, void * args) {
@@ -981,7 +979,6 @@ static void validate_children(Channel * c, void * args, int error) {
     s->error_get_children = get_error_report(error);
     cache_notify(&s->cache);
     if (s->disposed) free_sym_info_cache(s);
-    if (trap.error) exception(trap.error);
 }
 
 int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
@@ -1046,7 +1043,6 @@ static void validate_type_id(Channel * c, void * args, int error) {
     s->error = get_error_report(error);
     cache_notify(&s->cache);
     if (s->disposed) free_arr_sym_cache(s);
-    if (trap.error) exception(trap.error);
 }
 
 int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
@@ -1262,7 +1258,6 @@ static void validate_frame(Channel * c, void * args, int error) {
     if (get_error_code(error) != ERR_INV_COMMAND) f->error = get_error_report(error);
     cache_notify(&f->cache);
     if (f->disposed) free_stack_frame_cache(f);
-    if (trap.error) exception(trap.error);
 }
 
 int get_next_stack_frame(StackFrame * frame, StackFrame * down) {

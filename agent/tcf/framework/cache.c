@@ -96,6 +96,7 @@ void cache_wait_dbg(const char * file, int line, AbstractCache * cache) {
     assert(is_dispatch_thread());
     assert(client_exited == 0);
     if (current_client.client != NULL && cache_miss_cnt == 0) {
+        assert(!is_channel_closed(current_client.channel));
         if (cache->wait_list_cnt >= cache->wait_list_max) {
             cache->wait_list_max += 8;
             cache->wait_list_buf = (WaitingCacheClient *)loc_realloc(cache->wait_list_buf, cache->wait_list_max * sizeof(WaitingCacheClient));
