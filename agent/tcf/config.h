@@ -106,6 +106,9 @@
 #if !defined(SERVICE_PathMap)
 #define SERVICE_PathMap         1
 #endif
+#if !defined(SERVICE_ContextQuery)
+#define SERVICE_ContextQuery    1
+#endif
 #if !defined(SERVICE_Terminals)
 #define SERVICE_Terminals       (TARGET_UNIX || TARGET_WINDOWS)
 #endif

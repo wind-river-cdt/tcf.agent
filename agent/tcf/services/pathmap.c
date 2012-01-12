@@ -23,6 +23,7 @@
 #include <tcf/framework/mdep-inet.h>
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/proxy.h>
+#include <tcf/services/contextquery.h>
 #include <tcf/services/pathmap.h>
 
 char * canonic_path_map_file_name(const char * fnm) {
@@ -91,6 +92,7 @@ struct PathMapRule {
     char * dst;
     char * host;
     char * prot;
+    char * query;
     char * ctx;
 };
 
@@ -188,6 +190,7 @@ static void free_rule(PathMapRule * r) {
     loc_free(r->dst);
     loc_free(r->host);
     loc_free(r->prot);
+    loc_free(r->query);
     loc_free(r->ctx);
     while (r->attrs != NULL) {
         PathMapRuleAttribute * attr = r->attrs;
@@ -260,6 +263,10 @@ static int update_rule(PathMapRule * r, PathMapRuleAttribute * new_attrs) {
             loc_free(r->host);
             r->host = json_read_alloc_string(buf_inp);
         }
+        else if (strcmp(name, PATH_MAP_CONTEXT_QUERY) == 0) {
+            loc_free(r->query);
+            r->query = json_read_alloc_string(buf_inp);
+        }
         else if (strcmp(name, PATH_MAP_CONTEXT) == 0) {
             loc_free(r->ctx);
             r->ctx = json_read_alloc_string(buf_inp);
@@ -286,6 +293,10 @@ static int update_rule(PathMapRule * r, PathMapRuleAttribute * new_attrs) {
         else if (strcmp(name, PATH_MAP_HOST) == 0) {
             loc_free(r->host);
             r->host = NULL;
+        }
+        else if (strcmp(name, PATH_MAP_CONTEXT_QUERY) == 0) {
+            loc_free(r->query);
+            r->query = NULL;
         }
         else if (strcmp(name, PATH_MAP_CONTEXT) == 0) {
             loc_free(r->ctx);
@@ -331,6 +342,7 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
 #endif
             if (!ok) continue;
         }
+        if (r->query != NULL && !context_query(ctx, r->query)) continue;
         src = canonic_path_map_file_name(r->src);
         k = strlen(src);
         if (strncmp(src, fnm, k)) continue;

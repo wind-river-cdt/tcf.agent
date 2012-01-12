@@ -628,6 +628,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\contextquery.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\contextquery.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\diagnostics.c"
 				>
 			</File>

@@ -26,6 +26,7 @@
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/memoryservice.h>
 #include <tcf/services/memorymap.h>
+#include <tcf/services/contextquery.h>
 #include <tcf/services/registers.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/symbols.h>
@@ -46,6 +47,9 @@
 void ini_services(Protocol * proto, TCFBroadcastGroup * bcg) {
 #if SERVICE_Locator
     ini_locator_service(proto, bcg);
+#endif
+#if SERVICE_ContextQuery
+    ini_context_query_service(proto);
 #endif
 #if SERVICE_RunControl
     ini_run_ctrl_service(proto, bcg);

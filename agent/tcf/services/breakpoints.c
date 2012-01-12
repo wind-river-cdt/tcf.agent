@@ -39,6 +39,7 @@
 #include <tcf/framework/link.h>
 #include <tcf/services/symbols.h>
 #include <tcf/services/runctrl.h>
+#include <tcf/services/contextquery.h>
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/expressions.h>
 #include <tcf/services/linenumbers.h>
@@ -74,6 +75,7 @@ struct BreakpointInfo {
     char * type;
     char * location;
     char * condition;
+    char * context_query;
     char ** context_ids;
     char ** context_ids_prev;
     char ** context_names;
@@ -902,6 +904,7 @@ static void free_bp(BreakpointInfo * bp) {
     loc_free(bp->context_ids_prev);
     loc_free(bp->context_names);
     loc_free(bp->context_names_prev);
+    loc_free(bp->context_query);
     loc_free(bp->stop_group);
     loc_free(bp->file);
     loc_free(bp->condition);
@@ -1184,9 +1187,22 @@ static int check_context_ids_location(BreakpointInfo * bp, Context * ctx) {
                 l = l->next;
                 if (c->exited) continue;
                 if (c->name == NULL) continue;
-                if (strcmp(ctx->name, name)) continue;
+                if (strcmp(c->name, name)) continue;
                 ok = context_get_group(c, CONTEXT_GROUP_BREAKPOINT) == ctx;
             }
+        }
+        if (!ok) return 0;
+    }
+    if (bp->context_query != NULL) {
+        int ok = 0;
+        LINK * l = context_root.next;
+        parse_context_query(bp->context_query);
+        while (!ok && l != &context_root) {
+            Context * c = ctxl2ctxp(l);
+            l = l->next;
+            if (c->exited) continue;
+            if (!run_context_query(c)) continue;
+            ok = context_get_group(c, CONTEXT_GROUP_BREAKPOINT) == ctx;
         }
         if (!ok) return 0;
     }
@@ -1229,6 +1245,10 @@ static int check_context_ids_condition(BreakpointInfo * bp, Context * ctx) {
             }
         }
         if (!ok) return 0;
+    }
+    if (bp->context_query != NULL) {
+        parse_context_query(bp->context_query);
+        if (!run_context_query(ctx)) return 0;
     }
     return 1;
 }
@@ -1605,6 +1625,10 @@ static int set_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * 
             loc_free(bp->context_names);
             bp->context_names = json_read_alloc_string_array(buf_inp, NULL);
         }
+        else if (strcmp(name, BREAKPOINT_CONTEXT_QUERY) == 0) {
+            loc_free(bp->context_query);
+            bp->context_query = json_read_alloc_string(buf_inp);
+        }
         else if (strcmp(name, BREAKPOINT_STOP_GROUP) == 0) {
             loc_free(bp->stop_group);
             bp->stop_group = json_read_alloc_string_array(buf_inp, NULL);
@@ -1665,6 +1689,10 @@ static int set_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * 
         else if (strcmp(name, BREAKPOINT_CONTEXTNAMES) == 0) {
             loc_free(bp->context_names);
             bp->context_names = NULL;
+        }
+        else if (strcmp(name, BREAKPOINT_CONTEXT_QUERY) == 0) {
+            loc_free(bp->context_query);
+            bp->context_query = NULL;
         }
         else if (strcmp(name, BREAKPOINT_STOP_GROUP) == 0) {
             loc_free(bp->stop_group);
@@ -1837,7 +1865,7 @@ static void delete_breakpoint_refs(Channel * c) {
     }
 }
 
-static void command_ini_bps(char * token, Channel * c) {
+static void command_set(char * token, Channel * c) {
     int ch;
     LINK * l = NULL;
 
@@ -1887,7 +1915,7 @@ static void command_ini_bps(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-static void command_get_bp_ids(char * token, Channel * c) {
+static void command_get_ids(char * token, Channel * c) {
     LINK * l = breakpoints.next;
     int cnt = 0;
 
@@ -1962,7 +1990,7 @@ static void command_get_status(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-static void command_bp_add(char * token, Channel * c) {
+static void command_add(char * token, Channel * c) {
     BreakpointAttribute * props = read_breakpoint_properties(&c->inp);
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
@@ -1975,7 +2003,7 @@ static void command_bp_add(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-static void command_bp_change(char * token, Channel * c) {
+static void command_change(char * token, Channel * c) {
     BreakpointAttribute * props = read_breakpoint_properties(&c->inp);
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
@@ -1988,7 +2016,7 @@ static void command_bp_change(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-static void command_bp_enable(char * token, Channel * c) {
+static void command_enable(char * token, Channel * c) {
     int ch = read_stream(&c->inp);
     if (ch == 'n') {
         if (read_stream(&c->inp) != 'u') exception(ERR_JSON_SYNTAX);
@@ -2030,7 +2058,7 @@ static void command_bp_enable(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-static void command_bp_disable(char * token, Channel * c) {
+static void command_disable(char * token, Channel * c) {
     int ch = read_stream(&c->inp);
     if (ch == 'n') {
         if (read_stream(&c->inp) != 'u') exception(ERR_JSON_SYNTAX);
@@ -2071,7 +2099,7 @@ static void command_bp_disable(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-static void command_bp_remove(char * token, Channel * c) {
+static void command_remove(char * token, Channel * c) {
     int ch = read_stream(&c->inp);
     if (ch == 'n') {
         if (read_stream(&c->inp) != 'u') exception(ERR_JSON_SYNTAX);
@@ -2166,6 +2194,12 @@ static void command_get_capabilities(char * token, Channel * c) {
     json_write_string(&c->out, "ContextNames");
     write_stream(&c->out, ':');
     json_write_boolean(&c->out, 1);
+#if SERVICE_ContextQuery
+    write_stream(&c->out, ',');
+    json_write_string(&c->out, "ContextQuery");
+    write_stream(&c->out, ':');
+    json_write_boolean(&c->out, 1);
+#endif
     write_stream(&c->out, ',');
     json_write_string(&c->out, "StopGroup");
     write_stream(&c->out, ':');
@@ -2607,13 +2641,13 @@ void ini_breakpoints_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     for (i = 0; i < ID2BP_HASH_SIZE; i++) list_init(id2bp + i);
     for (i = 0; i < INP2BR_HASH_SIZE; i++) list_init(inp2br + i);
     add_channel_close_listener(channel_close_listener);
-    add_command_handler(proto, BREAKPOINTS, "set", command_ini_bps);
-    add_command_handler(proto, BREAKPOINTS, "add", command_bp_add);
-    add_command_handler(proto, BREAKPOINTS, "change", command_bp_change);
-    add_command_handler(proto, BREAKPOINTS, "enable", command_bp_enable);
-    add_command_handler(proto, BREAKPOINTS, "disable", command_bp_disable);
-    add_command_handler(proto, BREAKPOINTS, "remove", command_bp_remove);
-    add_command_handler(proto, BREAKPOINTS, "getIDs", command_get_bp_ids);
+    add_command_handler(proto, BREAKPOINTS, "set", command_set);
+    add_command_handler(proto, BREAKPOINTS, "add", command_add);
+    add_command_handler(proto, BREAKPOINTS, "change", command_change);
+    add_command_handler(proto, BREAKPOINTS, "enable", command_enable);
+    add_command_handler(proto, BREAKPOINTS, "disable", command_disable);
+    add_command_handler(proto, BREAKPOINTS, "remove", command_remove);
+    add_command_handler(proto, BREAKPOINTS, "getIDs", command_get_ids);
     add_command_handler(proto, BREAKPOINTS, "getProperties", command_get_properties);
     add_command_handler(proto, BREAKPOINTS, "getStatus", command_get_status);
     add_command_handler(proto, BREAKPOINTS, "getCapabilities", command_get_capabilities);

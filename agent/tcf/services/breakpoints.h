@@ -63,6 +63,7 @@ struct BreakpointAttribute {
 #define BREAKPOINT_CONDITION        "Condition"
 #define BREAKPOINT_TEMPORARY        "Temporary"
 #define BREAKPOINT_CLIENT_DATA      "ClientData"
+#define BREAKPOINT_CONTEXT_QUERY    "ContextQuery"
 
 
 /* Breakpoints event listener */

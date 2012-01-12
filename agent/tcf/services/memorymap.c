@@ -29,6 +29,7 @@
 #include <tcf/framework/json.h>
 #include <tcf/framework/events.h>
 #include <tcf/framework/exceptions.h>
+#include <tcf/services/contextquery.h>
 #include <tcf/services/memorymap.h>
 
 typedef struct Listener {
@@ -45,7 +46,6 @@ typedef struct ContextExtensionMM {
 
 typedef struct ClientMap {
     LINK link_list;
-    LINK link_hash;
     LINK link_ctx;
     char * id;
     MemoryMap map;
@@ -63,21 +63,11 @@ static unsigned listener_cnt = 0;
 static unsigned listener_max = 0;
 
 #define list2map(A)    ((ClientMap *)((char *)(A) - offsetof(ClientMap, link_list)))
-#define hash2map(A)    ((ClientMap *)((char *)(A) - offsetof(ClientMap, link_hash)))
 #define ctx2map(A)     ((ClientMap *)((char *)(A) - offsetof(ClientMap, link_ctx)))
 
-#define MAP_HASH_SIZE (4 * MEM_USAGE_FACTOR - 1)
 static LINK client_map_list = TCF_LIST_INIT(client_map_list);
-static LINK client_map_hash[MAP_HASH_SIZE];
 
 static TCFBroadcastGroup * broadcast_group = NULL;
-
-static unsigned map_id_hash(const char * id) {
-    int i;
-    unsigned h = 0;
-    for (i = 0; id[i]; i++) h += id[i];
-    return h % MAP_HASH_SIZE;
-}
 
 static MemoryRegion * add_region(MemoryMap * map) {
     MemoryRegion * r = NULL;
@@ -97,18 +87,19 @@ static int str_equ(char * x, char * y) {
     return strcmp(x, y) == 0;
 }
 
-static unsigned find_maps(LINK * maps, const char * id) {
+static void find_maps(LINK * maps, Context * ctx) {
     LINK * l;
-    unsigned cnt = 0;
-    unsigned h = map_id_hash(id);
-    for (l = client_map_hash[h].next; l != &client_map_hash[h]; l = l->next) {
-        ClientMap * m = hash2map(l);
-        if (list_is_empty(&m->link_ctx) && strcmp(m->id, id) == 0) {
+    const char * full_name = context_full_name(ctx);
+    for (l = client_map_list.next; l != &client_map_list; l = l->next) {
+        ClientMap * m = list2map(l);
+        if (!list_is_empty(&m->link_ctx)) continue;
+        if (m->id[0] == 0 ||
+            strcmp(m->id, ctx->id) == 0 ||
+            strcmp(m->id, full_name) == 0 ||
+            (ctx->name != NULL && strcmp(m->id, ctx->name) == 0)) {
             list_add_last(&m->link_ctx, maps);
-            cnt += m->map.region_cnt;
         }
     }
-    return cnt;
 }
 
 static Context * get_mem_context(Context * ctx) {
@@ -128,39 +119,38 @@ static Context * get_sym_context(Context * ctx) {
 static void update_context_client_map(Context * ctx) {
     ContextExtensionMM * ext = EXT(ctx);
     Context * syms = get_sym_context(ctx);
-    unsigned r_cnt = 0;
-    int equ = 0;
-    unsigned i;
+    int equ = 1;
+    unsigned i = 0;
+    unsigned k = 0;
     LINK * l;
     LINK maps;
 
     if (syms == NULL) return;
     assert(ctx == get_mem_context(ctx));
     list_init(&maps);
-    r_cnt += find_maps(&maps, syms->id);
-    if (syms->name != NULL) {
-        r_cnt += find_maps(&maps, syms->name);
-        r_cnt += find_maps(&maps, context_full_name(syms));
-    }
-    equ = ext->client_map.region_cnt == r_cnt;
-    if (equ) {
-        unsigned k = 0;
-        for (l = maps.next; equ && l != &maps; l = l->next) {
-            ClientMap * m = ctx2map(l);
-            for (i = 0; equ && i < m->map.region_cnt; i++) {
-                MemoryRegion * x = m->map.regions + i;
-                MemoryRegion * y = ext->client_map.regions + k++;
-                equ =
-                    y->addr == x->addr &&
-                    y->size == x->size &&
-                    y->file_offs == x->file_offs &&
-                    y->bss == x->bss &&
-                    y->flags == x->flags &&
-                    str_equ(y->file_name, x->file_name) &&
-                    str_equ(y->sect_name, x->sect_name);
+    find_maps(&maps, syms);
+    for (l = maps.next; equ && l != &maps; l = l->next) {
+        ClientMap * m = ctx2map(l);
+        for (i = 0; equ && i < m->map.region_cnt; i++) {
+            MemoryRegion * x = m->map.regions + i;
+            if (context_query(ctx, x->query)) {
+                if (k >= ext->client_map.region_cnt) {
+                    equ = 0;
+                }
+                else {
+                    MemoryRegion * y = ext->client_map.regions + k++;
+                    equ =
+                        y->addr == x->addr &&
+                        y->size == x->size &&
+                        y->file_offs == x->file_offs &&
+                        y->bss == x->bss &&
+                        y->flags == x->flags &&
+                        str_equ(y->file_name, x->file_name) &&
+                        str_equ(y->sect_name, x->sect_name) &&
+                        str_equ(y->query, x->query);
+                }
             }
         }
-        assert(!equ || k == r_cnt);
     }
     if (!equ) {
         context_clear_memory_map(&ext->client_map);
@@ -168,18 +158,20 @@ static void update_context_client_map(Context * ctx) {
             ClientMap * m = ctx2map(l);
             for (i = 0; i < m->map.region_cnt; i++) {
                 MemoryRegion * x = m->map.regions + i;
-                MemoryRegion * y = add_region(&ext->client_map);
-                y->addr = x->addr;
-                y->size = x->size;
-                y->file_offs = x->file_offs;
-                y->bss = x->bss;
-                y->flags = x->flags;
-                if (x->file_name) y->file_name = loc_strdup(x->file_name);
-                if (x->sect_name) y->sect_name = loc_strdup(x->sect_name);
-                if (x->id) y->id = loc_strdup(x->id);
+                if (context_query(ctx, x->query)) {
+                    MemoryRegion * y = add_region(&ext->client_map);
+                    y->addr = x->addr;
+                    y->size = x->size;
+                    y->file_offs = x->file_offs;
+                    y->bss = x->bss;
+                    y->flags = x->flags;
+                    if (x->file_name) y->file_name = loc_strdup(x->file_name);
+                    if (x->sect_name) y->sect_name = loc_strdup(x->sect_name);
+                    if (x->query) y->query = loc_strdup(x->query);
+                    if (x->id) y->id = loc_strdup(x->id);
+                }
             }
         }
-        assert(ext->client_map.region_cnt == r_cnt);
     }
     while (!list_is_empty(&maps)) list_remove(maps.next);
     if (!equ) memory_map_event_mapping_changed(ctx);
@@ -363,6 +355,12 @@ static void write_map_region(OutputStream * out, MemoryRegion * m) {
             json_write_boolean(out, m->bss);
         }
     }
+    if (m->query != NULL) {
+        write_stream(out, ',');
+        json_write_string(out, "ContextQuery");
+        write_stream(out, ':');
+        json_write_string(out, m->query);
+    }
     if (m->id != NULL) {
         write_stream(out, ',');
         json_write_string(out, "ID");
@@ -432,6 +430,7 @@ static void read_map_attribute(InputStream * inp, const char * name, void * args
     else if (strcmp(name, "Flags") == 0) r->flags = (unsigned)json_read_long(inp);
     else if (strcmp(name, "FileName") == 0) r->file_name = json_read_alloc_string(inp);
     else if (strcmp(name, "SectionName") == 0) r->sect_name = json_read_alloc_string(inp);
+    else if (strcmp(name, "ContextQuery") == 0) r->query = json_read_alloc_string(inp);
     else if (strcmp(name, "ID") == 0) r->id = json_read_alloc_string(inp);
     else {
         MemoryRegionAttribute * x = (MemoryRegionAttribute *)loc_alloc(sizeof(MemoryRegionAttribute));
@@ -451,7 +450,6 @@ static void read_map_item(InputStream * inp, void * args) {
 
 static void command_set(char * token, Channel * c) {
     char id[256];
-    unsigned h;
     ClientMap * cm = NULL;
     LINK * l = NULL;
     MemoryMap map;
@@ -464,9 +462,8 @@ static void command_set(char * token, Channel * c) {
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
-    h = map_id_hash(id);
-    for (l = client_map_hash[h].next; l != &client_map_hash[h]; l = l->next) {
-        ClientMap * m = hash2map(l);
+    for (l = client_map_list.next; l != &client_map_list; l = l->next) {
+        ClientMap * m = list2map(l);
         if (m->channel == c && strcmp(m->id, id) == 0) {
             context_clear_memory_map(&m->map);
             loc_free(m->map.regions);
@@ -480,14 +477,12 @@ static void command_set(char * token, Channel * c) {
             cm->id = loc_strdup(id);
             cm->channel = c;
             list_add_last(&cm->link_list, &client_map_list);
-            list_add_last(&cm->link_hash, &client_map_hash[h]);
         }
         cm->map = map;
         update_all_context_client_maps();
     }
     else if (cm != NULL) {
         list_remove(&cm->link_list);
-        list_remove(&cm->link_hash);
         loc_free(cm->id);
         loc_free(cm);
         update_all_context_client_maps();
@@ -507,7 +502,6 @@ static void channel_close_listener(Channel * c) {
         l = l->next;
         if (m->channel != c) continue;
         list_remove(&m->link_list);
-        list_remove(&m->link_hash);
         context_clear_memory_map(&m->map);
         loc_free(m->map.regions);
         loc_free(m->id);
@@ -518,7 +512,6 @@ static void channel_close_listener(Channel * c) {
 }
 
 void ini_memory_map_service(Protocol * proto, TCFBroadcastGroup * bcg) {
-    int i;
     static ContextEventListener listener = {
         event_context_changed,
         NULL,
@@ -529,9 +522,6 @@ void ini_memory_map_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     };
     broadcast_group = bcg;
     add_channel_close_listener(channel_close_listener);
-    for (i = 0; i < MAP_HASH_SIZE; i++) {
-        list_init(&client_map_hash[i]);
-    }
     add_context_event_listener(&listener, NULL);
     add_command_handler(proto, MEMORY_MAP, "get", command_get);
     add_command_handler(proto, MEMORY_MAP, "set", command_set);

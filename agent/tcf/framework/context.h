@@ -131,6 +131,7 @@ struct MemoryRegion {
     char * sect_name;               /* Region file section name, can be NULL */
     unsigned flags;                 /* Region flags, see MM_FLAG* */
     char * id;                      /* Region ID, not NULL only if the region info is submitted by a client */
+    char * query;                   /* If not NULL, the region is only part of the memory map for contexts matches the query */
     MemoryRegionAttribute * attrs;  /* Additional memory region attributes */
 };
 

@@ -121,6 +121,7 @@ void context_clear_memory_map(MemoryMap * map) {
         MemoryRegion * r = map->regions + i;
         loc_free(r->file_name);
         loc_free(r->sect_name);
+        loc_free(r->query);
         loc_free(r->id);
         while (r->attrs != NULL) {
             MemoryRegionAttribute * x = r->attrs;

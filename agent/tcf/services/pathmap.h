@@ -47,6 +47,7 @@ struct PathMapRuleAttribute {
 #define PATH_MAP_ID             "ID"
 #define PATH_MAP_SOURCE         "Source"
 #define PATH_MAP_DESTINATION    "Destination"
+#define PATH_MAP_CONTEXT_QUERY  "ContextQuery"
 #define PATH_MAP_CONTEXT        "Context"
 #define PATH_MAP_HOST           "Host"
 #define PATH_MAP_PROTOCOL       "Protocol"

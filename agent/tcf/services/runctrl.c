@@ -37,6 +37,7 @@
 #include <tcf/framework/signames.h>
 #include <tcf/framework/cache.h>
 #include <tcf/services/runctrl.h>
+#include <tcf/services/contextquery.h>
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/linenumbers.h>
 #include <tcf/services/stacktrace.h>
@@ -1785,6 +1786,25 @@ static void event_context_disposed(Context * ctx, void * client_data) {
     cancel_step_mode(ctx);
 }
 
+static int cmp_has_state(Context * ctx, const char * v) {
+    int x = strcmp(v, "true") == 0 || strcmp(v, "1") == 0;
+    int y = context_has_state(ctx) != 0;
+    return x == y;
+}
+
+static int cmp_parent_id(Context * ctx, const char * v) {
+    return ctx->parent != NULL && strcmp(ctx->parent->id, v) == 0;
+}
+
+static int cmp_creator_id(Context * ctx, const char * v) {
+    return ctx->creator != NULL && strcmp(ctx->creator->id, v) == 0;
+}
+
+static int cmp_process_id(Context * ctx, const char * v) {
+    ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+    return ctx != NULL && strcmp(ctx->id, v) == 0;
+}
+
 void ini_run_ctrl_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     static ContextEventListener listener = {
         event_context_created,
@@ -1804,6 +1824,10 @@ void ini_run_ctrl_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     add_command_handler(proto, RUN_CONTROL, "suspend", command_suspend);
     add_command_handler(proto, RUN_CONTROL, "terminate", command_terminate);
     add_command_handler(proto, RUN_CONTROL, "detach", command_detach);
+    add_context_query_comparator("HasState", cmp_has_state);
+    add_context_query_comparator("ParentID", cmp_parent_id);
+    add_context_query_comparator("CreatorID", cmp_creator_id);
+    add_context_query_comparator("ProcessID", cmp_process_id);
 }
 
 #else
