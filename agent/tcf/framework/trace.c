@@ -156,7 +156,7 @@ int add_trace_mode(int mode, const char * name, const char * description) {
             trace_mode_table[i].mode = mode;
             trace_mode_table[i].name = name;
             trace_mode_table[i].description = description;
-            return 0;
+            return mode;
         }
         busy |= trace_mode_table[i].mode;
     }
