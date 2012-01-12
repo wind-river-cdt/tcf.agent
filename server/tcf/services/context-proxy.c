@@ -971,7 +971,8 @@ static void read_memory_region_property(InputStream * inp, const char * name, vo
     else if (strcmp(name, "Flags") == 0) m->flags = json_read_ulong(inp);
     else if (strcmp(name, "FileName") == 0) m->file_name = json_read_alloc_string(inp);
     else if (strcmp(name, "SectionName") == 0) m->sect_name = json_read_alloc_string(inp);
-    else if (strcmp(name, "ID")) m->id = json_read_alloc_string(inp);
+    else if (strcmp(name, "ContextQuery") == 0) m->query = json_read_alloc_string(inp);
+    else if (strcmp(name, "ID") == 0) m->id = json_read_alloc_string(inp);
     else {
         MemoryRegionAttribute * x = (MemoryRegionAttribute *)loc_alloc(sizeof(MemoryRegionAttribute));
         x->name = loc_strdup(name);

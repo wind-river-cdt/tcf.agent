@@ -347,6 +347,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\agent\tcf\services\contextquery.c"
+				>
+			</File>
+			<File
+				RelativePath="..\agent\tcf\services\contextquery.h"
+				>
+			</File>
+			<File
 				RelativePath="..\agent\tcf\services\diagnostics.c"
 				>
 			</File>
