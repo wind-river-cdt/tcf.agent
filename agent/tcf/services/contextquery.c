@@ -225,6 +225,6 @@ void ini_context_query_service(Protocol * proto) {
 void add_context_query_comparator(const char * attr_name, ContextQueryComparator * callback) {}
 void parse_context_query(const char * query) {}
 int run_context_query(Context * ctx) { return 0; }
-int context_query(Context * ctx, const char * query) { return 0; }
+int context_query(Context * ctx, const char * query) { return query == NULL || *query == 0; }
 
 #endif
