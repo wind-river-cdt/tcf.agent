@@ -62,7 +62,7 @@ static void add_char(char ch) {
     str_buf[str_pos++] = ch;
 }
 
-extern void parse_context_query(const char * q) {
+void parse_context_query(const char * q) {
     str_pos = 0;
     str_buf = NULL;
     attrs = NULL;
@@ -155,11 +155,13 @@ static int match(Context * ctx, Attribute * attr) {
         if (attr->name != NULL) {
             if (!match_attribute(ctx, attr->name, attr->value)) return 0;
         }
-        else if (ctx->name != NULL) {
-            if (strcmp(ctx->name, attr->value) != 0) return 0;
-        }
-        else {
-            if (strcmp(ctx->id, attr->value) != 0) return 0;
+        else if (strcmp(attr->value, "*") != 0) {
+            if (ctx->name != NULL) {
+                if (strcmp(ctx->name, attr->value) != 0) return 0;
+            }
+            else {
+                if (strcmp(ctx->id, attr->value) != 0) return 0;
+            }
         }
         attr = attr->next;
     }
