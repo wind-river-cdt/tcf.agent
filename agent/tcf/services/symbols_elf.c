@@ -348,8 +348,29 @@ static ObjectInfo * get_object_type(ObjectInfo * obj) {
     return obj;
 }
 
-static int is_modified_type(ObjectInfo * obj) {
-    if (obj != NULL && obj->mType != NULL) {
+/* If 'obj' is modified type, like "const char", return unmodified type, e.g. "char" */
+static ObjectInfo * get_unmodified_type(ObjectInfo * obj) {
+    while (obj != NULL && obj->mType != NULL) {
+        switch (obj->mTag) {
+        case TAG_subrange_type:
+        case TAG_packed_type:
+        case TAG_const_type:
+        case TAG_volatile_type:
+        case TAG_restrict_type:
+        case TAG_shared_type:
+            obj = obj->mType;
+            break;
+        default:
+            return obj;
+        }
+    }
+    return obj;
+}
+
+/* Get object original type, skipping typedefs and all modifications like const, volatile, etc. */
+static ObjectInfo * get_original_type(ObjectInfo * obj) {
+    obj = get_object_type(obj);
+    while (obj != NULL && obj->mType != NULL) {
         switch (obj->mTag) {
         case TAG_subrange_type:
         case TAG_packed_type:
@@ -359,16 +380,11 @@ static int is_modified_type(ObjectInfo * obj) {
         case TAG_shared_type:
         case TAG_typedef:
         case TAG_template_type_param:
-            return 1;
+            obj = obj->mType;
+            break;
+        default:
+            return obj;
         }
-    }
-    return 0;
-}
-
-static ObjectInfo * get_original_type(ObjectInfo * obj) {
-    obj = get_object_type(obj);
-    while (is_modified_type(obj)) {
-        obj = obj->mType;
     }
     return obj;
 }
@@ -1042,6 +1058,7 @@ static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_
         case TAG_lexical_block:
             if (check_in_range(obj, rt_offs, sym_ip)) {
                 enumerate_local_vars(get_dwarf_children(obj), level + 1, rt_offs, call_back, args);
+                if (level == 0) return;
             }
             break;
         case TAG_formal_parameter:
@@ -1605,7 +1622,7 @@ int get_symbol_class(const Symbol * sym, int * sym_class) {
 int get_symbol_type(const Symbol * sym, Symbol ** type) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->sym_class == SYM_CLASS_TYPE) {
+    if (sym->sym_class == SYM_CLASS_TYPE && obj == NULL) {
         *type = (Symbol *)sym;
         return 0;
     }
@@ -1623,7 +1640,7 @@ int get_symbol_type(const Symbol * sym, Symbol ** type) {
     }
     if (unpack(sym) < 0) return -1;
     obj = sym->sym_class == SYM_CLASS_TYPE ?
-        get_original_type(obj) : get_object_type(obj);
+        get_unmodified_type(obj) : get_object_type(obj);
     if (obj == NULL) {
         *type = NULL;
     }
