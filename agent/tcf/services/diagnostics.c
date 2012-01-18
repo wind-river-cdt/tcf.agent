@@ -114,8 +114,12 @@ static void command_echo_fp(char * token, Channel * c) {
 }
 
 static void command_echo_err(char * token, Channel * c) {
-    int no = read_errno(&c->inp);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    int no = 0;
+    for (;;) {
+        no = read_errno(&c->inp);
+        if (peek_stream(&c->inp) == MARKER_EOM) break;
+    }
+    read_stream(&c->inp);
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
     write_errno(&c->out, no);
