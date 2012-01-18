@@ -71,7 +71,7 @@ static size_t disconnect_hnd_count = 0;
 
 static void cmd_done(int error);
 
-static void destroy_cmdline_handler() {
+static void destroy_cmdline_handler(void) {
     size_t i;
     for (i = 0; i < cmd_count; ++i) {
         loc_free(cmds[i].cmd);
@@ -124,30 +124,75 @@ static void display_tcf_reply(Channel * c, void * client_data, int error) {
     cmd_done(error);
 }
 
-#define maxargs 20
+static int is_space(unsigned ch) {
+    if (ch == ' ') return 1;
+    if (ch == '\t') return 1;
+    return 0;
+}
 
-static int cmd_tcf(char *s) {
-    int i;
-    int ind;
-    char * args[maxargs];
+static int cmd_tcf(char * args) {
+    char * service = NULL;
+    char * command = NULL;
+    unsigned char * s = (unsigned char *)args;
+    unsigned char * json = NULL;
     Channel * c = chan;
 
     if (c == NULL) {
         fprintf(stderr, "Error: Channel not connected, use 'connect' command\n");
         return -1;
     }
-    ind = 0;
-    args[ind] = strtok(s, " \t");
-    while (args[ind] != NULL && ++ind < maxargs) {
-        args[ind] = strtok(NULL, " \t");
+    while (is_space(*s)) s++;
+    if (*s) {
+        service = (char *)s;
+        while (*s && !is_space(*s)) s++;
+        if (*s) {
+            *s++ = 0;
+            while (is_space(*s)) s++;
+            if (*s) {
+                command = (char *)s;
+                while (*s && !is_space(*s)) s++;
+                if (*s) {
+                    *s++ = 0;
+                    while (is_space(*s)) s++;
+                    if (*s) json = s;
+                }
+            }
+        }
     }
-    if (args[0] == NULL || args[1] == NULL) {
+    if (service == NULL || command == NULL) {
         fprintf(stderr, "Error: Expected at least service and command name arguments\n");
         return -1;
     }
-    protocol_send_command(c, args[0], args[1], display_tcf_reply, c);
-    for (i = 2; i < ind; i++) {
-        write_stringz(&c->out, args[i]);
+    protocol_send_command(c, service, command, display_tcf_reply, c);
+    if (json != NULL) {
+        unsigned in_string = 0;
+        unsigned in_struct = 0;
+        unsigned in_array = 0;
+        while (*json) {
+            unsigned ch = *json++;
+            if (in_string) {
+                if (ch == '\\' && *json != 0) {
+                    write_stream(&c->out, ch);
+                    ch = *json++;
+                }
+                else if (ch == '"') {
+                    in_string = 0;
+                }
+            }
+            else if (ch == '[') in_array++;
+            else if (ch == ']') in_array--;
+            else if (ch == '{') in_struct++;
+            else if (ch == '}') in_struct--;
+            else if (ch == '"') in_string++;
+            else if (is_space(ch)) {
+                while (is_space(*json)) json++;
+                if (in_array || in_struct) continue;
+                if (*json == 0) break;
+                ch = 0;
+            }
+            write_stream(&c->out, ch);
+        }
+        write_stream(&c->out, 0);
     }
     write_stream(&c->out, MARKER_EOM);
     return 1;
