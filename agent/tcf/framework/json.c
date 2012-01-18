@@ -886,6 +886,13 @@ int read_errno(InputStream * inp) {
     ErrorReport * err = NULL;
     int ch = read_stream(inp);
     if (ch == 0) return 0;
+    if (ch == 'n') {
+        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
+        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
+        return 0;
+    }
     if (ch != '{') exception(ERR_JSON_SYNTAX);
     if (peek_stream(inp) == '}') {
         read_stream(inp);
