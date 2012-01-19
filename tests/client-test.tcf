@@ -1,0 +1,21 @@
+connect TCP:127.0.0.1:1534
+
+# A comment
+       # Another comment
+
+# Spaces in a string
+tcf Diagnostics echo "a ga ag ag a" 
+
+# Empty string
+tcf Diagnostics echo "" 
+
+# Space betweem arguments
+tcf Diagnostics echoERR null 
+
+# Space inside a struct
+tcf Diagnostics echoERR { }
+
+# Space inside an array
+tcf Diagnostics echoERR { } null { "Code" : 1, "Time" : 334, "Array" : [ 1, 2, 3 ] }
+
+tcf Diagnostics getTestList

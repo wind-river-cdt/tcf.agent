@@ -124,12 +124,6 @@ static void display_tcf_reply(Channel * c, void * client_data, int error) {
     cmd_done(error);
 }
 
-static int is_space(unsigned ch) {
-    if (ch == ' ') return 1;
-    if (ch == '\t') return 1;
-    return 0;
-}
-
 static int cmd_tcf(char * args) {
     char * service = NULL;
     char * command = NULL;
@@ -141,19 +135,19 @@ static int cmd_tcf(char * args) {
         fprintf(stderr, "Error: Channel not connected, use 'connect' command\n");
         return -1;
     }
-    while (is_space(*s)) s++;
+    while (isspace(*s)) s++;
     if (*s) {
         service = (char *)s;
-        while (*s && !is_space(*s)) s++;
+        while (*s && !isspace(*s)) s++;
         if (*s) {
             *s++ = 0;
-            while (is_space(*s)) s++;
+            while (isspace(*s)) s++;
             if (*s) {
                 command = (char *)s;
-                while (*s && !is_space(*s)) s++;
+                while (*s && !isspace(*s)) s++;
                 if (*s) {
                     *s++ = 0;
-                    while (is_space(*s)) s++;
+                    while (isspace(*s)) s++;
                     if (*s) json = s;
                 }
             }
@@ -184,8 +178,8 @@ static int cmd_tcf(char * args) {
             else if (ch == '{') in_struct++;
             else if (ch == '}') in_struct--;
             else if (ch == '"') in_string++;
-            else if (is_space(ch)) {
-                while (is_space(*json)) json++;
+            else if (isspace(ch)) {
+                while (isspace(*json)) json++;
                 if (in_array || in_struct) continue;
                 if (*json == 0) break;
                 ch = 0;
@@ -309,7 +303,7 @@ static void event_cmd_line(void * arg) {
     }
 
     while (*s && isspace((int)*s)) s++;
-    if (*s) {
+    if (*s && *s != '#') {
         for (cp = 0; cp < cmd_count; ++cp) {
             len = strlen(cmds[cp].cmd);
             if (strncmp(s, cmds[cp].cmd, len) == 0 && (s[len] == 0 || isspace((int)s[len]))) {
