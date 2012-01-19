@@ -58,8 +58,13 @@ struct InputStream {
 #define read_stream(inp) (((inp)->cur < (inp)->end) ? *(inp)->cur++ : (inp)->read((inp)))
 #define peek_stream(inp) (((inp)->cur < (inp)->end) ? *(inp)->cur : (inp)->peek((inp)))
 
-#define write_stream(out, b) { OutputStream * _s_ = (out); int _x_ = (b); \
-    if (_x_ > ESC && _s_->cur < _s_->end) *_s_->cur++ = (unsigned char)_x_; else _s_->write(_s_, _x_); }
+/* Note: do..while(0) wrapper is used to allow syntax like "if (...) write_stream(out, x); else ..." */
+#define write_stream(out, b) do { \
+    OutputStream * _s_ = (out); int _x_ = (b); \
+    if (_x_ > ESC && _s_->cur < _s_->end) *_s_->cur++ = (unsigned char)_x_; \
+    else _s_->write(_s_, _x_); \
+} while(0)
+
 #define write_block_stream(out, b, size) (out)->write_block((out), (b), (size))
 #define splice_block_stream(out, fd, size, offset) (out)->splice_block((out), (fd), (size), (offset))
 
