@@ -196,7 +196,7 @@ static void waitpid_done(void * arg) {
 
     if (req->u.wpid.rval == -1) {
         assert(error);
-        trace(LOG_ALWAYS, "waitpid error (pid %d): %d %d", pid, error, errno_to_str(error));
+        trace(error == ECHILD ? LOG_WAITPID : LOG_ALWAYS, "waitpid error (pid %d): %d %s", pid, error, errno_to_str(error));
         exited = 1;
         exit_code = error;
     }

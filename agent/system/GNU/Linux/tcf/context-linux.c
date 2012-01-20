@@ -100,7 +100,10 @@ typedef struct ContextExtensionLinux {
     int                     regs_gp_dirty;      /* if not 0, 'regs->gp' is modified and needs to be saved before context is continued */
     int                     regs_fp_dirty;      /* if not 0, 'regs->fp' is modified and needs to be saved before context is continued */
     int                     pending_step;
-    int                     tkill_cnt;
+    int                     stop_cnt;
+    int                     sigstop_posted;
+    int                     detach_req;
+    int                     detach_done;
 } ContextExtensionLinux;
 
 static size_t context_extension_offset = 0;
@@ -185,6 +188,31 @@ int context_attach(pid_t pid, ContextAttachCallBack * done, void * data, int mod
     return 0;
 }
 
+static int context_detach(Context * ctx) {
+    ContextExtensionLinux * ext = EXT(ctx);
+
+    assert(is_dispatch_thread());
+    assert(!ctx->exited);
+    assert(ctx->parent == NULL);
+
+    trace(LOG_CONTEXT, "context: detach ctx %#lx, id %s", ctx, ctx->id);
+
+    ctx->exiting = 1;
+    ext->detach_req = 1;
+    unplant_breakpoints(ctx);
+    if (!list_is_empty(&ctx->children)) {
+        LINK * l = ctx->children.next;
+        while (l != &ctx->children) {
+            Context * c = cldl2ctxp(l);
+            ContextExtensionLinux * e = EXT(c);
+            c->exiting = 1;
+            e->detach_req = 1;
+            l = l->next;
+        }
+    }
+    return 0;
+}
+
 int context_has_state(Context * ctx) {
     return ctx != NULL && ctx->parent != NULL;
 }
@@ -200,8 +228,8 @@ int context_stop(Context * ctx) {
     assert(!ctx->stopped);
     assert(!ext->regs_gp_dirty);
     assert(!ext->regs_fp_dirty);
-    if (ext->tkill_cnt > 4) {
-        /* Check for zombies */
+    if (ext->stop_cnt > 4) {
+        /* Waiting too long, check for zombies */
         int ch = 0;
         FILE * file = NULL;
         char file_name[FILE_PATH_SIZE];
@@ -215,20 +243,24 @@ int context_stop(Context * ctx) {
             return 0;
         }
         fclose(file);
-        ext->tkill_cnt = 0;
+        ext->stop_cnt = 0;
+        ext->sigstop_posted = 0;
     }
-    if (tkill(ext->pid, SIGSTOP) < 0) {
-        int err = errno;
-        if (err == ESRCH) {
-            ctx->exiting = 1;
-            return 0;
+    if (!ext->sigstop_posted) {
+        if (tkill(ext->pid, SIGSTOP) < 0) {
+            int err = errno;
+            if (err == ESRCH) {
+                ctx->exiting = 1;
+                return 0;
+            }
+            trace(LOG_ALWAYS, "error: tkill(SIGSTOP) failed: ctx %#lx, id %s, error %d %s",
+                ctx, ctx->id, err, errno_to_str(err));
+            errno = err;
+            return -1;
         }
-        trace(LOG_ALWAYS, "error: tkill(SIGSTOP) failed: ctx %#lx, id %s, error %d %s",
-            ctx, ctx->id, err, errno_to_str(err));
-        errno = err;
-        return -1;
+        ext->sigstop_posted = 1;
     }
-    ext->tkill_cnt++;
+    ext->stop_cnt++;
     return 0;
 }
 
@@ -289,6 +321,11 @@ static int flush_regs(Context * ctx) {
 int context_continue(Context * ctx) {
     int signal = 0;
     ContextExtensionLinux * ext = EXT(ctx);
+#if USE_PTRACE_SYSCALL
+    int cmd = PTRACE_SYSCALL;
+#else
+    int cmd = PTRACE_CONT;
+#endif
 
     assert(is_dispatch_thread());
     assert(ctx->stopped);
@@ -321,12 +358,9 @@ int context_continue(Context * ctx) {
     }
 #endif
     if (flush_regs(ctx) < 0) return -1;
-    if (!ctx->stopped) return 0;
-#if USE_PTRACE_SYSCALL
-    if (ptrace(PTRACE_SYSCALL, ext->pid, 0, signal) < 0) {
-#else
-    if (ptrace(PTRACE_CONT, ext->pid, 0, signal) < 0) {
-#endif
+    if (ext->detach_req && !ext->sigstop_posted) cmd = PTRACE_DETACH;
+    assert(!ext->detach_done || cmd != PTRACE_DETACH);
+    if (ptrace(cmd, ext->pid, 0, signal) < 0) {
         int err = errno;
         if (err == ESRCH) {
             ctx->exiting = 1;
@@ -345,6 +379,35 @@ int context_continue(Context * ctx) {
         ext->syscall_id = 0;
     }
     send_context_started_event(ctx);
+    if (cmd == PTRACE_DETACH) {
+        int all_detached = 1;
+        Context * prs = ctx->parent;
+        LINK * l = prs->children.next;
+        ext->detach_done = 1;
+        while (l != &prs->children) {
+            Context * c = cldl2ctxp(l);
+            if (!c->exited && !EXT(c)->detach_done) all_detached = 0;
+            l = l->next;
+        }
+        if (all_detached) {
+            l = prs->children.next;
+            while (l != &prs->children) {
+                Context * c = cldl2ctxp(l);
+                ContextExtensionLinux * e = EXT(c);
+                l = l->next;
+                if (!c->exited) {
+                    release_error_report(e->regs_error);
+                    e->regs_error = NULL;
+                    loc_free(e->regs);
+                    e->regs = NULL;
+                    send_context_exited_event(c);
+                }
+            }
+            assert(EXT(prs)->regs_error == NULL);
+            assert(EXT(prs)->regs == NULL);
+            send_context_exited_event(prs);
+        }
+    }
     return 0;
 }
 
@@ -389,6 +452,8 @@ int context_resume(Context * ctx, int mode, ContextAddress range_start, ContextA
     case RM_TERMINATE:
         ctx->pending_signals |= 1 << SIGKILL;
         return context_continue(ctx);
+    case RM_DETACH:
+        return context_detach(ctx);
     }
     errno = ERR_UNSUPPORTED;
     return -1;
@@ -401,6 +466,8 @@ int context_can_resume(Context * ctx, int mode) {
     case RM_STEP_INTO:
     case RM_TERMINATE:
         return context_has_state(ctx);
+    case RM_DETACH:
+        return ctx != NULL && ctx->parent == NULL;
     }
     return 0;
 }
@@ -869,7 +936,9 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     ext = EXT(ctx);
     assert(!ctx->exited);
     assert(!ext->attach_callback);
-    ext->tkill_cnt = 0;
+    if (signal == SIGSTOP) ext->sigstop_posted = 0;
+    ext->stop_cnt = 0;
+
     if (ext->ptrace_flags == 0) {
         if (ptrace((enum __ptrace_request)PTRACE_SETOPTIONS, ext->pid, 0, PTRACE_FLAGS) < 0 && errno != ESRCH) {
             int err = errno;
