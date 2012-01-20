@@ -360,7 +360,7 @@ int context_continue(Context * ctx) {
     if (flush_regs(ctx) < 0) return -1;
     if (ext->detach_req && !ext->sigstop_posted) cmd = PTRACE_DETACH;
     assert(!ext->detach_done || cmd != PTRACE_DETACH);
-    if (ptrace(cmd, ext->pid, 0, signal) < 0) {
+    if (ptrace((enum __ptrace_request)cmd, ext->pid, 0, signal) < 0) {
         int err = errno;
         if (err == ESRCH) {
             ctx->exiting = 1;
