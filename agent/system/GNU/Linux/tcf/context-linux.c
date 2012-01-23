@@ -329,6 +329,7 @@ int context_continue(Context * ctx) {
 
     assert(is_dispatch_thread());
     assert(ctx->stopped);
+    assert(!is_intercepted(ctx));
     assert(!ctx->pending_intercept);
     assert(!ext->pending_step);
     assert(!ctx->exited);
@@ -417,8 +418,9 @@ int context_single_step(Context * ctx) {
     assert(is_dispatch_thread());
     assert(context_has_state(ctx));
     assert(ctx->stopped);
-    assert(!ctx->exited);
+    assert(!is_intercepted(ctx));
     assert(!ext->pending_step);
+    assert(!ctx->exited);
 
     if (skip_breakpoint(ctx, 1)) return 0;
 
@@ -1062,7 +1064,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         assert(signal < 32);
         ctx->pending_signals |= 1 << signal;
         if ((ctx->sig_dont_stop & (1 << signal)) == 0) {
-            ctx->pending_intercept = 1;
+            if (!is_intercepted(ctx)) ctx->pending_intercept = 1;
             stopped_by_exception = 1;
         }
     }
@@ -1233,6 +1235,7 @@ static void eventpoint_at_loader(Context * ctx, void * args) {
     ContextExtensionLinux * ext = NULL;
 
 
+    assert(!is_intercepted(ctx));
     if (ctx->parent != NULL) ctx = ctx->parent;
     ext = EXT(ctx);
 
