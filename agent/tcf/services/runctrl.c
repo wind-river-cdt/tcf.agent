@@ -832,11 +832,13 @@ static void notify_context_intercepted(Context * ctx) {
     ContextExtensionRC * ext = EXT(ctx);
     assert(!ext->intercepted);
     ext->intercepted = 1;
+    ctx->pending_intercept = 0;
     for (i = 0; i < listener_cnt; i++) {
         Listener * l = listeners + i;
         if (l->func->context_intercepted == NULL) continue;
         l->func->context_intercepted(ctx, l->args);
     }
+    assert(ctx->pending_intercept == 0);
 }
 
 static void notify_context_released(Context * ctx) {
@@ -919,7 +921,6 @@ static void send_event_context_suspended(void) {
             assert(!e->safe_single_step);
             cancel_step_mode(x);
             notify_context_intercepted(x);
-            x->pending_intercept = 0;
             if (get_context_breakpoint_ids(x) != NULL) e->intercepted_by_bp++;
             if (e->intercepted_by_bp || x->stopped_by_exception) n = &p0;
             list_add_last(&e->link, n);
@@ -1050,6 +1051,11 @@ int is_all_stopped(Context * ctx) {
         return 0;
     }
     return 1;
+}
+
+int is_intercepted(Context * ctx) {
+    ContextExtensionRC * ext = EXT(ctx);
+    return ext->intercepted;
 }
 
 #if EN_STEP_LINE
@@ -1533,6 +1539,7 @@ static void sync_run_state(void) {
     while (err_cnt == 0 && run_ctrl_lock_cnt == 0 && l != &p) {
         Context * ctx = link2ctx(l);
         ContextExtensionRC * ext = EXT(ctx);
+        assert(!ext->intercepted);
         l = l->next;
         if (context_resume(ctx, ext->step_continue_mode, ext->step_range_start, ext->step_range_end) < 0) {
             int error = set_errno(errno, "Cannot resume");

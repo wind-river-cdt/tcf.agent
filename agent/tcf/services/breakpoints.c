@@ -2408,6 +2408,7 @@ static void safe_skip_breakpoint(void * arg) {
     if (ctx->exited || ctx->exiting) return;
 
     assert(ctx->stopped);
+    assert(!is_intercepted(ctx));
     assert(bi->cb.address == get_regs_PC(ctx));
 
     if (bi->planted) remove_instruction(bi);

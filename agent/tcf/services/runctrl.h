@@ -91,6 +91,12 @@ extern int safe_context_single_step(Context * ctx);
 extern int is_all_stopped(Context * ctx);
 
 /*
+ * Return 1 if the context is intercepted.
+ * A context is intercepted when it is reported up (to UI or value-add) as suspended.
+ */
+extern int is_intercepted(Context * ctx);
+
+/*
  * Terminate debug context - thread or process.
  * Returns 0 if no errors, otherwise returns -1 and sets errno.
  * Note: this function is asynchronous, it returns before context is terminated.
