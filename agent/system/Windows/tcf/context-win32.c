@@ -48,7 +48,7 @@
 #  define MAX_HW_BPS 4
 #endif
 
-#define BREAK_TIMEOUT 10000
+#define BREAK_TIMEOUT 100000
 
 #if defined(_M_IX86)
 #  define reg_ip Eip
@@ -104,6 +104,8 @@ typedef struct DebugState {
     HANDLE              break_thread;
     LPVOID              break_thread_code;
     DWORD               break_thread_id;
+    unsigned            break_event_generation;
+    unsigned            debug_event_generation;
     HANDLE              file_handle;
     DWORD64             base_address;
     HANDLE              module_handle;
@@ -458,6 +460,8 @@ static DWORD WINAPI remote_thread_func(LPVOID args) {
     return 0;
 }
 
+static void post_break_process_event(Context * ctx);
+
 static void break_process_event(void * args) {
     Context * ctx = (Context *)args;
     ContextExtensionWin32 * ext = EXT(ctx);
@@ -467,6 +471,8 @@ static void break_process_event(void * args) {
         int cnt = 0;
         DebugState * debug_state = ext->debug_state;
 
+        assert(debug_state->break_posted);
+        debug_state->break_posted = 0;
         if (!ctx->exited && debug_state->break_thread == NULL) {
             for (l = ctx->children.next; l != &ctx->children; l = l->next) {
                 Context * c  = cldl2ctxp(l);
@@ -477,32 +483,49 @@ static void break_process_event(void * args) {
                 }
             }
             if (cnt > 0) {
-                const SIZE_T buf_size = 0x100;
-                SIZE_T size = 0;
-                int error = 0;
-
-                trace(LOG_CONTEXT, "context: creating remote thread in process %#lx, id %s", ctx, ctx->id);
-                if (debug_state->break_thread_code == NULL) {
-                    debug_state->break_thread_code = VirtualAllocEx(ext->handle,
-                        NULL, buf_size, MEM_COMMIT, PAGE_EXECUTE);
-                    error = log_error("VirtualAllocEx", debug_state->break_thread_code != NULL);
+                if (debug_state->break_event_generation != debug_state->debug_event_generation) {
+                    /* Target state changed after break request was posted. Re-post the request. */
+                    post_break_process_event(ctx);
                 }
+                else {
+                    const SIZE_T buf_size = 0x100;
+                    SIZE_T size = 0;
+                    int error = 0;
 
-                if (!error) error = log_error("WriteProcessMemory", WriteProcessMemory(ext->handle,
-                    debug_state->break_thread_code, (LPCVOID)remote_thread_func, buf_size, &size) && size == buf_size);
+                    trace(LOG_CONTEXT, "context: creating remote thread in process %#lx, id %s", ctx, ctx->id);
+                    if (debug_state->break_thread_code == NULL) {
+                        debug_state->break_thread_code = VirtualAllocEx(ext->handle,
+                            NULL, buf_size, MEM_COMMIT, PAGE_EXECUTE);
+                        error = log_error("VirtualAllocEx", debug_state->break_thread_code != NULL);
+                    }
 
-                if (!error) error = log_error("CreateRemoteThread", (debug_state->break_thread = CreateRemoteThread(ext->handle,
-                    0, 0, (DWORD (WINAPI*)(LPVOID))debug_state->break_thread_code, NULL, 0, &debug_state->break_thread_id)) != NULL);
+                    if (!error) error = log_error("WriteProcessMemory", WriteProcessMemory(ext->handle,
+                        debug_state->break_thread_code, (LPCVOID)remote_thread_func, buf_size, &size) && size == buf_size);
 
-                if (error) {
-                    debug_state->break_thread = NULL;
-                    debug_state->break_thread_id = 0;
+                    if (!error) error = log_error("CreateRemoteThread", (debug_state->break_thread = CreateRemoteThread(ext->handle,
+                        0, 0, (DWORD (WINAPI*)(LPVOID))debug_state->break_thread_code, NULL, 0, &debug_state->break_thread_id)) != NULL);
+
+                    if (error) {
+                        debug_state->break_thread = NULL;
+                        debug_state->break_thread_id = 0;
+                    }
                 }
             }
         }
-        debug_state->break_posted = 0;
     }
     context_unlock(ctx);
+}
+
+static void post_break_process_event(Context * ctx) {
+    ContextExtensionWin32 * ext = EXT(ctx);
+    DebugState * debug_state = ext->debug_state;
+
+    assert(ctx->parent == NULL);
+    assert(!debug_state->break_posted);
+    context_lock(ctx);
+    post_event_with_delay(break_process_event, ctx, BREAK_TIMEOUT);
+    debug_state->break_event_generation = debug_state->debug_event_generation;
+    debug_state->break_posted = 1;
 }
 
 static int win32_resume(Context * ctx, int step) {
@@ -954,6 +977,7 @@ static void early_debug_event_handler(void * x) {
             win32_event->dwProcessId, win32_event->dwThreadId);
     }
 
+    debug_state->debug_event_generation++;
     debug_state->reporting_debug_event = 1;
     debug_event_handler(debug_event);
     post_event(continue_debug_event, debug_event);
@@ -1113,9 +1137,7 @@ int context_stop(Context * ctx) {
         debug_state->reporting_debug_event++;
     }
     else if (!debug_state->break_posted) {
-        context_lock(ctx->parent);
-        post_event_with_delay(break_process_event, ctx->parent, BREAK_TIMEOUT);
-        debug_state->break_posted = 1;
+        post_break_process_event(ctx->parent);
     }
     ext->stop_pending = 1;
     return 0;
@@ -1172,9 +1194,7 @@ static int context_detach(Context * ctx) {
         if (win32_resume(c, 0) < 0) return -1;
     }
     if (!debug_state->break_posted) {
-        context_lock(ctx);
-        post_event_with_delay(break_process_event, ctx, BREAK_TIMEOUT);
-        debug_state->break_posted = 1;
+        post_break_process_event(ctx);
     }
     return 0;
 }
