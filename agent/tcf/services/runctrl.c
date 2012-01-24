@@ -1427,6 +1427,20 @@ static void stop_all_timer(void * args) {
     post_event(run_safe_events, NULL);
 }
 
+static void resume_error(Context * ctx, int error) {
+    trace(LOG_ALWAYS, "Cannot resume context %s: %s", ctx->id, errno_to_str(error));
+    error = set_errno(error, "Cannot resume");
+    ctx->signal = 0;
+    ctx->stopped = 1;
+    ctx->stopped_by_bp = 0;
+    ctx->stopped_by_cb = NULL;
+    ctx->stopped_by_exception = 1;
+    ctx->pending_intercept = 1;
+    loc_free(ctx->exception_description);
+    ctx->exception_description = loc_strdup(errno_to_str(error));
+    send_context_changed_event(ctx);
+}
+
 static void sync_run_state(void) {
     int err_cnt = 0;
     LINK * l;
@@ -1447,7 +1461,7 @@ static void sync_run_state(void) {
             EXT(grp)->intercept_group = 0;
         }
         else if (ext->step_mode == RM_TERMINATE || ext->step_mode == RM_DETACH) {
-            context_resume(ctx, ext->step_mode, 0, 0);
+            if (context_resume(ctx, ext->step_mode, 0, 0) < 0) resume_error(ctx, errno);
         }
         l = l->next;
     }
@@ -1519,16 +1533,7 @@ static void sync_run_state(void) {
                 list_add_last(&ext->link, &p);
             }
             else if (context_resume(ctx, EXT(grp)->reverse_run ? RM_REVERSE_RESUME : RM_RESUME, 0, 0) < 0) {
-                int error = set_errno(errno, "Cannot resume");
-                ctx->signal = 0;
-                ctx->stopped = 1;
-                ctx->stopped_by_bp = 0;
-                ctx->stopped_by_cb = NULL;
-                ctx->stopped_by_exception = 1;
-                ctx->pending_intercept = 1;
-                loc_free(ctx->exception_description);
-                ctx->exception_description = loc_strdup(errno_to_str(error));
-                send_context_changed_event(ctx);
+                resume_error(ctx, errno);
                 err_cnt++;
             }
         }
@@ -1542,16 +1547,7 @@ static void sync_run_state(void) {
         assert(!ext->intercepted);
         l = l->next;
         if (context_resume(ctx, ext->step_continue_mode, ext->step_range_start, ext->step_range_end) < 0) {
-            int error = set_errno(errno, "Cannot resume");
-            ctx->signal = 0;
-            ctx->stopped = 1;
-            ctx->stopped_by_bp = 0;
-            ctx->stopped_by_cb = NULL;
-            ctx->stopped_by_exception = 1;
-            ctx->pending_intercept = 1;
-            loc_free(ctx->exception_description);
-            ctx->exception_description = loc_strdup(errno_to_str(error));
-            send_context_changed_event(ctx);
+            resume_error(ctx, errno);
             err_cnt++;
         }
     }
