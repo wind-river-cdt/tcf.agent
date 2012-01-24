@@ -48,6 +48,8 @@
 #  define MAX_HW_BPS 4
 #endif
 
+#define BREAK_TIMEOUT 10000
+
 #if defined(_M_IX86)
 #  define reg_ip Eip
 #  define reg_sp Esp
@@ -96,6 +98,7 @@ typedef struct DebugState {
     HANDLE              ini_thread_handle;
     DWORD               main_thread_id;
     HANDLE              main_thread_handle;
+    /* Note that while reporting debug events, all threads within the reporting process are frozen. */
     int                 reporting_debug_event;
     int                 break_posted;
     HANDLE              break_thread;
@@ -109,7 +112,8 @@ typedef struct DebugState {
     void *              attach_data;
     int                 detach;
 #if USE_HW_BPS
-    int                 ok_to_use_hw_bp;    /* NtContinue() changes Dr6 and Dr7, so HW breakpoints should be disabled until NtContinue() is done */
+    /* NtContinue() changes Dr6 and Dr7, so HW breakpoints should be disabled until NtContinue() is done */
+    int                 ok_to_use_hw_bp;
     ContextBreakpoint * hw_bps[MAX_HW_BPS];
     unsigned            hw_idx[MAX_HW_BPS];
     unsigned            hw_bps_generation;
@@ -193,8 +197,6 @@ static int log_error(const char * fn, int ok) {
     trace(LOG_ALWAYS, "context: %s: %s", fn, errno_to_str(errno));
     return err;
 }
-
-static void event_win32_context_exited(Context * ctx, int detach);
 
 static void get_registers(Context * ctx) {
     ContextExtensionWin32 * ext = EXT(ctx);
@@ -408,6 +410,8 @@ static void event_win32_context_started(Context * ctx) {
     send_context_started_event(ctx);
 }
 
+static int win32_resume(Context * ctx, int step);
+
 static void event_win32_context_exited(Context * ctx, int detach) {
     ContextExtensionWin32 * ext = EXT(ctx);
     LINK * l = NULL;
@@ -416,7 +420,7 @@ static void event_win32_context_exited(Context * ctx, int detach) {
     context_lock(ctx);
     ctx->exiting = 1;
     ext->stop_pending = 0;
-    if (ctx->stopped) send_context_started_event(ctx);
+    if (ctx->stopped) win32_resume(ctx, 0);
     l = ctx->children.next;
     while (l != &ctx->children) {
         Context * c = cldl2ctxp(l);
@@ -430,6 +434,7 @@ static void event_win32_context_exited(Context * ctx, int detach) {
     ext->regs = NULL;
     send_context_exited_event(ctx);
     if (ext->handle != NULL) {
+        assert(!detach || ctx->parent == NULL || ResumeThread(ext->handle) <= 0);
         if (!detach) {
             if (ctx->mem != ctx) {
                 log_error("CloseHandle", CloseHandle(ext->handle));
@@ -464,8 +469,12 @@ static void break_process_event(void * args) {
 
         if (!ctx->exited && debug_state->break_thread == NULL) {
             for (l = ctx->children.next; l != &ctx->children; l = l->next) {
-                ContextExtensionWin32 * x = EXT(cldl2ctxp(l));
-                if (x->stop_pending && SuspendThread(x->handle) != (DWORD)-1) cnt++;
+                Context * c  = cldl2ctxp(l);
+                if (EXT(c)->stop_pending) {
+                    assert(!c->stopped);
+                    assert(!c->exited);
+                    cnt++;
+                }
             }
             if (cnt > 0) {
                 const SIZE_T buf_size = 0x100;
@@ -1105,7 +1114,7 @@ int context_stop(Context * ctx) {
     }
     else if (!debug_state->break_posted) {
         context_lock(ctx->parent);
-        post_event_with_delay(break_process_event, ctx->parent, 10000);
+        post_event_with_delay(break_process_event, ctx->parent, BREAK_TIMEOUT);
         debug_state->break_posted = 1;
     }
     ext->stop_pending = 1;
@@ -1149,6 +1158,14 @@ static int context_detach(Context * ctx) {
     trace(LOG_CONTEXT, "context: detach ctx %#lx id %s", ctx, ctx->id);
     debug_state->detach = 1;
     unplant_breakpoints(ctx);
+#if USE_HW_BPS && !defined(NDEBUG)
+    {
+        unsigned i = 0;
+        for (i = 0; i < MAX_HW_BPS; i++) {
+            assert(debug_state->hw_bps[i] == NULL);
+        }
+    }
+#endif
     for (l = ctx->children.next; l != &ctx->children; l = l->next) {
         Context * c = cldl2ctxp(l);
         if (!c->stopped) continue;
@@ -1156,7 +1173,7 @@ static int context_detach(Context * ctx) {
     }
     if (!debug_state->break_posted) {
         context_lock(ctx);
-        post_event_with_delay(break_process_event, ctx, 10000);
+        post_event_with_delay(break_process_event, ctx, BREAK_TIMEOUT);
         debug_state->break_posted = 1;
     }
     return 0;
