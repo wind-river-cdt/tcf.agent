@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -466,14 +466,14 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
             {
                 LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
                 cmd->args.deref.size = rules.address_size;
-                cmd->args.deref.big_endian = rules.section->file->big_endian;
+                cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
             }
             break;
         case OP_deref_size:
             {
                 LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
                 cmd->args.deref.size = dio_ReadU1();
-                cmd->args.deref.big_endian = rules.section->file->big_endian;
+                cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
             }
             break;
         case OP_const1u:
@@ -638,7 +638,7 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
             LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
             cmd->args.deref.size = dst_reg_def->size;
             if (cmd->args.deref.size > rules.address_size) cmd->args.deref.size = rules.address_size;
-            cmd->args.deref.big_endian = rules.section->file->big_endian;
+            cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
         }
         break;
     case RULE_SAME_VALUE:
@@ -659,7 +659,7 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
             LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
             cmd->args.deref.size = dst_reg_def->size;
             if (cmd->args.deref.size > rules.address_size) cmd->args.deref.size = rules.address_size;
-            cmd->args.deref.big_endian = rules.section->file->big_endian;
+            cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
         }
         break;
     default:
@@ -716,8 +716,16 @@ static void generate_commands(void) {
     add_command_sequence(&dwarf_stack_trace_fp, NULL);
 }
 
-static void generate_plt_section_commands(U8_T offs) {
+static void generate_plt_section_commands(Context * ctx, ELF_File * file, U8_T offs) {
     RegisterRules * reg = NULL;
+
+    memset(&rules, 0, sizeof(StackFrameRules));
+    rules.ctx = ctx;
+    rules.reg_id_scope.big_endian = file->big_endian;
+    rules.reg_id_scope.machine = file->machine;
+    rules.reg_id_scope.os_abi = file->os_abi;
+    rules.reg_id_scope.id_type = REGNUM_DWARF;
+    rules.address_size = file->elf64 ? 8 : 4;
 
     cie_regs.regs_cnt = 0;
     frame_regs.regs_cnt = 0;
@@ -1045,7 +1053,11 @@ void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * te
     if (text_section != NULL && text_section->name != NULL && strcmp(text_section->name, ".plt") == 0) {
         assert(addr >= text_section->addr);
         assert(addr < text_section->addr + text_section->size);
-        generate_plt_section_commands(addr - text_section->addr);
+        generate_plt_section_commands(ctx, file, addr - text_section->addr);
+        if (dwarf_stack_trace_fp->cmds_cnt > 0) {
+            dwarf_stack_trace_addr = addr;
+            dwarf_stack_trace_size = 1;
+        }
     }
 }
 
