@@ -574,6 +574,8 @@ static void next_sy(void) {
 }
 
 static void reg2value(Context * ctx, int frame, RegisterDefinition * def, Value * v) {
+    if (ctx->exited) exception(ERR_ALREADY_EXITED);
+    if (!ctx->stopped) str_exception(ERR_IS_RUNNING, "Cannot read CPU register");
     memset(v, 0, sizeof(Value));
     set_value(v, NULL, def->size, def->big_endian);
     v->type_class = def->fp_value ? TYPE_CLASS_REAL : TYPE_CLASS_CARDINAL;
