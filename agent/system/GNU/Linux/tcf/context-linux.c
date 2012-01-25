@@ -204,9 +204,11 @@ static int context_detach(Context * ctx) {
         LINK * l = ctx->children.next;
         while (l != &ctx->children) {
             Context * c = cldl2ctxp(l);
-            ContextExtensionLinux * e = EXT(c);
-            c->exiting = 1;
-            e->detach_req = 1;
+            if (!c->exited) {
+                ContextExtensionLinux * e = EXT(c);
+                c->exiting = 1;
+                e->detach_req = 1;
+            }
             l = l->next;
         }
     }

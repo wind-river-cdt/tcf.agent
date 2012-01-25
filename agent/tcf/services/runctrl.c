@@ -1045,7 +1045,7 @@ int is_all_stopped(Context * ctx) {
     Context * grp = context_get_group(ctx, CONTEXT_GROUP_STOP);
     for (l = context_root.next; l != &context_root; l = l->next) {
         Context * ctx = ctxl2ctxp(l);
-        if (ctx->stopped || ctx->exited || ctx->exiting || EXT(ctx)->safe_single_step) continue;
+        if (ctx->stopped || ctx->exited || ctx->exiting) continue;
         if (!context_has_state(ctx)) continue;
         if (context_get_group(ctx, CONTEXT_GROUP_STOP) != grp) continue;
         return 0;
@@ -1461,7 +1461,9 @@ static void sync_run_state(void) {
             EXT(grp)->intercept_group = 0;
         }
         else if (ext->step_mode == RM_TERMINATE || ext->step_mode == RM_DETACH) {
+            assert(is_all_stopped(ctx));
             if (context_resume(ctx, ext->step_mode, 0, 0) < 0) resume_error(ctx, errno);
+            ext->step_mode = 0;
         }
         l = l->next;
     }

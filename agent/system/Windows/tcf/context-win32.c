@@ -729,8 +729,8 @@ static int win32_terminate(Context * ctx) {
         for (l = ctx->children.next; l != &ctx->children; l = l->next) {
             Context * c = cldl2ctxp(l);
             if (!c->stopped) continue;
-            event_win32_context_started(c);
             c->exiting = 1;
+            event_win32_context_started(c);
         }
     }
 
@@ -823,7 +823,7 @@ static void debug_event_handler(DebugEvent * debug_event) {
             ext->debug_event = *win32_event;
         }
         else if (ctx == NULL || ctx->exiting) {
-            /* Does not work as expected: debug_event->continue_status = DBG_EXCEPTION_NOT_HANDLED; */
+            debug_event->continue_status = DBG_EXCEPTION_NOT_HANDLED;
         }
         else {
             assert(prs != NULL);
@@ -1188,10 +1188,11 @@ static int context_detach(Context * ctx) {
         }
     }
 #endif
+    ctx->exiting = 1;
     for (l = ctx->children.next; l != &ctx->children; l = l->next) {
         Context * c = cldl2ctxp(l);
-        if (!c->stopped) continue;
-        if (win32_resume(c, 0) < 0) return -1;
+        if (!c->exited) c->exiting = 1;
+        if (c->stopped && win32_resume(c, 0) < 0) return -1;
     }
     if (!debug_state->break_posted) {
         post_break_process_event(ctx);
@@ -1391,6 +1392,7 @@ int context_plant_breakpoint(ContextBreakpoint * bp) {
             unsigned i;
             unsigned n = 1;
             unsigned m = 0;
+            assert(!debug_state->detach);
             if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
                 /* Don't use more then 2 HW slots for regular instruction breakpoints */
                 int cnt = 0;
