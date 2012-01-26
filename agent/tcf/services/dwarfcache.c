@@ -1360,6 +1360,14 @@ static void add_file(CompUnit * Unit, FileInfo * file) {
 }
 
 static void add_state(CompUnit * Unit, LineNumbersState * state) {
+    assert(state->mFile < Unit->mFilesCnt);
+    if (Unit->mFiles[state->mFile].mAreaCnt++ == 1) {
+        LineNumbersState s;
+        memset(&s, 0, sizeof(s));
+        s.mLine = 1;
+        s.mFile = state->mFile;
+        add_state(Unit, &s);
+    }
     if (Unit->mStatesCnt >= Unit->mStatesMax) {
         Unit->mStatesMax = Unit->mStatesMax == 0 ? 128 : Unit->mStatesMax * 2;
         Unit->mStates = (LineNumbersState *)loc_realloc(Unit->mStates, sizeof(LineNumbersState) * Unit->mStatesMax);

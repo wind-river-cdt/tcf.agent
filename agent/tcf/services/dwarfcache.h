@@ -57,6 +57,7 @@ struct FileInfo {
     unsigned mNameHash;
     FileInfo * mNextInHash;
     CompUnit * mCompUnit;
+    unsigned mAreaCnt;
 };
 
 #define TAG_fund_type           0x2000

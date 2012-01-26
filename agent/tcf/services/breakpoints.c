@@ -1137,7 +1137,7 @@ static void plant_breakpoint_address_iterator(CodeArea * area, void * x) {
     EvaluationArgs * args = (EvaluationArgs *)x;
     if (args->bp->location == NULL) {
         ContextAddress addr = area->start_address;
-        if (area->start_line != args->bp->line && area->next_address != 0) addr = area->next_address;
+        if ((addr == 0 || area->start_line != args->bp->line) && area->next_address != 0) addr = area->next_address;
         plant_breakpoint(args->ctx, args->bp, addr, 1);
     }
     else {
