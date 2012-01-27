@@ -456,6 +456,13 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
     if (decl == NULL) return NULL;
     if ((decl->mFlags & DOIF_declaration) == 0) return decl;
     if (decl->mDefinition != NULL) return decl->mDefinition;
+    switch (decl->mTag) {
+    case TAG_structure_type:
+    case TAG_interface_type:
+    case TAG_union_type:
+    case TAG_class_type:
+        if (get_dwarf_children(decl) != NULL) return decl;
+    }
     if ((decl->mFlags & DOIF_external) != 0 && decl->mName != NULL) {
         int found = 0;
         Symbol * sym = NULL;
@@ -466,7 +473,7 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
                 found = find_by_name_in_pub_names(cache, &cache->mPubTypes, decl->mName, &sym);
             }
         }
-        if (found && sym->obj != NULL) return sym->obj;
+        if (found && sym->obj != NULL && sym->obj->mTag == decl->mTag) return sym->obj;
     }
     return decl;
 }
