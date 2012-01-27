@@ -20,6 +20,9 @@
 
 #if defined(__linux__)
 #  include <sys/user.h>
+#if !defined(__i386__) && !defined(__x86_64__) 
+#  include <tcf/regdefs-mdep.h>
+#else
 typedef struct REG_SET {
     struct user user;
     struct user_fpregs_struct fp;
@@ -29,4 +32,5 @@ typedef struct REG_SET {
     ContextAddress fpx;
 #endif
 } REG_SET;
+#endif
 #endif
