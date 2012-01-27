@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -43,7 +43,6 @@ typedef struct ObjectArray {
 } ObjectArray;
 
 typedef struct ObjectReference {
-    ELF_Section * sec;
     ObjectInfo * obj;
     ObjectInfo * org;
 } ObjectReference;
@@ -118,24 +117,43 @@ static CompUnit * add_comp_unit(ContextAddress ID) {
     return Info->mCompUnit;
 }
 
-static void add_object_reference(ELF_Section * sec, ObjectInfo * org, ObjectInfo * obj) {
+static CompUnit * find_comp_unit(ContextAddress ObjID) {
+    if (sCompUnit != NULL) {
+        ContextAddress ID = sCompUnit->mDesc.mSection->addr + sCompUnit->mDesc.mUnitOffs;
+        if (ID <= ObjID && ID + sCompUnit->mDesc.mUnitSize > ObjID) return sCompUnit;
+    }
+    if (sCache->mCompUnitsIndex != NULL) {
+        unsigned l = 0;
+        unsigned h = sCache->mCompUnitsCnt;
+        while (l < h) {
+            unsigned i = (l + h) / 2;
+            CompUnit * unit = sCache->mCompUnitsIndex[i];
+            ContextAddress ID = unit->mDesc.mSection->addr + unit->mDesc.mUnitOffs;
+            if (ID > ObjID) {
+                h = i;
+            }
+            else if (ID + unit->mDesc.mUnitSize <= ObjID) {
+                l = i + 1;
+            }
+            else {
+                return unit;
+            }
+        }
+    }
+    return NULL;
+}
+
+static void add_object_reference(ObjectInfo * org, ObjectInfo * obj) {
 #if ENABLE_DWARF_LAZY_LOAD
     if (org->mTag != 0 && obj == NULL) return;
 #else
     if (obj == NULL) return;
 #endif
-    if (sec == NULL) sec = sDebugSection;
-    if (org->mCompUnit == NULL) {
-        U8_T offs = org->mID - sec->addr;
-        if (sCompUnit->mDesc.mUnitOffs <= offs && sCompUnit->mDesc.mUnitOffs + sCompUnit->mDesc.mUnitSize > offs) {
-            org->mCompUnit = sCompUnit;
-        }
-    }
+    if (org->mCompUnit == NULL) org->mCompUnit = find_comp_unit(org->mID);
     if (sObjRefsCnt >= sObjRefsMax) {
         sObjRefsMax += sObjRefsMax ? sObjRefsMax * 2 : 256;
         sObjRefs = (ObjectReference *)loc_realloc(sObjRefs, sizeof(ObjectReference) * sObjRefsMax);
     }
-    sObjRefs[sObjRefsCnt].sec = sec;
     sObjRefs[sObjRefsCnt].org = org;
     sObjRefs[sObjRefsCnt].obj = obj;
     sObjRefsCnt++;
@@ -230,7 +248,7 @@ static void read_mod_user_def_type(U2_T Form, ObjectInfo ** Type) {
             (sDebugSection->file->big_endian ? 3 - i : i)] << (i * 8);
     }
     *Type = add_object_info((ContextAddress)(sDebugSection->addr + Ref));
-    add_object_reference(sDebugSection, *Type, NULL);
+    add_object_reference(*Type, NULL);
     BufPos = BufSize - 4;
     while (BufPos > 0) {
         U2_T Tag = 0;
@@ -297,7 +315,7 @@ static void read_subscr_data(U2_T Form, ObjectInfo * Array) {
         case FMT_UT_X_X:
             dio_ReadAttribute(AT_subscr_data, FORM_REF);
             Type = add_object_info((ContextAddress)dio_gFormData);
-            add_object_reference(sDebugSection, Type, NULL);
+            add_object_reference(Type, NULL);
             break;
         }
         if (Type != NULL) {
@@ -357,7 +375,7 @@ static void read_subscr_data(U2_T Form, ObjectInfo * Array) {
             case AT_user_def_type:
                 dio_ChkRef(Form);
                 Type = add_object_info((ContextAddress)dio_gFormData);
-                add_object_reference(dio_gFormSection, Type, NULL);
+                add_object_reference(Type, NULL);
                 break;
             case AT_mod_fund_type:
                 read_mod_fund_type(Form, &Type);
@@ -413,7 +431,12 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
             Info->mCompUnit = sCompUnit;
         }
         else {
-            if (Tag == TAG_compile_unit && Sibling == 0) Sibling = sUnitDesc.mUnitOffs + sUnitDesc.mUnitSize;
+            if (Tag == TAG_compile_unit) {
+                assert(sCache->mCompUnitsIndex == NULL);
+                if (Sibling == 0) Sibling = sUnitDesc.mUnitOffs + sUnitDesc.mUnitSize;
+                sCompUnit->mDesc = sUnitDesc;
+                sCache->mCompUnitsCnt++;
+            }
             if (sPrevSibling != NULL) sPrevSibling->mSibling = Info;
             else if (sParentObject != NULL) sParentObject->mChildren = Info;
             else if (Tag == TAG_compile_unit) sCache->mCompUnits = Info;
@@ -458,7 +481,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_type:
         dio_ChkRef(Form);
         Info->mType = add_object_info((ContextAddress)dio_gFormData);
-        add_object_reference(dio_gFormSection, Info->mType, NULL);
+        add_object_reference(Info->mType, NULL);
         break;
     case AT_fund_type:
         dio_ChkData(Form);
@@ -470,7 +493,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_user_def_type:
         dio_ChkRef(Form);
         Info->mType = add_object_info((ContextAddress)dio_gFormData);
-        add_object_reference(dio_gFormSection, Info->mType, NULL);
+        add_object_reference(Info->mType, NULL);
         break;
     case AT_mod_fund_type:
         read_mod_fund_type(Form, &Info->mType);
@@ -487,17 +510,17 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         break;
     case AT_specification_v2:
         dio_ChkRef(Form);
-        add_object_reference(dio_gFormSection, add_object_info((ContextAddress)dio_gFormData), Info);
+        add_object_reference(add_object_info((ContextAddress)dio_gFormData), Info);
         Info->mFlags |= DOIF_specification;
         break;
     case AT_abstract_origin:
         dio_ChkRef(Form);
-        add_object_reference(dio_gFormSection, add_object_info((ContextAddress)dio_gFormData), Info);
+        add_object_reference(add_object_info((ContextAddress)dio_gFormData), Info);
         Info->mFlags |= DOIF_abstract_origin;
         break;
     case AT_extension:
         dio_ChkRef(Form);
-        add_object_reference(dio_gFormSection, add_object_info((ContextAddress)dio_gFormData), Info);
+        add_object_reference(add_object_info((ContextAddress)dio_gFormData), Info);
         Info->mFlags |= DOIF_extension;
         break;
     case AT_low_pc:
@@ -560,30 +583,16 @@ static void read_object_refs(void) {
     /* Note: this implementation does not support forward references in AT_abstract_origin and AT_specification.
      * It is not clear if such support is needed. GCC seems never emit such forward references.
      */
+    sCompUnit = NULL;
     while (sObjRefsPos < sObjRefsCnt) {
         ObjectReference ref = sObjRefs[sObjRefsPos++];
-        if (ref.org->mCompUnit == NULL) {
-            /* TODO: need faster unit search */
-            ObjectInfo * info = sCache->mCompUnits;
-            while (info != NULL) {
-                CompUnit * unit = info->mCompUnit;
-                if (unit->mDesc.mSection == ref.sec) {
-                    U8_T offs = ref.org->mID - ref.sec->addr;
-                    if (unit->mDesc.mUnitOffs <= offs && unit->mDesc.mUnitOffs + unit->mDesc.mUnitSize > offs) {
-                        ref.org->mCompUnit = unit;
-                        break;
-                    }
-                }
-                info = info->mSibling;
-            }
-        }
-        assert(ref.sec == ref.org->mCompUnit->mDesc.mSection);
+        if (ref.org->mCompUnit == NULL) ref.org->mCompUnit = find_comp_unit(ref.org->mID);
         if (ref.org->mTag == 0) {
             Trap trap;
             ObjectInfo * obj = ref.org;
             sCompUnit = obj->mCompUnit;
             sUnitDesc = sCompUnit->mDesc;
-            sDebugSection = ref.sec;
+            sDebugSection = sUnitDesc.mSection;
             sParentObject = NULL;
             sPrevSibling = NULL;
             dio_EnterSection(&sCompUnit->mDesc, sDebugSection, obj->mID - sDebugSection->addr);
@@ -653,7 +662,7 @@ static void load_addr_ranges(void) {
             debug_ranges = sec;
         }
         else if (strcmp(sec->name, ".debug_aranges") == 0) {
-            ObjectInfo * info = sCache->mCompUnits;
+            sCompUnit = NULL;
             dio_EnterSection(NULL, sec, 0);
             if (set_trap(&trap)) {
                 while (dio_GetPos() < sec->size) {
@@ -673,13 +682,9 @@ static void load_addr_ranges(void) {
                         U1_T addr_size = dio_ReadU1();
                         U1_T segm_size = dio_ReadU1();
                         if (segm_size != 0) str_exception(ERR_INV_DWARF, "segment descriptors are not supported");
-                        while (info != NULL && info->mCompUnit->mDesc.mUnitOffs != offs) info = info->mSibling;
-                        if (info == NULL) {
-                            info = sCache->mCompUnits;
-                            while (info != NULL && info->mCompUnit->mDesc.mUnitOffs != offs) info = info->mSibling;
-                        }
-                        if (info == NULL) str_exception(ERR_INV_DWARF, "invalid .debug_aranges section");
-                        info->mCompUnit->mARangesFound = 1;
+                        sCompUnit = find_comp_unit((ContextAddress)offs);
+                        if (sCompUnit == NULL) str_exception(ERR_INV_DWARF, "invalid .debug_aranges section");
+                        sCompUnit->mARangesFound = 1;
                         while (dio_GetPos() % (addr_size * 2) != 0) dio_Skip(1);
                         for (;;) {
                             ELF_Section * range_sec = NULL;
@@ -687,7 +692,7 @@ static void load_addr_ranges(void) {
                             ContextAddress size = (ContextAddress)dio_ReadUX(addr_size);
                             if (addr == 0 && size == 0) break;
                             if (size == 0) continue;
-                            add_addr_range(range_sec, info->mCompUnit, addr, size);
+                            add_addr_range(range_sec, sCompUnit, addr, size);
                         }
                     }
                 }
@@ -825,6 +830,14 @@ static void allocate_obj_hash(void) {
     sCache->mObjectHash = (ObjectInfo **)loc_alloc_zero(sizeof(ObjectInfo *) * sCache->mObjectHashSize);
 }
 
+static int unit_id_comparator(const void * x1, const void * x2) {
+    ObjectInfo * u1 = (*(CompUnit **)x1)->mObject;
+    ObjectInfo * u2 = (*(CompUnit **)x2)->mObject;
+    if (u1->mID < u2->mID) return -1;
+    if (u1->mID > u2->mID) return +1;
+    return 0;
+}
+
 static void load_debug_sections(void) {
     Trap trap;
     unsigned idx;
@@ -851,7 +864,6 @@ static void load_debug_sections(void) {
             if (set_trap(&trap)) {
                 while (dio_GetPos() < sec->size) {
                     dio_ReadUnit(&sUnitDesc, read_object_info);
-                    sCompUnit->mDesc = sUnitDesc;
                 }
                 clear_trap(&trap);
             }
@@ -860,6 +872,18 @@ static void load_debug_sections(void) {
             sParentObject = NULL;
             sPrevSibling = NULL;
             sCompUnit = NULL;
+            if (sCache->mCompUnitsCnt > 0) {
+                unsigned i = 0;
+                ObjectInfo * unit = sCache->mCompUnits;
+                sCache->mCompUnitsIndex = (CompUnit **)loc_alloc(sizeof(CompUnit *) * sCache->mCompUnitsCnt);
+                while (unit != NULL) {
+                    assert(unit->mTag == TAG_compile_unit);
+                    sCache->mCompUnitsIndex[i++] = unit->mCompUnit;
+                    unit = unit->mSibling;
+                }
+                assert(sCache->mCompUnitsCnt == i);
+                qsort(sCache->mCompUnitsIndex, sCache->mCompUnitsCnt, sizeof(CompUnit *), unit_id_comparator);
+            }
             if (trap.error) break;
             read_object_refs();
         }
@@ -867,7 +891,7 @@ static void load_debug_sections(void) {
             sCache->mDebugLineV1 = sec;
         }
         else if (strcmp(sec->name, ".debug_line") == 0) {
-            sCache->mDebugLine = sec;
+            sCache->mDebugLineV2 = sec;
         }
         else if (strcmp(sec->name, ".debug_loc") == 0) {
             sCache->mDebugLoc = sec;
@@ -931,6 +955,7 @@ ObjectInfo * get_dwarf_children(ObjectInfo * obj) {
     sCompUnit = NULL;
     if (trap.error) exception(trap.error);
     read_object_refs();
+    assert(obj->mFlags & DOIF_children_loaded);
     return obj->mChildren;
 }
 #endif
@@ -1281,6 +1306,7 @@ static void free_dwarf_cache(ELF_File * file) {
     if (Cache != NULL) {
         assert(Cache->magic == DWARF_CACHE_MAGIC);
         Cache->magic = 0;
+        loc_free(Cache->mCompUnitsIndex);
         while (Cache->mCompUnits != NULL) {
             CompUnit * Unit = Cache->mCompUnits->mCompUnit;
             Cache->mCompUnits = Cache->mCompUnits->mSibling;
@@ -1360,7 +1386,7 @@ static void add_file(CompUnit * Unit, FileInfo * file) {
 }
 
 static void add_state(CompUnit * Unit, LineNumbersState * state) {
-    assert(state->mFile < Unit->mFilesCnt);
+    if (state->mFile >= Unit->mFilesCnt) str_exception(ERR_INV_DWARF, "Invalid line info");
     if (Unit->mFiles[state->mFile].mAreaCnt++ == 1) {
         LineNumbersState s;
         memset(&s, 0, sizeof(s));
@@ -1595,8 +1621,9 @@ static void load_line_numbers_v2(CompUnit * Unit, U8_T unit_size, int dwarf64) {
 void load_line_numbers(CompUnit * Unit) {
     Trap trap;
     DWARFCache * Cache = (DWARFCache *)Unit->mFile->dwarf_dt_cache;
-    ELF_Section * LineInfoSection = Unit->mDesc.mVersion <= 1 ? Cache->mDebugLineV1 : Cache->mDebugLine;
+    ELF_Section * LineInfoSection = Unit->mDesc.mVersion <= 1 ? Cache->mDebugLineV1 : Cache->mDebugLineV2;
     if (LineInfoSection == NULL) return;
+    if (Unit->mLowPC == Unit->mHighPC) return;
     if (Unit->mLineInfoLoaded) return;
     if (elf_load(LineInfoSection)) exception(errno);
     dio_EnterSection(&Unit->mDesc, LineInfoSection, Unit->mLineInfoOffs);

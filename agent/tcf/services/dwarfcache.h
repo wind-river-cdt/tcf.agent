@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -220,8 +220,10 @@ struct DWARFCache {
     ELF_File * mFile;
     ErrorReport * mErrorReport;
     ObjectInfo * mCompUnits;
+    CompUnit ** mCompUnitsIndex;
+    unsigned mCompUnitsCnt;
     ELF_Section * mDebugLineV1;
-    ELF_Section * mDebugLine;
+    ELF_Section * mDebugLineV2;
     ELF_Section * mDebugLoc;
     ELF_Section * mDebugRanges;
     ELF_Section * mDebugFrame;
