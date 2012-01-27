@@ -290,6 +290,7 @@ void send_context_exited_event(Context * ctx) {
 }
 
 void ini_contexts(void) {
+    ini_cpudefs();
     init_contexts_sys_dep();
 }
 

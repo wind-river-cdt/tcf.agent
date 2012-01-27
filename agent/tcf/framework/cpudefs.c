@@ -364,4 +364,10 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
     return state;
 }
 
+void ini_cpudefs(void) {
+#if ENABLE_ini_cpudefs_mdep
+    ini_cpudefs_mdep();
+#endif
+}
+
 #endif /* ENABLE_DebugContext */

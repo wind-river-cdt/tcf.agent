@@ -236,6 +236,8 @@ extern LocationExpressionState * evaluate_location_expression(Context * ctx, Sta
                                              LocationExpressionCommand * cmds, unsigned cmds_cnt,
                                              uint64_t * args, unsigned args_cnt);
 
+extern void ini_cpudefs(void);
+
 #endif /* ENABLE_DebugContext */
 
 #endif /* D_cpudefs */
