@@ -178,7 +178,7 @@ static void map_to_source_cache_client(void * x) {
     ctx = id2ctx(args->id);
     if (ctx == NULL) err = ERR_INV_CONTEXT;
     else if (ctx->exited) err = ERR_ALREADY_EXITED;
-    else ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+    else ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
 
     code_area_cnt = 0;
     if (err == 0 && address_to_line(ctx, args->addr0, args->addr1, add_code_area, NULL) < 0) err = errno;
@@ -229,7 +229,7 @@ static void map_to_memory_cache_client(void * x) {
     ctx = id2ctx(args->id);
     if (ctx == NULL) err = ERR_INV_CONTEXT;
     else if (ctx->exited) err = ERR_ALREADY_EXITED;
-    else ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+    else ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
 
 
     code_area_cnt = 0;

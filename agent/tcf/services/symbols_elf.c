@@ -127,7 +127,7 @@ static Symbol * alloc_symbol(void) {
 
 static int get_sym_context(Context * ctx, int frame, ContextAddress addr) {
     if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
         sym_ip = addr;
     }
     else if (frame == STACK_TOP_FRAME) {
@@ -316,7 +316,7 @@ static void object2symbol(ObjectInfo * obj, Symbol ** res) {
         break;
     }
     sym->frame = STACK_NO_FRAME;
-    sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_PROCESS);
+    sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
     if (sym_frame != STACK_NO_FRAME && is_frame_based_object(sym)) {
         sym->frame = sym_frame;
         sym->ctx = sym_ctx;
@@ -624,7 +624,7 @@ static int find_by_name_in_sym_table(DWARFCache * cache, const char * name, Symb
     unsigned m = 0;
     unsigned h = calc_symbol_name_hash(name);
     unsigned cnt = 0;
-    Context * prs = context_get_group(sym_ctx, CONTEXT_GROUP_PROCESS);
+    Context * prs = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
     for (m = 1; m < cache->mFile->section_cnt; m++) {
         unsigned n;
         ELF_Section * tbl = cache->mFile->sections + m;
@@ -706,7 +706,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
         }
         else {
             Symbol * sym = alloc_symbol();
-            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
             sym->frame = STACK_NO_FRAME;
             sym->address = (ContextAddress)ptr;
             sym->has_address = 1;
@@ -790,7 +790,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                             found = find_in_dwarf(constant_pseudo_symbols[i].type, &type);
                             if (found) {
                                 Symbol * sym = alloc_symbol();
-                                sym->ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+                                sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
                                 sym->frame = STACK_NO_FRAME;
                                 sym->sym_class = SYM_CLASS_VALUE;
                                 sym->base = type;
@@ -817,7 +817,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
         found = find_test_symbol(ctx, name, &address, &sym_class) >= 0;
         if (found) {
             Symbol * sym = alloc_symbol();
-            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
             sym->frame = STACK_NO_FRAME;
             sym->address = (ContextAddress)address;
             sym->has_address = 1;
@@ -997,7 +997,7 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
             if (sym_addr + sym_info.size > lt_addr) {
                 Symbol * sym = alloc_symbol();
                 sym->frame = STACK_NO_FRAME;
-                sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_PROCESS);
+                sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
                 sym->tbl = sym_info.sym_section;
                 sym->index = sym_info.sym_index;
                 sym->sym_class = sym_class;
@@ -1391,7 +1391,7 @@ static U8_T get_array_index_length(ObjectInfo * obj) {
 
 static void alloc_cardinal_type_pseudo_symbol(Context * ctx, unsigned size, Symbol ** type) {
     *type = alloc_symbol();
-    (*type)->ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+    (*type)->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
     (*type)->frame = STACK_NO_FRAME;
     (*type)->sym_class = SYM_CLASS_TYPE;
     (*type)->cardinal = size;
@@ -2636,7 +2636,7 @@ int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
     assert(sym->magic == SYMBOL_MAGIC);
     assert(sym->sym_class == SYM_CLASS_TYPE);
     assert(sym->frame == STACK_NO_FRAME);
-    assert(sym->ctx == context_get_group(sym->ctx, CONTEXT_GROUP_PROCESS));
+    assert(sym->ctx == context_get_group(sym->ctx, CONTEXT_GROUP_SYMBOLS));
     *ptr = alloc_symbol();
     (*ptr)->ctx = sym->ctx;
     (*ptr)->frame = STACK_NO_FRAME;

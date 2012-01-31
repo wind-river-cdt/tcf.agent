@@ -472,7 +472,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const cha
     if (!set_trap(&trap)) return -1;
 
     if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
         ip = addr;
     }
     else {
@@ -513,7 +513,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const cha
             }
             f->update_policy = UPDATE_ON_MEMORY_MAP_CHANGES;
             snprintf(bf, sizeof(bf), "@T.%X.%"PRIX64".%s", sym_class,
-                    (uint64_t)(uintptr_t)address, context_get_group(ctx, CONTEXT_GROUP_PROCESS)->id);
+                    (uint64_t)(uintptr_t)address, context_get_group(ctx, CONTEXT_GROUP_SYMBOLS)->id);
             f->id = loc_strdup(bf);
         }
     }
@@ -568,7 +568,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress addr, Symbol *
     if (!set_trap(&trap)) return -1;
 
     if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
         ip = addr;
     }
     else {
@@ -685,7 +685,7 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func,
     if (!set_trap(&trap)) return -1;
 
     if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
     }
     else {
         StackFrame * info = NULL;
@@ -1267,7 +1267,7 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
     uint64_t ip = 0;
     Context * ctx = frame->ctx;
     /* Here we assume that stack tracing info is valid for all threads in same memory space */
-    Context * prs = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+    Context * prs = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
     SymbolsCache * syms = NULL;
     StackFrameCache * f = NULL;
 
@@ -1405,7 +1405,7 @@ static void flush_syms(Context * ctx, int mode) {
                 }
             }
             if (mode & (1 << UPDATE_ON_MEMORY_MAP_CHANGES)) {
-                Context * prs = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+                Context * prs = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
                 l = syms->link_frame[i].next;
                 while (l != syms->link_frame + i) {
                     StackFrameCache * c = syms2frame(l);

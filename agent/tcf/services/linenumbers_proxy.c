@@ -211,7 +211,7 @@ int line_to_address(Context * ctx, char * file, int line, int column,
 
     if (!set_trap(&trap)) return -1;
 
-    ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+    ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
     h = hash_addr(ctx, file, line, column);
     cache = get_line_numbers_cache();
     assert(cache->magic == LINE_NUMBERS_CACHE_MAGIC);
@@ -282,15 +282,15 @@ static void flush_cache(Context * ctx) {
 }
 
 static void event_context_created(Context * ctx, void * x) {
-    if (ctx == context_get_group(ctx, CONTEXT_GROUP_PROCESS)) flush_cache(ctx);
+    if (ctx == context_get_group(ctx, CONTEXT_GROUP_SYMBOLS)) flush_cache(ctx);
 }
 
 static void event_context_exited(Context * ctx, void * x) {
-    if (ctx == context_get_group(ctx, CONTEXT_GROUP_PROCESS)) flush_cache(ctx);
+    if (ctx == context_get_group(ctx, CONTEXT_GROUP_SYMBOLS)) flush_cache(ctx);
 }
 
 static void event_context_changed(Context * ctx, void * x) {
-    flush_cache(context_get_group(ctx, CONTEXT_GROUP_PROCESS));
+    flush_cache(context_get_group(ctx, CONTEXT_GROUP_SYMBOLS));
 }
 
 static void channel_close_listener(Channel * c) {
