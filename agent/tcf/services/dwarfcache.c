@@ -76,15 +76,6 @@ unsigned calc_file_name_hash(const char * s) {
     return h;
 }
 
-ObjectInfo * find_object(DWARFCache * Cache, ContextAddress ID) {
-    ObjectInfo * Info = Cache->mObjectHash[OBJ_HASH(Cache, ID)];
-    while (Info != NULL) {
-        if (Info->mID == ID) return Info;
-        Info = Info->mHashNext;
-    }
-    return NULL;
-}
-
 static ObjectInfo * add_object_info(ContextAddress ID) {
     U4_T Hash = OBJ_HASH(sCache, ID);
     ObjectInfo * Info = sCache->mObjectHash[Hash];
@@ -139,6 +130,49 @@ static CompUnit * find_comp_unit(ContextAddress ObjID) {
                 return unit;
             }
         }
+    }
+    return NULL;
+}
+
+static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form);
+
+ObjectInfo * find_object(DWARFCache * Cache, ContextAddress ID) {
+    ObjectInfo * Info = Cache->mObjectHash[OBJ_HASH(Cache, ID)];
+    while (Info != NULL) {
+        if (Info->mID == ID) return Info;
+        Info = Info->mHashNext;
+    }
+    sCache = Cache;
+    sCompUnit = NULL;
+    sCompUnit = find_comp_unit(ID);
+    if (sCompUnit != NULL) {
+        Trap trap;
+        sUnitDesc = sCompUnit->mDesc;
+        sDebugSection = sUnitDesc.mSection;
+        sParentObject = NULL;
+        sPrevSibling = NULL;
+        dio_EnterSection(&sCompUnit->mDesc, sDebugSection, ID - sDebugSection->addr);
+        if (set_trap(&trap)) {
+            dio_ReadEntry(read_object_info, 0);
+            Info = Cache->mObjectHash[OBJ_HASH(Cache, ID)];
+            while (Info != NULL) {
+                if (Info->mID == ID) break;
+                Info = Info->mHashNext;
+            }
+            clear_trap(&trap);
+        }
+        dio_ExitSection();
+        sDebugSection = NULL;
+    }
+    sCompUnit = NULL;
+    return Info;
+}
+
+static ObjectInfo * find_loaded_object(DWARFCache * Cache, ContextAddress ID) {
+    ObjectInfo * Info = Cache->mObjectHash[OBJ_HASH(Cache, ID)];
+    while (Info != NULL) {
+        if (Info->mID == ID) return Info;
+        Info = Info->mHashNext;
     }
     return NULL;
 }
@@ -788,21 +822,24 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, Pu
             if (unit_offs + unit_size > debug_info->size) str_fmt_exception(ERR_INV_DWARF,
                 "Invalid unit size in %s section", pub_names->name);
             for (;;) {
-                unsigned h;
+                char * name = NULL;
                 PubNamesInfo * info = NULL;
                 U8_T obj_offs = dwarf64 ? dio_ReadU8() : (U8_T)dio_ReadU4();
                 if (obj_offs == 0) break;
                 if (obj_offs >= unit_size) str_fmt_exception(ERR_INV_DWARF,
                     "Invalid object offset in %s section", pub_names->name);
+                name = dio_ReadString();
                 if (tbl->mCnt >= tbl->mMax) {
                     tbl->mMax = tbl->mMax * 3 / 2;
                     tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
                 }
                 info = tbl->mNext + tbl->mCnt;
-                h = calc_symbol_name_hash(dio_ReadString()) % tbl->mHashSize;
-                info->mObject = find_object(sCache, (ContextAddress)(debug_info->addr + unit_offs + obj_offs));
-                info->mNext = tbl->mHash[h];
-                tbl->mHash[h] = tbl->mCnt++;
+                info->mObject = find_loaded_object(sCache, (ContextAddress)(debug_info->addr + unit_offs + obj_offs));
+                if (info->mObject != NULL) {
+                    unsigned h = calc_symbol_name_hash(name) % tbl->mHashSize;
+                    info->mNext = tbl->mHash[h];
+                    tbl->mHash[h] = tbl->mCnt++;
+                }
             }
         }
         assert(next >= dio_GetPos());

@@ -207,6 +207,7 @@ static void op_implicit_pointer(void) {
     CompUnit * unit = expr->object->mCompUnit;
     int arg_size = unit->mDesc.m64bit ? 8 : 4;
     ObjectInfo * ref_obj = NULL;
+    ContextAddress ref_id = 0;
     U4_T offset = 0;
     U8_T dio_pos = 0;
 
@@ -214,11 +215,12 @@ static void op_implicit_pointer(void) {
     if (op == OP_GNU_implicit_pointer && unit->mDesc.mVersion < 3) arg_size = unit->mDesc.mAddressSize;
     dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
     dio_EnterSection(&expr->unit->mDesc, expr->section, dio_pos);
-    ref_obj = find_object(get_dwarf_cache(unit->mFile), dio_ReadUX(arg_size));
+    ref_id = dio_ReadUX(arg_size);
     offset = dio_ReadULEB128();
     expr_pos += (size_t)(dio_GetPos() - dio_pos);
     dio_ExitSection();
 
+    ref_obj = find_object(get_dwarf_cache(unit->mFile), ref_id);
     if (ref_obj == NULL) str_exception(ERR_INV_DWARF, "OP_implicit_pointer: invalid object reference");
 
     memset(&pv, 0, sizeof(pv));
@@ -263,7 +265,7 @@ static void op_push_tls_address(void) {
 }
 
 static void op_call() {
-    U8_T id = 0;
+    U8_T ref_id = 0;
     DIO_UnitDescriptor * desc = &expr->unit->mDesc;
     U8_T dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
     ObjectInfo * ref_obj = NULL;
@@ -273,24 +275,24 @@ static void op_call() {
     dio_EnterSection(desc, expr->section, dio_pos);
     switch (expr->expr_addr[expr_pos]) {
     case OP_call2:
-        id = desc->mSection->addr + desc->mUnitOffs + dio_ReadU2();
+        ref_id = desc->mSection->addr + desc->mUnitOffs + dio_ReadU2();
         break;
     case OP_call4:
-        id = desc->mSection->addr + desc->mUnitOffs + dio_ReadU4();
+        ref_id = desc->mSection->addr + desc->mUnitOffs + dio_ReadU4();
         break;
     case OP_call_ref:
         {
             ELF_Section * section = NULL;
             int size = desc->m64bit ? 8 : 4;
             if (desc->mVersion < 3) size = desc->mAddressSize;
-            id = dio_ReadAddressX(&section, size);
+            ref_id = dio_ReadAddressX(&section, size);
         }
         break;
     }
     expr_pos += (size_t)(dio_GetPos() - dio_pos);
     dio_ExitSection();
 
-    ref_obj = find_object(get_dwarf_cache(expr->unit->mFile), id);
+    ref_obj = find_object(get_dwarf_cache(expr->unit->mFile), ref_id);
     if (ref_obj == NULL) str_exception(ERR_INV_DWARF, "Invalid reference in OP_call");
     read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_location, &pv);
     dwarf_find_expression(&pv, expr_ip, &info);

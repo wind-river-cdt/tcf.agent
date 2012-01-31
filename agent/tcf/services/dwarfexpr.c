@@ -128,9 +128,10 @@ static void evaluate_implicit_pointer(uint8_t op) {
     PropertyValue PV;
     CompUnit * Unit = sValue->mObject->mCompUnit;
     int ArgSize = op == OP_GNU_implicit_pointer && Unit->mDesc.mVersion < 3 ? Unit->mDesc.mAddressSize : (Unit->mDesc.m64bit ? 8 : 4);
-    ObjectInfo * Info = find_object(get_dwarf_cache(Unit->mFile), dio_ReadUX(ArgSize));
+    ContextAddress id = dio_ReadUX(ArgSize);
     U4_T Offset = dio_ReadULEB128();
     U8_T DioPos = dio_GetPos();
+    ObjectInfo * Info = find_object(get_dwarf_cache(Unit->mFile), id);
     if (Info == NULL) str_exception(ERR_INV_DWARF, "OP_implicit_pointer: invalid object reference");
     memset(&PV, 0, sizeof(PV));
     if (set_trap(&trap)) {
