@@ -477,6 +477,17 @@ extern int context_plant_breakpoint(ContextBreakpoint * bp);
 extern int context_unplant_breakpoint(ContextBreakpoint * bp);
 
 /*
+ * Get context breakpoint capabilities.
+ * 'values' are JSON objects.
+ * 'ctx' can be NULL, it means a client has requested global capabilities.
+ * Return -1 and set errno if cannot access the capabilities.
+ * Return 0 on success.
+ */
+#if ENABLE_ContextBreakpointCapabilities
+extern int context_get_breakpoint_capabilities(Context * ctx, const char *** names, const char *** values, int * cnt);
+#endif
+
+/*
  * Functions that notify listeners of various context event.
  * They are not supposed to be called by clients.
  */

@@ -2138,6 +2138,7 @@ static void command_remove(char * token, Channel * c) {
 static void command_get_capabilities(char * token, Channel * c) {
     char id[256];
     Context * ctx;
+    OutputStream * out = &c->out;
 
     json_read_string(&c->inp, id, sizeof(id));
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
@@ -2145,73 +2146,92 @@ static void command_get_capabilities(char * token, Channel * c) {
 
     ctx = id2ctx(id);
 
-    write_stringz(&c->out, "R");
-    write_stringz(&c->out, token);
-    write_errno(&c->out, 0);
+    write_stringz(out, "R");
+    write_stringz(out, token);
+    write_errno(out, 0);
 
-    write_stream(&c->out, '{');
-    json_write_string(&c->out, "ID");
-    write_stream(&c->out, ':');
-    json_write_string(&c->out, id);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "BreakpointType");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "Location");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "FileLine");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, ENABLE_LineNumbers);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "FileMapping");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, SERVICE_PathMap);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "IgnoreCount");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "Condition");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
+    write_stream(out, '{');
+    json_write_string(out, "ID");
+    write_stream(out, ':');
+    json_write_string(out, id);
+    write_stream(out, ',');
+    json_write_string(out, "BreakpointType");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "Location");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "FileLine");
+    write_stream(out, ':');
+    json_write_boolean(out, ENABLE_LineNumbers);
+    write_stream(out, ',');
+    json_write_string(out, "FileMapping");
+    write_stream(out, ':');
+    json_write_boolean(out, SERVICE_PathMap);
+    write_stream(out, ',');
+    json_write_string(out, "IgnoreCount");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "Condition");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
     if (ctx != NULL) {
         int md = CTX_BP_ACCESS_INSTRUCTION;
         md |= context_get_supported_bp_access_types(ctx);
         md &= ~CTX_BP_ACCESS_VIRTUAL;
-        write_stream(&c->out, ',');
-        json_write_string(&c->out, "AccessMode");
-        write_stream(&c->out, ':');
-        json_write_long(&c->out, md);
+        write_stream(out, ',');
+        json_write_string(out, "AccessMode");
+        write_stream(out, ':');
+        json_write_long(out, md);
     }
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "ContextIds");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "ContextNames");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "ContextIds");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "ContextNames");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
 #if SERVICE_ContextQuery
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "ContextQuery");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "ContextQuery");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
 #endif
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "StopGroup");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
-    write_stream(&c->out, ',');
-    json_write_string(&c->out, "ClientData");
-    write_stream(&c->out, ':');
-    json_write_boolean(&c->out, 1);
-    write_stream(&c->out, '}');
-    write_stream(&c->out, 0);
+    write_stream(out, ',');
+    json_write_string(out, "StopGroup");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "ClientData");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
+#if ENABLE_ContextBreakpointCapabilities
+    {
+        /* Back-end context breakpoint capabilities */
+        int cnt = 0;
+        const char ** names = NULL;
+        const char ** values = NULL;
+        if (context_get_breakpoint_capabilities(ctx, &names, &values, &cnt) == 0) {
+            while (cnt > 0) {
+                if (*values != NULL) {
+                    write_stream(out, ',');
+                    json_write_string(out, *names++);
+                    write_stream(out, ':');
+                    write_string(out, *values++);
+                }
+                cnt--;
+            }
+        }
+    }
+#endif
+    write_stream(out, '}');
+    write_stream(out, 0);
 
-    write_stream(&c->out, MARKER_EOM);
+    write_stream(out, MARKER_EOM);
 }
 
 void add_breakpoint_event_listener(BreakpointsEventListener * listener, void * args) {

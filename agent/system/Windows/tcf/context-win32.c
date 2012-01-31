@@ -1516,6 +1516,19 @@ int context_get_memory_map(Context * ctx, MemoryMap * map) {
     return 0;
 }
 
+#if ENABLE_ContextBreakpointCapabilities
+int context_get_breakpoint_capabilities(Context * ctx, const char *** names, const char *** values, int * cnt) {
+    static const char * n[1];
+    static const char * v[1];
+    n[0] = "MaxHardwareBreakpoints";
+    v[0] = "4";
+    *names = n;
+    *values = v;
+    *cnt = 1;
+    return 0;
+}
+#endif
+
 HANDLE get_context_handle(Context * ctx) {
     ContextExtensionWin32 * ext = EXT(ctx);
     return ext->handle;
