@@ -142,6 +142,7 @@ ObjectInfo * find_object(DWARFCache * Cache, ContextAddress ID) {
         if (Info->mID == ID) return Info;
         Info = Info->mHashNext;
     }
+#if ENABLE_DWARF_LAZY_LOAD
     sCache = Cache;
     sCompUnit = NULL;
     sCompUnit = find_comp_unit(ID);
@@ -165,6 +166,7 @@ ObjectInfo * find_object(DWARFCache * Cache, ContextAddress ID) {
         sDebugSection = NULL;
     }
     sCompUnit = NULL;
+#endif
     return Info;
 }
 
@@ -1447,7 +1449,10 @@ static void add_file(CompUnit * Unit, FileInfo * file) {
 }
 
 static void add_state(CompUnit * Unit, LineNumbersState * state) {
-    if (state->mFile >= Unit->mFilesCnt) str_exception(ERR_INV_DWARF, "Invalid line info");
+    if (state->mFile >= Unit->mFilesCnt) {
+        /* Workaround: Diab compiler generates invalid file indices for an empty compilation unit */
+        return;
+    }
     if (Unit->mFiles[state->mFile].mAreaCnt++ == 1) {
         LineNumbersState s;
         memset(&s, 0, sizeof(s));
@@ -1684,7 +1689,6 @@ void load_line_numbers(CompUnit * Unit) {
     DWARFCache * Cache = (DWARFCache *)Unit->mFile->dwarf_dt_cache;
     ELF_Section * LineInfoSection = Unit->mDesc.mVersion <= 1 ? Cache->mDebugLineV1 : Cache->mDebugLineV2;
     if (LineInfoSection == NULL) return;
-    if (Unit->mLowPC == Unit->mHighPC) return;
     if (Unit->mLineInfoLoaded) return;
     if (elf_load(LineInfoSection)) exception(errno);
     dio_EnterSection(&Unit->mDesc, LineInfoSection, Unit->mLineInfoOffs);
