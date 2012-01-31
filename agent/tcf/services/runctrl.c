@@ -287,28 +287,28 @@ static void write_context_state(OutputStream * out, Context * ctx) {
     if (!ext->intercepted) {
         write_stringz(out, "0");
         write_stringz(out, "null");
-        write_stringz(out, "null");
-        return;
     }
+    else {
 
-    /* Number: PC */
-    if (get_current_pc(ctx, &pc) < 0) pc_error = errno;
-    json_write_uint64(out, pc);
-    write_stream(out, 0);
+        /* Number: PC */
+        if (get_current_pc(ctx, &pc) < 0) pc_error = errno;
+        json_write_uint64(out, pc);
+        write_stream(out, 0);
 
-    /* String: Reason */
-    if (ext->intercepted_by_bp == 1) bp_ids = get_context_breakpoint_ids(ctx);
-    if (bp_ids != NULL) reason = REASON_BREAKPOINT;
-    else if (ctx->exception_description != NULL) reason = ctx->exception_description;
-    else if (ext->step_error != NULL) reason = errno_to_str(set_error_report_errno(ext->step_error));
-    else if (ext->step_done != NULL) reason = ext->step_done;
-    else reason = context_suspend_reason(ctx);
-    json_write_string(out, reason);
-    write_stream(out, 0);
+        /* String: Reason */
+        if (ext->intercepted_by_bp == 1) bp_ids = get_context_breakpoint_ids(ctx);
+        if (bp_ids != NULL) reason = REASON_BREAKPOINT;
+        else if (ctx->exception_description != NULL) reason = ctx->exception_description;
+        else if (ext->step_error != NULL) reason = errno_to_str(set_error_report_errno(ext->step_error));
+        else if (ext->step_done != NULL) reason = ext->step_done;
+        else reason = context_suspend_reason(ctx);
+        json_write_string(out, reason);
+        write_stream(out, 0);
+    }
 
     /* Object: Additional context state info */
     write_stream(out, '{');
-    if (ext->step_error == NULL && ext->step_done == NULL && ctx->signal) {
+    if (ext->intercepted && ext->step_error == NULL && ext->step_done == NULL && ctx->signal) {
         const char * name = signal_name(ctx->signal);
         const char * desc = signal_description(ctx->signal);
         json_write_string(out, "Signal");
