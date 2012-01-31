@@ -144,7 +144,7 @@
 #define AT_common_reference         0x001a
 #define AT_comp_dir                 0x001b
 #define AT_const_value              0x001c
-#define AT_constaining_type         0x001d
+#define AT_containing_type          0x001d
 #define AT_default_value            0x001e
 #define AT_friends                  0x001f
 #define AT_inline                   0x0020

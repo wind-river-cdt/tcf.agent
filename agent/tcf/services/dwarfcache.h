@@ -71,8 +71,11 @@ struct FileInfo {
 #define DOIF_specification      0x0008
 #define DOIF_abstract_origin    0x0010
 #define DOIF_extension          0x0020
-#define DOIF_children_loaded    0x0040
-#define DOIF_find_mark          0x0080
+#define DOIF_private            0x0040
+#define DOIF_protected          0x0080
+#define DOIF_public             0x0100
+#define DOIF_children_loaded    0x0200
+#define DOIF_find_mark          0x0400
 
 struct ObjectInfo {
 

@@ -348,29 +348,8 @@ static ObjectInfo * get_object_type(ObjectInfo * obj) {
     return obj;
 }
 
-/* If 'obj' is modified type, like "const char", return unmodified type, e.g. "char" */
-static ObjectInfo * get_unmodified_type(ObjectInfo * obj) {
-    while (obj != NULL && obj->mType != NULL) {
-        switch (obj->mTag) {
-        case TAG_subrange_type:
-        case TAG_packed_type:
-        case TAG_const_type:
-        case TAG_volatile_type:
-        case TAG_restrict_type:
-        case TAG_shared_type:
-            obj = obj->mType;
-            break;
-        default:
-            return obj;
-        }
-    }
-    return obj;
-}
-
-/* Get object original type, skipping typedefs and all modifications like const, volatile, etc. */
-static ObjectInfo * get_original_type(ObjectInfo * obj) {
-    obj = get_object_type(obj);
-    while (obj != NULL && obj->mType != NULL) {
+static int is_modified_type(ObjectInfo * obj) {
+    if (obj != NULL) {
         switch (obj->mTag) {
         case TAG_subrange_type:
         case TAG_packed_type:
@@ -380,12 +359,16 @@ static ObjectInfo * get_original_type(ObjectInfo * obj) {
         case TAG_shared_type:
         case TAG_typedef:
         case TAG_template_type_param:
-            obj = obj->mType;
-            break;
-        default:
-            return obj;
+            return 1;
         }
     }
+    return 0;
+}
+
+/* Get object original type, skipping typedefs and all modifications like const, volatile, etc. */
+static ObjectInfo * get_original_type(ObjectInfo * obj) {
+    obj = get_object_type(obj);
+    while (obj != NULL && obj->mType != NULL && is_modified_type(obj)) obj = obj->mType;
     return obj;
 }
 
@@ -1646,8 +1629,12 @@ int get_symbol_type(const Symbol * sym, Symbol ** type) {
         return 0;
     }
     if (unpack(sym) < 0) return -1;
-    obj = sym->sym_class == SYM_CLASS_TYPE ?
-        get_unmodified_type(obj) : get_object_type(obj);
+    if (is_modified_type(obj)) {
+        obj = obj->mType;
+    }
+    else {
+        obj = get_object_type(obj);
+    }
     if (obj == NULL) {
         *type = NULL;
     }
@@ -1957,9 +1944,8 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
                 i--;
             }
             if (idx != NULL && idx->mSibling != NULL) {
-                *base_type = alloc_symbol();
-                **base_type = *sym;
-                (*base_type)->dimension++;
+                object2symbol(obj, base_type);
+                (*base_type)->dimension = sym->dimension + 1;
                 return 0;
             }
         }
@@ -2025,19 +2011,22 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
     ObjectInfo * obj = sym->obj;
     if (obj != NULL) {
         if (unpack(sym) < 0) return -1;
-        if (obj->mTag == TAG_ptr_to_member_type) {
-            U8_T id = 0;
-            if (get_num_prop(obj, AT_constaining_type, &id)) {
-                ObjectInfo * type = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)id);
-                if (type != NULL) {
-                    object2symbol(type, container);
-                    return 0;
+        if (sym->sym_class == SYM_CLASS_TYPE) {
+            obj = get_original_type(obj);
+            if (obj->mTag == TAG_ptr_to_member_type) {
+                U8_T id = 0;
+                if (get_num_prop(obj, AT_containing_type, &id)) {
+                    ObjectInfo * type = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)id);
+                    if (type != NULL) {
+                        object2symbol(type, container);
+                        return 0;
+                    }
                 }
+                set_errno(ERR_INV_DWARF, "Invalid AT_containing_type attribute");
+                return -1;
             }
-            set_errno(ERR_INV_DWARF, "Invalid AT_constaining_type attribute");
-            return -1;
         }
-        if (obj->mTag == TAG_member && obj->mParent != NULL) {
+        else if (obj->mTag == TAG_member && obj->mParent != NULL) {
             object2symbol(obj->mParent, container);
             return 0;
         }
@@ -2563,87 +2552,77 @@ int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, Registe
 
 int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
     U8_T v = 0;
-    ObjectInfo * i = NULL;
     ObjectInfo * obj = sym->obj;
     *flags = 0;
     assert(sym->magic == SYMBOL_MAGIC);
     if (sym->base || is_cardinal_type_pseudo_symbol(sym)) return 0;
     if (unpack(sym) < 0) return -1;
-    i = obj;
-    while (i != NULL) {
-        if (i->mFlags & DOIF_external) *flags |= SYM_FLAG_EXTERNAL;
-        if (i->mFlags & DOIF_artificial) *flags |= SYM_FLAG_ARTIFICIAL;
-        switch (i->mTag) {
+    if (obj != NULL) {
+        if (obj->mFlags & DOIF_external) *flags |= SYM_FLAG_EXTERNAL;
+        if (obj->mFlags & DOIF_artificial) *flags |= SYM_FLAG_ARTIFICIAL;
+        if (obj->mFlags & DOIF_private) *flags |= SYM_FLAG_PRIVATE;
+        if (obj->mFlags & DOIF_protected) *flags |= SYM_FLAG_PROTECTED;
+        if (obj->mFlags & DOIF_public) *flags |= SYM_FLAG_PUBLIC;
+        switch (obj->mTag) {
         case TAG_subrange_type:
             *flags |= SYM_FLAG_SUBRANGE_TYPE;
-            i = i->mType;
             break;
         case TAG_packed_type:
             *flags |= SYM_FLAG_PACKET_TYPE;
-            i = i->mType;
             break;
         case TAG_const_type:
             *flags |= SYM_FLAG_CONST_TYPE;
-            i = i->mType;
             break;
         case TAG_volatile_type:
             *flags |= SYM_FLAG_VOLATILE_TYPE;
-            i = i->mType;
             break;
         case TAG_restrict_type:
             *flags |= SYM_FLAG_RESTRICT_TYPE;
-            i = i->mType;
             break;
         case TAG_shared_type:
             *flags |= SYM_FLAG_SHARED_TYPE;
-            i = i->mType;
             break;
         case TAG_typedef:
-            if (i == obj) *flags |= SYM_FLAG_TYPEDEF;
-            i = i->mType;
+            *flags |= SYM_FLAG_TYPEDEF;
             break;
         case TAG_template_type_param:
-            if (i == obj) *flags |= SYM_FLAG_TYPE_PARAMETER;
-            i = i->mType;
+            *flags |= SYM_FLAG_TYPE_PARAMETER;
             break;
         case TAG_reference_type:
         case TAG_mod_reference:
             *flags |= SYM_FLAG_REFERENCE;
-            i = NULL;
             break;
         case TAG_union_type:
             *flags |= SYM_FLAG_UNION_TYPE;
-            i = NULL;
             break;
         case TAG_class_type:
             *flags |= SYM_FLAG_CLASS_TYPE;
-            i = NULL;
+            break;
+        case TAG_structure_type:
+            *flags |= SYM_FLAG_STRUCT_TYPE;
+            break;
+        case TAG_enumeration_type:
+            *flags |= SYM_FLAG_ENUM_TYPE;
             break;
         case TAG_interface_type:
             *flags |= SYM_FLAG_INTERFACE_TYPE;
-            i = NULL;
             break;
         case TAG_unspecified_parameters:
             *flags |= SYM_FLAG_PARAMETER;
             *flags |= SYM_FLAG_VARARG;
-            i = NULL;
             break;
         case TAG_formal_parameter:
         case TAG_variable:
         case TAG_constant:
         case TAG_base_type:
-            if (i->mTag == TAG_formal_parameter) {
+            if (obj->mTag == TAG_formal_parameter) {
                 *flags |= SYM_FLAG_PARAMETER;
-                if (get_num_prop(i, AT_is_optional, &v) && v != 0) *flags |= SYM_FLAG_OPTIONAL;
+                if (get_num_prop(obj, AT_is_optional, &v) && v != 0) *flags |= SYM_FLAG_OPTIONAL;
             }
-            if (get_num_prop(i, AT_endianity, &v)) {
+            if (get_num_prop(obj, AT_endianity, &v)) {
                 if (v == DW_END_big) *flags |= SYM_FLAG_BIG_ENDIAN;
                 if (v == DW_END_little) *flags |= SYM_FLAG_LITTLE_ENDIAN;
             }
-            i = NULL;
-            break;
-        default:
-            i = NULL;
             break;
         }
     }

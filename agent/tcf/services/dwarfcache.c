@@ -426,7 +426,13 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
             HasChildren = Form == DWARF_ENTRY_HAS_CHILDREN;
             Sibling = 0;
             Skip = Info->mTag != 0;
-            if (Skip) return; /* Object is already loaded */
+            if (Skip) {
+                /* Object is already loaded */
+                assert(Info->mTag == Tag);
+                assert(Tag != TAG_compile_unit);
+                assert(Info->mCompUnit == sCompUnit);
+                return;
+            }
             Info->mTag = Tag;
             Info->mCompUnit = sCompUnit;
         }
@@ -441,17 +447,23 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
             else if (sParentObject != NULL) sParentObject->mChildren = Info;
             else if (Tag == TAG_compile_unit) sCache->mCompUnits = Info;
             sPrevSibling = Info;
-            if (Skip) {
-                if (Sibling != 0) dio_SetPos(Sibling);
+            if (Skip && Sibling != 0) {
+                dio_SetPos(Sibling);
                 return;
             }
             if (Tag == TAG_enumerator && Info->mType == NULL) Info->mType = sParentObject;
 #if ENABLE_DWARF_LAZY_LOAD
             if (Sibling != 0) {
-                switch (Info->mTag) {
+                switch (Tag) {
+                case TAG_union_type:
+                case TAG_array_type:
+                case TAG_class_type:
+                case TAG_structure_type:
+                case TAG_subroutine_type:
                 case TAG_global_subroutine:
                 case TAG_subroutine:
                 case TAG_subprogram:
+                case TAG_namespace:
                     dio_SetPos(Sibling);
                     return;
                 }
@@ -542,6 +554,18 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_declaration:
         dio_ChkFlag(Form);
         if (dio_gFormData) Info->mFlags |= DOIF_declaration;
+        break;
+    case AT_private:
+        dio_ChkFlag(Form);
+        if (dio_gFormData) Info->mFlags |= DOIF_private;
+        break;
+    case AT_protected:
+        dio_ChkFlag(Form);
+        if (dio_gFormData) Info->mFlags |= DOIF_protected;
+        break;
+    case AT_public:
+        dio_ChkFlag(Form);
+        if (dio_gFormData) Info->mFlags |= DOIF_public;
         break;
     }
     if (Tag == TAG_compile_unit) {
@@ -935,6 +959,7 @@ ObjectInfo * get_dwarf_children(ObjectInfo * obj) {
     dio_EnterSection(&sCompUnit->mDesc, sDebugSection, obj->mID - sDebugSection->addr);
     if (set_trap(&trap)) {
         U8_T end_pos = sCompUnit->mDesc.mUnitOffs + sCompUnit->mDesc.mUnitSize;
+        if (obj->mSibling != NULL) end_pos = obj->mSibling->mID - sDebugSection->addr;
         dio_ReadEntry(NULL, ~(U2_T)0u);
         sParentObject = obj;
         sPrevSibling = NULL;
@@ -1011,7 +1036,7 @@ void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Obj, U2_T
     Value->mBigEndian = Obj->mCompUnit->mFile->big_endian;
 
     if (Obj->mTag >= TAG_fund_type && Obj->mTag < TAG_fund_type + 0x100) {
-        /* Virtual DWARF object that is created by DWARF reader. It has no properties. */
+        /* Virtual DWARF object that is created by the DWARF reader. It has no properties. */
         if (Obj->mTag == TAG_fund_type) {
             if (Attr == AT_byte_size) {
                 Value->mValue = get_fund_type_size(Obj->mCompUnit, Obj->u.mFundType);
@@ -1019,7 +1044,6 @@ void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Obj, U2_T
             }
         }
         else if (Obj->mTag == TAG_index_range) {
-            /* TAG_index_range is virtual DWARF object that is created by DWARF reader. It has no properties. */
             if (Attr == AT_lower_bound) {
                 switch (Obj->u.mRange.mFmt) {
                 case FMT_FT_C_C:
@@ -1099,7 +1123,7 @@ void read_dwarf_object_property(Context * Ctx, int Frame, ObjectInfo * Obj, U2_T
     case FORM_REF4      :
     case FORM_REF8      :
     case FORM_REF_UDATA :
-        if (Attr == AT_import || Attr == AT_specification_v2 || Attr == AT_constaining_type) {
+        if (Attr == AT_import || Attr == AT_specification_v2 || Attr == AT_containing_type) {
             Value->mValue = gop_gFormData;
         }
         else {

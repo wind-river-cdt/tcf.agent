@@ -313,6 +313,12 @@ static void print_time(struct timespec time_start, int cnt) {
     fflush(stdout);
 }
 
+static int symcmp(Symbol * x, Symbol * y) {
+    char id[256];
+    strcpy(id, symbol2id(x));
+    return strcmp(id, symbol2id(y));
+}
+
 static void test(void * args);
 
 static void loc_var_func(void * args, Symbol * sym) {
@@ -406,16 +412,69 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
     }
     if (type != NULL) {
+        int type_sym_class = 0;
+        Symbol * org_type = NULL;
         Symbol * container = NULL;
+        if (get_symbol_class(type, &type_sym_class) < 0) {
+            error("get_symbol_class");
+        }
+        if (type_sym_class != SYM_CLASS_TYPE) {
+            errno = ERR_OTHER;
+            error("Invalid symbol class of a type");
+        }
         if (get_symbol_type_class(sym, &type_class) < 0) {
             error("get_symbol_type_class");
         }
         if (get_symbol_flags(type, &flags) < 0) {
             error("get_symbol_flags");
         }
+        if (flags & SYM_FLAG_TYPEDEF) {
+            char * type_name = NULL;
+            if (get_symbol_object(type) == NULL) {
+                errno = ERR_OTHER;
+                error("Invalid DWARF object of typedef");
+            }
+            if (get_symbol_type(type, &org_type) < 0) {
+                error("get_symbol_type");
+            }
+            if (symcmp(type, org_type) == 0) {
+                errno = ERR_OTHER;
+                error("Invalid original type of typedef");
+            }
+            if (get_symbol_name(type, &type_name) < 0) {
+                error("get_symbol_name");
+            }
+            if (type_name == NULL) {
+                errno = ERR_OTHER;
+                error("typedef must have a name");
+            }
+            if ((flags & SYM_FLAG_CONST_TYPE) || (flags & SYM_FLAG_VOLATILE_TYPE)) {
+                errno = ERR_OTHER;
+                error("Invalid flags of typedef");
+            }
+        }
+        else if ((flags & SYM_FLAG_CONST_TYPE) || (flags & SYM_FLAG_VOLATILE_TYPE)) {
+            if (get_symbol_type(type, &org_type) < 0) {
+                error("get_symbol_type");
+            }
+            if (symcmp(type, org_type) == 0) {
+                errno = ERR_OTHER;
+                error("Invalid original type of modified type");
+            }
+        }
         if (get_symbol_index_type(type, &index_type) < 0) {
             if (type_class == TYPE_CLASS_ARRAY) {
                 error("get_symbol_index_type");
+            }
+        }
+        else if (org_type != NULL) {
+            Symbol * org_index_type = NULL;
+            if (get_symbol_index_type(org_type, &org_index_type) < 0) {
+                error("get_symbol_index_type");
+            }
+            if (symcmp(index_type, org_index_type) != 0) {
+                errno = ERR_OTHER;
+                error("Invalid inedx type of typedef");
             }
         }
         if (get_symbol_base_type(type, &base_type) < 0) {
@@ -424,14 +483,44 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error("get_symbol_base_type");
             }
         }
+        else if (org_type != NULL) {
+            Symbol * org_base_type = NULL;
+            if (get_symbol_base_type(org_type, &org_base_type) < 0) {
+                error("get_symbol_base_type");
+            }
+            if (symcmp(base_type, org_base_type) != 0) {
+                errno = ERR_OTHER;
+                error("Invalid base type of typedef");
+            }
+        }
         if (get_symbol_container(type, &container) < 0) {
             if (type_class == TYPE_CLASS_MEMBER_PTR) {
                 error("get_symbol_container");
             }
         }
+        else if (org_type != NULL) {
+            Symbol * org_container = NULL;
+            if (get_symbol_container(org_type, &org_container) < 0) {
+                error("get_symbol_container");
+            }
+            if (symcmp(container, org_container) != 0) {
+                errno = ERR_OTHER;
+                error("Invalid container of typedef");
+            }
+        }
         if (get_symbol_length(type, &length) < 0) {
             if (type_class == TYPE_CLASS_ARRAY) {
                 error("get_symbol_length");
+            }
+        }
+        else if (org_type != NULL) {
+            ContextAddress org_length = 0;
+            if (get_symbol_length(org_type, &org_length) < 0) {
+                error("get_symbol_length");
+            }
+            if (length != org_length) {
+                errno = ERR_OTHER;
+                error("Invalid length of typedef");
             }
         }
         if (type_class == TYPE_CLASS_ARRAY) {
@@ -443,15 +532,38 @@ static void loc_var_func(void * args, Symbol * sym) {
             int i;
             int count = 0;
             Symbol ** children = NULL;
+            Symbol * enum_type = type;
+            for (i = 0;; i++) {
+                SYM_FLAGS enum_flags = 0;
+                if (get_symbol_flags(enum_type, &enum_flags) < 0) {
+                    error("get_symbol_flags");
+                }
+                if ((enum_flags & SYM_FLAG_ENUM_TYPE) != 0) break;
+                if (get_symbol_type(enum_type, &enum_type) < 0) {
+                    error("get_symbol_type");
+                }
+                if (i >= 1000) {
+                    errno = ERR_OTHER;
+                    error("Invalid original type for enumeration type class");
+                }
+            }
             if (get_symbol_children(type, &children, &count) < 0) {
                 error("get_symbol_children");
             }
             for (i = 0; i < count; i++) {
+                Symbol * child_type = NULL;
                 void * value = NULL;
                 size_t value_size = 0;
                 int big_endian = 0;
                 if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
                     error("get_symbol_value");
+                }
+                if (get_symbol_type(children[i], &child_type) < 0) {
+                    error("get_symbol_type");
+                }
+                if (symcmp(enum_type, child_type) != 0) {
+                    errno = ERR_OTHER;
+                    error("Invalid type of enum element");
                 }
             }
         }
@@ -862,7 +974,7 @@ static void add_dir(const char * dir_name) {
 }
 
 void init_contexts_sys_dep(void) {
-    const char * dir_name = "files";
+    const char * dir_name = ".";
     add_dir(dir_name);
     test_posted = 1;
     post_event(test, NULL);
