@@ -75,7 +75,8 @@ struct FileInfo {
 #define DOIF_protected          0x0080
 #define DOIF_public             0x0100
 #define DOIF_children_loaded    0x0200
-#define DOIF_find_mark          0x0400
+#define DOIF_ranges             0x0400
+#define DOIF_find_mark          0x0800
 
 struct ObjectInfo {
 
@@ -101,6 +102,7 @@ struct ObjectInfo {
             ContextAddress mLowPC;
             ContextAddress mHighPC;
         } mAddr;
+        U8_T mDebugRangesOffs;
         struct {
             U2_T mFmt;
             union {

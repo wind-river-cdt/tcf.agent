@@ -573,11 +573,18 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         break;
     case AT_low_pc:
         dio_ChkAddr(Form);
+        if (Info->mFlags & DOIF_ranges) break;
         Info->u.mAddr.mLowPC = (ContextAddress)dio_gFormData;
         break;
     case AT_high_pc:
         dio_ChkAddr(Form);
+        if (Info->mFlags & DOIF_ranges) break;
         Info->u.mAddr.mHighPC = (ContextAddress)dio_gFormData;
+        break;
+    case AT_ranges:
+        dio_ChkData(Form);
+        Info->u.mDebugRangesOffs = dio_gFormData;
+        Info->mFlags |= DOIF_ranges;
         break;
     case AT_external:
         dio_ChkFlag(Form);
@@ -606,6 +613,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     }
     if (Tag == TAG_compile_unit) {
         CompUnit * Unit = Info->mCompUnit;
+        /* TODO: mLowPC, mHighPC and mDebugRangesOffs are redundand in CompUnit */
         switch (Attr) {
         case AT_low_pc:
             dio_ChkAddr(Form);

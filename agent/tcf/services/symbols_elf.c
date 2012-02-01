@@ -385,50 +385,49 @@ static int get_num_prop(ObjectInfo * obj, U2_T at, U8_T * res) {
 
 /* Check run-time 'addr' belongs to an object address range(s) */
 static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddress addr) {
-    Trap trap;
+    if (obj->mFlags & DOIF_ranges) {
+        Trap trap;
+        if (set_trap(&trap)) {
+            CompUnit * unit = obj->mCompUnit;
+            DWARFCache * cache = get_dwarf_cache(unit->mFile);
+            ELF_Section * debug_ranges = cache->mDebugRanges;
+            if (debug_ranges != NULL) {
+                ContextAddress lt_addr = addr - rt_offs;
+                ContextAddress base = unit->mLowPC;
+                int res = 0;
+
+                dio_EnterSection(&unit->mDesc, debug_ranges, obj->u.mDebugRangesOffs);
+                for (;;) {
+                    ELF_Section * sec = NULL;
+                    U8_T x = dio_ReadAddress(&sec);
+                    U8_T y = dio_ReadAddress(&sec);
+                    if (x == 0 && y == 0) break;
+                    if (x == ((U8_T)1 << unit->mDesc.mAddressSize * 8) - 1) {
+                        base = (ContextAddress)y;
+                    }
+                    else {
+                        x = base + x;
+                        y = base + y;
+                        if (x <= lt_addr && lt_addr < y) {
+                            res = 1;
+                            break;
+                        }
+                    }
+                }
+                dio_ExitSection();
+                clear_trap(&trap);
+                return res;
+            }
+            clear_trap(&trap);
+        }
+        return 0;
+    }
 
     if (obj->u.mAddr.mHighPC > obj->u.mAddr.mLowPC) {
         ContextAddress lt_addr = addr - rt_offs;
         return lt_addr >= obj->u.mAddr.mLowPC && lt_addr < obj->u.mAddr.mHighPC;
     }
 
-    if (set_trap(&trap)) {
-        CompUnit * unit = obj->mCompUnit;
-        DWARFCache * cache = get_dwarf_cache(unit->mFile);
-        ELF_Section * debug_ranges = cache->mDebugRanges;
-        if (debug_ranges != NULL) {
-            ContextAddress lt_addr = addr - rt_offs;
-            ContextAddress base = unit->mLowPC;
-            PropertyValue v;
-            U8_T offs = 0;
-            int res = 0;
-
-            read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_ranges, &v);
-            offs = get_numeric_property_value(&v);
-            dio_EnterSection(&unit->mDesc, debug_ranges, offs);
-            for (;;) {
-                ELF_Section * sec = NULL;
-                U8_T x = dio_ReadAddress(&sec);
-                U8_T y = dio_ReadAddress(&sec);
-                if (x == 0 && y == 0) break;
-                if (x == ((U8_T)1 << unit->mDesc.mAddressSize * 8) - 1) {
-                    base = (ContextAddress)y;
-                }
-                else {
-                    x = base + x;
-                    y = base + y;
-                    if (x <= lt_addr && lt_addr < y) {
-                        res = 1;
-                        break;
-                    }
-                }
-            }
-            dio_ExitSection();
-            clear_trap(&trap);
-            return res;
-        }
-        clear_trap(&trap);
-    }
     return 0;
 }
 
@@ -1450,7 +1449,7 @@ static int get_object_size(ObjectInfo * obj, unsigned dimension, U8_T * byte_siz
     case TAG_global_subroutine:
     case TAG_subroutine:
     case TAG_subprogram:
-        if (obj->u.mAddr.mHighPC > obj->u.mAddr.mLowPC) {
+        if ((obj->mFlags & DOIF_ranges) == 0 && obj->u.mAddr.mHighPC > obj->u.mAddr.mLowPC) {
             *byte_size = obj->u.mAddr.mHighPC - obj->u.mAddr.mLowPC;
             return 1;
         }
