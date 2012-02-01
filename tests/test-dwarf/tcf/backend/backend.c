@@ -258,6 +258,24 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
     return -1;
 }
 
+static void print_symbol(Symbol * sym) {
+    ObjectInfo * obj = get_symbol_object(sym);
+    if (obj == NULL) {
+        printf("Object  : NULL\n");
+    }
+    else {
+        printf("Object  : 0x%" PRIX64 "\n", (uint64_t)obj->mID);
+        printf("  Tag   : 0x%02x\n", obj->mTag);
+        printf("  Flags : 0x%02x\n", obj->mFlags);
+        if (obj->mName != NULL) {
+            printf("  Name  : %s\n", obj->mName);
+        }
+        if (obj->mType != NULL) {
+            printf("  Type  : 0x%" PRIX64 "\n", (uint64_t)obj->mType->mID);
+        }
+    }
+}
+
 static void error(const char * func) {
     int err = errno;
     printf("File    : %s\n", elf_file_name);
@@ -269,6 +287,13 @@ static void error(const char * func) {
     printf("Error   : %s\n", errno_to_str(err));
     fflush(stdout);
     exit(1);
+}
+
+static void error_sym(const char * func, Symbol * sym) {
+    int err = errno;
+    print_symbol(sym);
+    errno = err;
+    error(func);
 }
 
 static void addr_to_line_callback(CodeArea * area, void * args) {
@@ -343,10 +368,10 @@ static void loc_var_func(void * args, Symbol * sym) {
     LocationInfo * loc_info = NULL;
 
     if (get_symbol_flags(sym, &flags) < 0) {
-        error("get_symbol_flags");
+        error_sym("get_symbol_flags", sym);
     }
     if (get_symbol_name(sym, &name) < 0) {
-        error("get_symbol_name");
+        error_sym("get_symbol_name", sym);
     }
     if (get_symbol_address(sym, &addr) < 0) {
         if ((get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
@@ -358,11 +383,11 @@ static void loc_var_func(void * args, Symbol * sym) {
             if (strncmp(errno_to_str(err), "Division by zero in location", 28) == 0) return;
             if (strncmp(errno_to_str(err), "Cannot find loader debug", 24) == 0) return;
             errno = err;
-            error("get_symbol_value");
+            error_sym("get_symbol_value", sym);
         }
     }
     else if (get_location_info(sym, &loc_info) < 0) {
-        error("get_location_info");
+        error_sym("get_location_info", sym);
     }
     else if (get_frame_info(elf_ctx, STACK_TOP_FRAME, &frame_info) < 0) {
         error("get_frame_info");
@@ -384,10 +409,10 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
     }
     if (get_symbol_class(sym, &symbol_class) < 0) {
-        error("get_symbol_class");
+        error_sym("get_symbol_class", sym);
     }
     if (get_symbol_type(sym, &type) < 0) {
-        error("get_symbol_type");
+        error_sym("get_symbol_type", sym);
     }
     if (get_symbol_size(sym, &size) < 0) {
         int ok = 0;
@@ -396,10 +421,10 @@ static void loc_var_func(void * args, Symbol * sym) {
             char * type_name;
             unsigned type_flags;
             if (get_symbol_name(type, &type_name) < 0) {
-                error("get_symbol_name");
+                error_sym("get_symbol_name", type);
             }
             if (get_symbol_flags(type, &type_flags) < 0) {
-                error("get_symbol_flags");
+                error_sym("get_symbol_flags", type);
             }
             if (name == NULL && type_name != NULL && strcmp(type_name, "exception") == 0 && (type_flags & SYM_FLAG_CLASS_TYPE)) {
                 /* GCC does not tell size of std::exception class */
@@ -408,25 +433,33 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
         if (!ok) {
             errno = err;
-            error("get_symbol_size");
+            error_sym("get_symbol_size", sym);
         }
     }
     if (type != NULL) {
         int type_sym_class = 0;
+        int type_type_class = 0;
         Symbol * org_type = NULL;
         Symbol * container = NULL;
         if (get_symbol_class(type, &type_sym_class) < 0) {
-            error("get_symbol_class");
+            error_sym("get_symbol_class", type);
         }
         if (type_sym_class != SYM_CLASS_TYPE) {
             errno = ERR_OTHER;
             error("Invalid symbol class of a type");
         }
         if (get_symbol_type_class(sym, &type_class) < 0) {
-            error("get_symbol_type_class");
+            error_sym("get_symbol_type_class", sym);
+        }
+        if (get_symbol_type_class(type, &type_type_class) < 0) {
+            error_sym("get_symbol_type_class", type);
+        }
+        if (type_class != type_type_class) {
+            errno = ERR_OTHER;
+            error("Invalid symbol type class");
         }
         if (get_symbol_flags(type, &flags) < 0) {
-            error("get_symbol_flags");
+            error_sym("get_symbol_flags", type);
         }
         if (flags & SYM_FLAG_TYPEDEF) {
             char * type_name = NULL;
@@ -435,14 +468,14 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error("Invalid DWARF object of typedef");
             }
             if (get_symbol_type(type, &org_type) < 0) {
-                error("get_symbol_type");
+                error_sym("get_symbol_type", type);
             }
             if (symcmp(type, org_type) == 0) {
                 errno = ERR_OTHER;
                 error("Invalid original type of typedef");
             }
             if (get_symbol_name(type, &type_name) < 0) {
-                error("get_symbol_name");
+                error_sym("get_symbol_name", type);
             }
             if (type_name == NULL) {
                 errno = ERR_OTHER;
@@ -455,22 +488,32 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
         else if ((flags & SYM_FLAG_CONST_TYPE) || (flags & SYM_FLAG_VOLATILE_TYPE)) {
             if (get_symbol_type(type, &org_type) < 0) {
-                error("get_symbol_type");
+                error_sym("get_symbol_type", type);
             }
             if (symcmp(type, org_type) == 0) {
                 errno = ERR_OTHER;
                 error("Invalid original type of modified type");
             }
         }
+        if (org_type != NULL) {
+            int org_type_class = 0;
+            if (get_symbol_type_class(org_type, &org_type_class) < 0) {
+                error_sym("get_symbol_type_class", org_type);
+            }
+            if (type_class != org_type_class) {
+                errno = ERR_OTHER;
+                error("Invalid symbol type class");
+            }
+        }
         if (get_symbol_index_type(type, &index_type) < 0) {
             if (type_class == TYPE_CLASS_ARRAY) {
-                error("get_symbol_index_type");
+                error_sym("get_symbol_index_type", type);
             }
         }
         else if (org_type != NULL) {
             Symbol * org_index_type = NULL;
             if (get_symbol_index_type(org_type, &org_index_type) < 0) {
-                error("get_symbol_index_type");
+                error_sym("get_symbol_index_type", org_type);
             }
             if (symcmp(index_type, org_index_type) != 0) {
                 errno = ERR_OTHER;
@@ -480,13 +523,13 @@ static void loc_var_func(void * args, Symbol * sym) {
         if (get_symbol_base_type(type, &base_type) < 0) {
             if (type_class == TYPE_CLASS_ARRAY || type_class == TYPE_CLASS_FUNCTION ||
                 type_class == TYPE_CLASS_POINTER || type_class == TYPE_CLASS_MEMBER_PTR) {
-                error("get_symbol_base_type");
+                error_sym("get_symbol_base_type", type);
             }
         }
         else if (org_type != NULL) {
             Symbol * org_base_type = NULL;
             if (get_symbol_base_type(org_type, &org_base_type) < 0) {
-                error("get_symbol_base_type");
+                error_sym("get_symbol_base_type", org_type);
             }
             if (symcmp(base_type, org_base_type) != 0) {
                 errno = ERR_OTHER;
@@ -495,13 +538,13 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
         if (get_symbol_container(type, &container) < 0) {
             if (type_class == TYPE_CLASS_MEMBER_PTR) {
-                error("get_symbol_container");
+                error_sym("get_symbol_container", type);
             }
         }
         else if (org_type != NULL) {
             Symbol * org_container = NULL;
             if (get_symbol_container(org_type, &org_container) < 0) {
-                error("get_symbol_container");
+                error_sym("get_symbol_container", org_type);
             }
             if (symcmp(container, org_container) != 0) {
                 errno = ERR_OTHER;
@@ -510,13 +553,13 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
         if (get_symbol_length(type, &length) < 0) {
             if (type_class == TYPE_CLASS_ARRAY) {
-                error("get_symbol_length");
+                error_sym("get_symbol_length", type);
             }
         }
         else if (org_type != NULL) {
             ContextAddress org_length = 0;
             if (get_symbol_length(org_type, &org_length) < 0) {
-                error("get_symbol_length");
+                error_sym("get_symbol_length", org_type);
             }
             if (length != org_length) {
                 errno = ERR_OTHER;
@@ -525,7 +568,7 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
         if (type_class == TYPE_CLASS_ARRAY) {
             if (get_symbol_lower_bound(type, &lower_bound) < 0) {
-                error("get_symbol_lower_bound");
+                error_sym("get_symbol_lower_bound", type);
             }
         }
         else if (type_class == TYPE_CLASS_ENUMERATION) {
@@ -536,11 +579,11 @@ static void loc_var_func(void * args, Symbol * sym) {
             for (i = 0;; i++) {
                 SYM_FLAGS enum_flags = 0;
                 if (get_symbol_flags(enum_type, &enum_flags) < 0) {
-                    error("get_symbol_flags");
+                    error_sym("get_symbol_flags", enum_type);
                 }
                 if ((enum_flags & SYM_FLAG_ENUM_TYPE) != 0) break;
                 if (get_symbol_type(enum_type, &enum_type) < 0) {
-                    error("get_symbol_type");
+                    error_sym("get_symbol_type", enum_type);
                 }
                 if (i >= 1000) {
                     errno = ERR_OTHER;
@@ -548,7 +591,7 @@ static void loc_var_func(void * args, Symbol * sym) {
                 }
             }
             if (get_symbol_children(type, &children, &count) < 0) {
-                error("get_symbol_children");
+                error_sym("get_symbol_children", type);
             }
             for (i = 0; i < count; i++) {
                 Symbol * child_type = NULL;
@@ -556,10 +599,10 @@ static void loc_var_func(void * args, Symbol * sym) {
                 size_t value_size = 0;
                 int big_endian = 0;
                 if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
-                    error("get_symbol_value");
+                    error_sym("get_symbol_value", children[i]);
                 }
                 if (get_symbol_type(children[i], &child_type) < 0) {
-                    error("get_symbol_type");
+                    error_sym("get_symbol_type", children[i]);
                 }
                 if (symcmp(enum_type, child_type) != 0) {
                     errno = ERR_OTHER;
@@ -572,13 +615,13 @@ static void loc_var_func(void * args, Symbol * sym) {
             int count = 0;
             Symbol ** children = NULL;
             if (get_symbol_children(type, &children, &count) < 0) {
-                error("get_symbol_children");
+                error_sym("get_symbol_children", type);
             }
             for (i = 0; i < count; i++) {
                 int member_class = 0;
                 ContextAddress offs = 0;
                 if (get_symbol_class(children[i], &member_class) < 0) {
-                    error("get_symbol_class");
+                    error_sym("get_symbol_class", children[i]);
                 }
                 if (member_class == SYM_CLASS_REFERENCE) {
                     if (get_symbol_address(children[i], &offs) < 0) {
@@ -604,7 +647,7 @@ static void loc_var_func(void * args, Symbol * sym) {
                     size_t value_size = 0;
                     int big_endian = 0;
                     if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
-                        error("get_symbol_value");
+                        error_sym("get_symbol_value", children[i]);
                     }
                 }
             }
@@ -629,8 +672,8 @@ static void next_pc(void) {
             mem_region_pos = 0;
             pc = mem_map.regions[mem_region_pos].addr;
         }
-        else if (pc + 5 < mem_map.regions[mem_region_pos].addr + mem_map.regions[mem_region_pos].size) {
-            pc += 5;
+        else if (pc + 8 < mem_map.regions[mem_region_pos].addr + mem_map.regions[mem_region_pos].size) {
+            pc += 8;
         }
         else if (mem_region_pos + 1 < (int)mem_map.region_cnt) {
             mem_region_pos++;
@@ -696,11 +739,15 @@ static void next_pc(void) {
                 }
                 else {
                     if (get_symbol_name(sym, &name) < 0) {
-                        error("get_symbol_name");
+                        error_sym("get_symbol_name", sym);
+                    }
+                    if (name == NULL) {
+                        errno = ERR_OTHER;
+                        error_sym("invalid symbol name", sym);
                     }
                     if (strcmp(name_buf, name) != 0) {
                         errno = ERR_OTHER;
-                        error("strcmp(name_buf, name)");
+                        error_sym("strcmp(name_buf, name)", sym);
                     }
                 }
             }
@@ -778,7 +825,7 @@ static void next_pc(void) {
         }
 
         test_cnt++;
-        if (test_cnt % 10 == 0) tmp_gc();
+        if (test_cnt % 8 == 0) tmp_gc();
 
         if (loaded) {
             struct timespec time_diff;
