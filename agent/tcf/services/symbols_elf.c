@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -393,10 +393,10 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
             ELF_Section * debug_ranges = cache->mDebugRanges;
             if (debug_ranges != NULL) {
                 ContextAddress lt_addr = addr - rt_offs;
-                ContextAddress base = unit->mLowPC;
+                ContextAddress base = unit->mObject->u.mCode.mLowPC;
                 int res = 0;
 
-                dio_EnterSection(&unit->mDesc, debug_ranges, obj->u.mDebugRangesOffs);
+                dio_EnterSection(&unit->mDesc, debug_ranges, obj->u.mCode.mHighPC.mRanges);
                 for (;;) {
                     ELF_Section * sec = NULL;
                     U8_T x = dio_ReadAddress(&sec);
@@ -423,9 +423,9 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
         return 0;
     }
 
-    if (obj->u.mAddr.mHighPC > obj->u.mAddr.mLowPC) {
+    if (obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC) {
         ContextAddress lt_addr = addr - rt_offs;
-        return lt_addr >= obj->u.mAddr.mLowPC && lt_addr < obj->u.mAddr.mHighPC;
+        return lt_addr >= obj->u.mCode.mLowPC && lt_addr < obj->u.mCode.mHighPC.mAddr;
     }
 
     return 0;
@@ -1407,6 +1407,12 @@ static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
             if (p.mAddr != NULL) found = find_by_name_in_sym_table(cache, (char *)p.mAddr, sym);
             clear_trap(&trap);
         }
+        else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && set_trap(&trap)) {
+            PropertyValue p;
+            read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
+            if (p.mAddr != NULL) found = find_by_name_in_sym_table(cache, (char *)p.mAddr, sym);
+            clear_trap(&trap);
+        }
         else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
             found = find_by_name_in_sym_table(cache, obj->mName, sym);
         }
@@ -1449,8 +1455,8 @@ static int get_object_size(ObjectInfo * obj, unsigned dimension, U8_T * byte_siz
     case TAG_global_subroutine:
     case TAG_subroutine:
     case TAG_subprogram:
-        if ((obj->mFlags & DOIF_ranges) == 0 && obj->u.mAddr.mHighPC > obj->u.mAddr.mLowPC) {
-            *byte_size = obj->u.mAddr.mHighPC - obj->u.mAddr.mLowPC;
+        if ((obj->mFlags & DOIF_ranges) == 0 && obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC) {
+            *byte_size = obj->u.mCode.mHighPC.mAddr - obj->u.mCode.mLowPC;
             return 1;
         }
         return 0;

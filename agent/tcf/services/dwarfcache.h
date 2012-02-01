@@ -76,7 +76,8 @@ struct FileInfo {
 #define DOIF_public             0x0100
 #define DOIF_children_loaded    0x0200
 #define DOIF_ranges             0x0400
-#define DOIF_find_mark          0x0800
+#define DOIF_aranges            0x0800
+#define DOIF_find_mark          0x1000
 
 struct ObjectInfo {
 
@@ -100,9 +101,11 @@ struct ObjectInfo {
         U2_T mFundType;
         struct {
             ContextAddress mLowPC;
-            ContextAddress mHighPC;
-        } mAddr;
-        U8_T mDebugRangesOffs;
+            union {
+                U8_T mRanges;
+                ContextAddress mAddr;
+            } mHighPC;
+        } mCode;
         struct {
             U2_T mFmt;
             union {
@@ -175,13 +178,10 @@ struct CompUnit {
     ELF_Section * mTextSection;
 
     U2_T mLanguage;
-    ContextAddress mLowPC;
-    ContextAddress mHighPC;
 
     DIO_UnitDescriptor mDesc;
     RegisterIdScope mRegIdScope;
 
-    U8_T mDebugRangesOffs;
     U8_T mLineInfoOffs;
     char * mDir;
 
@@ -200,8 +200,6 @@ struct CompUnit {
     U1_T mLineInfoLoaded;
 
     CompUnit * mBaseTypes;
-
-    U1_T mARangesFound;
 };
 
 /* Address range of a compilation unit. A unit can occupy multiple address ranges. */

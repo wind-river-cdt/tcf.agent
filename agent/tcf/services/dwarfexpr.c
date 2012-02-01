@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2008, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -304,7 +304,7 @@ void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo *
         dio_EnterSection(&Unit->mDesc, Unit->mDesc.mSection, Value->mAddr - (U1_T *)Unit->mDesc.mSection->data);
         Offset = dio_ReadUX(Value->mSize);
         dio_ExitSection();
-        Base = Unit->mLowPC;
+        Base = Unit->mObject->u.mCode.mLowPC;
         if (Unit->mDesc.mAddressSize < 8) AddrMax = ((U8_T)1 << Unit->mDesc.mAddressSize * 8) - 1;
         dio_EnterSection(&Unit->mDesc, Cache->mDebugLoc, Offset);
         for (;;) {

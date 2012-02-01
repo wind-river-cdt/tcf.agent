@@ -446,7 +446,6 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
                 CompUnit * Unit = add_comp_unit((ContextAddress)(sDebugSection->addr + dio_gEntryPos));
                 assert(sParentObject == NULL);
                 Unit->mFile = sCache->mFile;
-                Unit->mDebugRangesOffs = ~(U8_T)0;
                 Unit->mRegIdScope.big_endian = sCache->mFile->big_endian;
                 Unit->mRegIdScope.machine = sCache->mFile->machine;
                 Unit->mRegIdScope.os_abi = sCache->mFile->os_abi;
@@ -573,17 +572,16 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         break;
     case AT_low_pc:
         dio_ChkAddr(Form);
-        if (Info->mFlags & DOIF_ranges) break;
-        Info->u.mAddr.mLowPC = (ContextAddress)dio_gFormData;
+        Info->u.mCode.mLowPC = (ContextAddress)dio_gFormData;
         break;
     case AT_high_pc:
         dio_ChkAddr(Form);
         if (Info->mFlags & DOIF_ranges) break;
-        Info->u.mAddr.mHighPC = (ContextAddress)dio_gFormData;
+        Info->u.mCode.mHighPC.mAddr = (ContextAddress)dio_gFormData;
         break;
     case AT_ranges:
         dio_ChkData(Form);
-        Info->u.mDebugRangesOffs = dio_gFormData;
+        Info->u.mCode.mHighPC.mRanges = dio_gFormData;
         Info->mFlags |= DOIF_ranges;
         break;
     case AT_external:
@@ -599,35 +597,36 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         if (dio_gFormData) Info->mFlags |= DOIF_declaration;
         break;
     case AT_private:
+        if (Form == FORM_STRING) {
+            /* Diab 4.1 */
+            Info->mFlags |= DOIF_private;
+            break;
+        }
         dio_ChkFlag(Form);
         if (dio_gFormData) Info->mFlags |= DOIF_private;
         break;
     case AT_protected:
+        if (Form == FORM_STRING) {
+            /* Diab 4.1 */
+            Info->mFlags |= DOIF_protected;
+            break;
+        }
         dio_ChkFlag(Form);
         if (dio_gFormData) Info->mFlags |= DOIF_protected;
         break;
     case AT_public:
+        if (Form == FORM_STRING) {
+            /* Diab 4.1 */
+            Info->mFlags |= DOIF_public;
+            break;
+        }
         dio_ChkFlag(Form);
         if (dio_gFormData) Info->mFlags |= DOIF_public;
         break;
     }
     if (Tag == TAG_compile_unit) {
         CompUnit * Unit = Info->mCompUnit;
-        /* TODO: mLowPC, mHighPC and mDebugRangesOffs are redundand in CompUnit */
         switch (Attr) {
-        case AT_low_pc:
-            dio_ChkAddr(Form);
-            Unit->mLowPC = (ContextAddress)dio_gFormData;
-            Unit->mTextSection = dio_gFormSection;
-            break;
-        case AT_high_pc:
-            dio_ChkAddr(Form);
-            Unit->mHighPC = (ContextAddress)dio_gFormData;
-            break;
-        case AT_ranges:
-            dio_ChkData(Form);
-            Unit->mDebugRangesOffs = dio_gFormData;
-            break;
         case AT_comp_dir:
             dio_ChkString(Form);
             Unit->mDir = (char *)dio_gFormDataAddr;
@@ -752,7 +751,7 @@ static void load_addr_ranges(void) {
                         if (segm_size != 0) str_exception(ERR_INV_DWARF, "segment descriptors are not supported");
                         sCompUnit = find_comp_unit((ContextAddress)offs);
                         if (sCompUnit == NULL) str_exception(ERR_INV_DWARF, "invalid .debug_aranges section");
-                        sCompUnit->mARangesFound = 1;
+                        sCompUnit->mObject->mFlags |= DOIF_aranges;
                         while (dio_GetPos() % (addr_size * 2) != 0) dio_Skip(1);
                         for (;;) {
                             ELF_Section * range_sec = NULL;
@@ -774,34 +773,35 @@ static void load_addr_ranges(void) {
     if (sCache->mCompUnits != NULL) {
         ObjectInfo * info = sCache->mCompUnits;
         while (info != NULL) {
-            CompUnit * unit = info->mCompUnit;
-            ContextAddress base = unit->mLowPC;
-            ContextAddress size = unit->mHighPC - unit->mLowPC;
-            info = info->mSibling;
-            if (unit->mARangesFound) continue;
-            if (size == 0) continue;
-            if (unit->mDebugRangesOffs != ~(U8_T)0 && debug_ranges != NULL) {
-                dio_EnterSection(&unit->mDesc, debug_ranges, unit->mDebugRangesOffs);
-                for (;;) {
-                    ELF_Section * sec = NULL;
-                    U8_T x = dio_ReadAddress(&sec);
-                    U8_T y = dio_ReadAddress(&sec);
-                    if (x == 0 && y == 0) break;
-                    if (sec != unit->mTextSection) exception(ERR_INV_DWARF);
-                    if (x == ((U8_T)1 << unit->mDesc.mAddressSize * 8) - 1) {
-                        base = (ContextAddress)y;
-                    }
-                    else {
-                        x = base + x;
-                        y = base + y;
-                        add_addr_range(sec, unit, (ContextAddress)x, (ContextAddress)(y - x));
+            if ((info->mFlags & DOIF_aranges) == 0) {
+                CompUnit * unit = info->mCompUnit;
+                ContextAddress base = info->u.mCode.mLowPC;
+                if (info->mFlags & DOIF_ranges) {
+                    if (debug_ranges != NULL) {
+                        dio_EnterSection(&unit->mDesc, debug_ranges, info->u.mCode.mHighPC.mRanges);
+                        for (;;) {
+                            ELF_Section * sec = NULL;
+                            U8_T x = dio_ReadAddress(&sec);
+                            U8_T y = dio_ReadAddress(&sec);
+                            if (x == 0 && y == 0) break;
+                            if (sec != unit->mTextSection) exception(ERR_INV_DWARF);
+                            if (x == ((U8_T)1 << unit->mDesc.mAddressSize * 8) - 1) {
+                                base = (ContextAddress)y;
+                            }
+                            else if (y > x) {
+                                x = base + x;
+                                y = base + y;
+                                add_addr_range(sec, unit, (ContextAddress)x, (ContextAddress)(y - x));
+                            }
+                        }
+                        dio_ExitSection();
                     }
                 }
-                dio_ExitSection();
+                else if (info->u.mCode.mHighPC.mAddr > base) {
+                    add_addr_range(unit->mTextSection, unit, base, info->u.mCode.mHighPC.mAddr - base);
+                }
             }
-            else {
-                add_addr_range(unit->mTextSection, unit, base, size);
-            }
+            info = info->mSibling;
         }
     }
     if (sCache->mAddrRangesCnt > 1) {
