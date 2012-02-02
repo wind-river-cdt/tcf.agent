@@ -78,6 +78,7 @@ struct FileInfo {
 #define DOIF_ranges             0x0400
 #define DOIF_aranges            0x0800
 #define DOIF_find_mark          0x1000
+#define DOIF_load_mark          0x2000
 
 struct ObjectInfo {
 

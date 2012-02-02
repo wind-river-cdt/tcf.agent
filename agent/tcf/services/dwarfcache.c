@@ -189,6 +189,7 @@ static void add_object_reference(ObjectInfo * org, ObjectInfo * obj) {
         sObjRefsMax += sObjRefsMax ? sObjRefsMax * 2 : 256;
         sObjRefs = (ObjectReference *)loc_realloc(sObjRefs, sizeof(ObjectReference) * sObjRefsMax);
     }
+    if (obj != NULL) obj->mFlags |= DOIF_load_mark;
     sObjRefs[sObjRefsCnt].org = org;
     sObjRefs[sObjRefsCnt].obj = obj;
     sObjRefsCnt++;
@@ -651,6 +652,8 @@ static int object_references_comparator(const void * x, const void * y) {
     if (rx->obj == ry->obj) return 0;
     if (rx->obj == NULL) return -1;
     if (ry->obj == NULL) return +1;
+    if (rx->org == ry->obj) return -1;
+    if (rx->obj == ry->org) return +1;
     if (rx->obj->mID < ry->obj->mID) return -1;
     if (rx->obj->mID > ry->obj->mID) return +1;
     return 0;
@@ -690,15 +693,14 @@ static void read_object_refs(void) {
 #endif
     /*
      * Propagate attributes like mName and mType along chain of references.
-     * Note: this implementation does not support forward references in AT_abstract_origin and AT_specification.
-     * It is not clear if such support is needed. GCC seems never emit such forward references.
      */
     qsort(sObjRefs, sObjRefsCnt, sizeof(ObjectReference), object_references_comparator);
     while (pos < sObjRefsCnt) {
         ObjectReference ref = sObjRefs[pos++];
         if (ref.obj != NULL) {
             assert(ref.org->mTag != 0);
-            if (ref.org->mID > ref.obj->mID) str_exception(ERR_INV_DWARF, "Invalid forward reference");
+            if (ref.org->mFlags & DOIF_load_mark) str_fmt_exception(ERR_INV_DWARF,
+                "Invalid forward reference at %x", (unsigned)ref.obj->mID);
             if (ref.obj->mFlags & DOIF_specification) ref.org->mDefinition = ref.obj;
             if (ref.obj->mName == NULL) ref.obj->mName = ref.org->mName;
             if (ref.obj->mType == NULL) ref.obj->mType = ref.org->mType;
@@ -711,6 +713,7 @@ static void read_object_refs(void) {
                 }
                 cls->mFlags |= DOIF_external;
             }
+            ref.obj->mFlags &= ~DOIF_load_mark;
         }
     }
     sObjRefsCnt = 0;
