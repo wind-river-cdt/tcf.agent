@@ -652,8 +652,8 @@ static int object_references_comparator(const void * x, const void * y) {
     if (rx->obj == ry->obj) return 0;
     if (rx->obj == NULL) return -1;
     if (ry->obj == NULL) return +1;
-    if (rx->org == ry->obj) return -1;
-    if (rx->obj == ry->org) return +1;
+    if (rx->obj == ry->org) return -1;
+    if (rx->org == ry->obj) return +1;
     if (rx->obj->mID < ry->obj->mID) return -1;
     if (rx->obj->mID > ry->obj->mID) return +1;
     return 0;

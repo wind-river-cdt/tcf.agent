@@ -134,6 +134,13 @@ extern int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Sym
 extern int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol ** sym);
 
 /*
+ * find_symbol_* functions return first symbol that matches the search criteria.
+ * Clients can use find_next_symbol() to get the rest of mtching symbols,
+ * for example, to get all symbols for overloaded functions.
+ */
+extern int find_next_symbol(Symbol ** sym);
+
+/*
  * Enumerate symbols in given context.
  * If frame >= 0 enumerates local symbols and function arguments.
  * If frame < 0 enumerates global symbols.

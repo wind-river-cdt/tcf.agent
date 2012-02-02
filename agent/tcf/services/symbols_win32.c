@@ -1070,6 +1070,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
 }
 
 int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, const char * name, Symbol ** sym) {
+    /* TODO: find_symbol_in_scope() for Windows */
     errno = ERR_SYM_NOT_FOUND;
     return -1;
 }
@@ -1083,6 +1084,12 @@ int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol **
     assert((*sym)->ctx == ((*sym)->frame ? ctx : ctx->mem));
     assert((*sym)->frame == ((*sym)->ctx == (*sym)->ctx->mem ? 0u : frame - STACK_NO_FRAME));
     return 0;
+}
+
+int find_next_symbol(Symbol ** sym) {
+    /* TODO: find_next_symbol() for Windows */
+    errno = ERR_SYM_NOT_FOUND;
+    return -1;
 }
 
 typedef struct EnumerateSymbolsContext {

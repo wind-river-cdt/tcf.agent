@@ -641,6 +641,12 @@ int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol **
     return -1;
 }
 
+int find_next_symbol(Symbol ** sym) {
+    /* TODO: find_next_symbol() for symbols proxy */
+    errno = ERR_SYM_NOT_FOUND;
+    return -1;
+}
+
 static void read_sym_list_item(InputStream * inp, void * args) {
     ListSymCache * f = (ListSymCache *)args;
     char * id = json_read_alloc_string(inp);
