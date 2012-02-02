@@ -54,7 +54,6 @@ static CompUnit * sCompUnit;
 static ObjectInfo * sParentObject;
 static ObjectInfo * sPrevSibling;
 static ObjectReference * sObjRefs;
-static U4_T sObjRefsPos = 0;
 static U4_T sObjRefsCnt = 0;
 static U4_T sObjRefsMax = 0;
 
@@ -646,13 +645,27 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     }
 }
 
+static int object_references_comparator(const void * x, const void * y) {
+    ObjectReference * rx = (ObjectReference *)x;
+    ObjectReference * ry = (ObjectReference *)y;
+    if (rx->obj == ry->obj) return 0;
+    if (rx->obj == NULL) return -1;
+    if (ry->obj == NULL) return +1;
+    if (rx->obj->mID < ry->obj->mID) return -1;
+    if (rx->obj->mID > ry->obj->mID) return +1;
+    return 0;
+}
+
 static void read_object_refs(void) {
-    /* Note: this implementation does not support forward references in AT_abstract_origin and AT_specification.
-     * It is not clear if such support is needed. GCC seems never emit such forward references.
+    U4_T pos = 0;
+#if ENABLE_DWARF_LAZY_LOAD
+    /*
+     * Build transitive closure of DWARF objects graph:
+     * load objects that are referenced by already loaded objects.
      */
     sCompUnit = NULL;
-    while (sObjRefsPos < sObjRefsCnt) {
-        ObjectReference ref = sObjRefs[sObjRefsPos++];
+    while (pos < sObjRefsCnt) {
+        ObjectReference ref = sObjRefs[pos++];
         if (ref.org->mCompUnit == NULL) ref.org->mCompUnit = find_comp_unit(ref.org->mID);
         if (ref.org->mTag == 0) {
             Trap trap;
@@ -672,8 +685,20 @@ static void read_object_refs(void) {
             sCompUnit = NULL;
             if (trap.error) exception(trap.error);
         }
+    }
+    pos = 0;
+#endif
+    /*
+     * Propagate attributes like mName and mType along chain of references.
+     * Note: this implementation does not support forward references in AT_abstract_origin and AT_specification.
+     * It is not clear if such support is needed. GCC seems never emit such forward references.
+     */
+    qsort(sObjRefs, sObjRefsCnt, sizeof(ObjectReference), object_references_comparator);
+    while (pos < sObjRefsCnt) {
+        ObjectReference ref = sObjRefs[pos++];
         if (ref.obj != NULL) {
             assert(ref.org->mTag != 0);
+            if (ref.org->mID > ref.obj->mID) str_exception(ERR_INV_DWARF, "Invalid forward reference");
             if (ref.obj->mFlags & DOIF_specification) ref.org->mDefinition = ref.obj;
             if (ref.obj->mName == NULL) ref.obj->mName = ref.org->mName;
             if (ref.obj->mType == NULL) ref.obj->mType = ref.org->mType;
@@ -688,11 +713,10 @@ static void read_object_refs(void) {
             }
         }
     }
-    sObjRefsPos = 0;
     sObjRefsCnt = 0;
 }
 
-static int cmp_addr_ranges(const void * x, const void * y) {
+static int addr_ranges_comparator(const void * x, const void * y) {
     UnitAddressRange * rx = (UnitAddressRange *)x;
     UnitAddressRange * ry = (UnitAddressRange *)y;
     if (rx->mAddr < ry->mAddr) return -1;
@@ -805,7 +829,7 @@ static void load_addr_ranges(void) {
         }
     }
     if (sCache->mAddrRangesCnt > 1) {
-        qsort(sCache->mAddrRanges, sCache->mAddrRangesCnt, sizeof(UnitAddressRange), cmp_addr_ranges);
+        qsort(sCache->mAddrRanges, sCache->mAddrRangesCnt, sizeof(UnitAddressRange), addr_ranges_comparator);
     }
 }
 
@@ -926,7 +950,6 @@ static void load_debug_sections(void) {
         if (sec->type == SHT_NOBITS) continue;
         if (strcmp(sec->name, ".debug") == 0 || strcmp(sec->name, ".debug_info") == 0) {
             if (strcmp(sec->name, ".debug_info") == 0) debug_info = sec;
-            sObjRefsPos = 0;
             sObjRefsCnt = 0;
             sDebugSection = sec;
             sParentObject = NULL;
@@ -997,7 +1020,6 @@ static void load_debug_sections(void) {
 ObjectInfo * get_dwarf_children(ObjectInfo * obj) {
     Trap trap;
     if (obj->mFlags & DOIF_children_loaded) return obj->mChildren;
-    sObjRefsPos = 0;
     sObjRefsCnt = 0;
     sCompUnit = obj->mCompUnit;
     sUnitDesc = sCompUnit->mDesc;
