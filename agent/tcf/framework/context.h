@@ -413,8 +413,8 @@ extern Context * context_get_group(Context * ctx, int group);
 #define CONTEXT_GROUP_INTERCEPT     3
 
 /*
- * "process" context group - all contexts that share same memory address space.
- * memory map and symbol files.
+ * "process" context group - all contexts that share same memory address space,
+ * memory map and executable files.
  */
 #define CONTEXT_GROUP_PROCESS       4
 
@@ -425,8 +425,8 @@ extern Context * context_get_group(Context * ctx, int group);
 #define CONTEXT_GROUP_CPU           5
 
 /*
- * "Symbols" context group - all contexts that share same symbol reader configuration,
- * including source file paths and user defined memory map entries.
+ * "Symbols" context group - all contexts that share same symbol reader data,
+ * including symbol files, source file paths and user defined memory map entries.
  */
 #define CONTEXT_GROUP_SYMBOLS       6
 
@@ -437,8 +437,11 @@ extern Context * context_get_group(Context * ctx, int group);
  * that can be implemented by debug context.
  *
  * ContextBreakpoint struct is used by the agent to communicate breakpoint properties to
- * debug context implementation. The implementation needs to handle only small subset of
- * breakpoint properties, the rest is handles by generic code in Breakpoints service.
+ * debug context implementation. Generic code in the Breakpoints service handles common
+ * breakpoint properties, like source code position and location expression. Debug context
+ * implementation can support additional breakpoint properties. The implementation can
+ * get values of the properties using Breakpoint service API: iterate_context_breakpoint_links()
+ * and get_breakpoint_attributes().
  */
 struct ContextBreakpoint {
     Context * ctx;              /* breakpoint context, one of returned by
