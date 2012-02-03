@@ -373,6 +373,43 @@ static void loc_var_func(void * args, Symbol * sym) {
     if (get_symbol_name(sym, &name) < 0) {
         error_sym("get_symbol_name", sym);
     }
+    if (name != NULL) {
+        Symbol * find_sym = NULL;
+        Symbol * find_next = NULL;
+        name = tmp_strdup(name);
+        if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, name, &find_sym) < 0) {
+            error("find_symbol_by_name");
+        }
+        if (find_next_symbol(&find_next) < 0) {
+            if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                error("find_next_symbol");
+            }
+        }
+        else {
+            errno = ERR_OTHER;
+            error("Invalid result of find_next_symbol()");
+        }
+        if (symcmp(sym, find_sym) != 0) {
+            /* 'sym' is eclipsed by 'find_sym' */
+            Symbol * container = NULL;
+            if (get_symbol_container(find_sym, &container) < 0) {
+                error("get_symbol_container");
+            }
+            for (;;) {
+                if (get_symbol_container(container, &container) < 0) {
+                    error("get_symbol_container");
+                }
+                if (find_symbol_in_scope(elf_ctx, STACK_TOP_FRAME, 0, container, name, &find_sym) < 0) {
+                    if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                        error("find_symbol_in_scope");
+                    }
+                }
+                else {
+                    if (symcmp(sym, find_sym) == 0) break;
+                }
+            }
+        }
+    }
     if (get_symbol_address(sym, &addr) < 0) {
         if ((get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
             (get_symbol_value(sym, &value, &value_size, &value_big_endian) < 0 || value == NULL)) {

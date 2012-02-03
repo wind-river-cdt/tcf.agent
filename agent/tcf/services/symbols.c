@@ -31,6 +31,18 @@
 
 static const char * SYMBOLS = "Symbols";
 
+static Symbol ** list_buf = NULL;
+static unsigned list_cnt = 0;
+static unsigned list_max = 0;
+
+static void list_add(Symbol * sym) {
+    if (list_cnt >= list_max) {
+        list_max = list_max == 0 ? 32 : list_max * 2;
+        list_buf = (Symbol **)loc_realloc(list_buf, sizeof(Symbol *) * list_max);
+    }
+    list_buf[list_cnt++] = sym;
+}
+
 typedef struct CommandGetContextArgs {
     char token[256];
     char id[256];
@@ -316,6 +328,7 @@ static void command_get_children(char * token, Channel * c) {
 typedef struct CommandFindByNameArgs {
     char token[256];
     char id[256];
+    int find_first;
     ContextAddress ip;
     char * name;
 } CommandFindByNameArgs;
@@ -334,40 +347,67 @@ static void command_find_by_name_cache_client(void * x) {
 
     if (err == 0 && find_symbol_by_name(ctx, frame, args->ip, args->name, &sym) < 0) err = errno;
 
+    list_cnt = 0;
+    if (err == 0 && args->find_first == 0) {
+        list_add(sym);
+        while (find_next_symbol(&sym) == 0) list_add(sym);
+        if (get_error_code(errno) != ERR_SYM_NOT_FOUND) err = errno;
+    }
+
     cache_exit();
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, args->token);
     write_errno(&c->out, err);
 
-    if (err == 0) {
+    if (err) {
+        write_stringz(&c->out, "null");
+    }
+    else if (args->find_first) {
         json_write_string(&c->out, symbol2id(sym));
         write_stream(&c->out, 0);
     }
     else {
-        write_stringz(&c->out, "null");
+        unsigned i = 0;
+        write_stream(&c->out, '[');
+        for (i = 0; i < list_cnt; i++) {
+            if (i > 0) write_stream(&c->out, ',');
+            json_write_string(&c->out, symbol2id(list_buf[i]));
+        }
+        write_stream(&c->out, ']');
+        write_stream(&c->out, 0);
     }
 
     write_stream(&c->out, MARKER_EOM);
     loc_free(args->name);
 }
 
-static void command_find_by_name(char * token, Channel * c) {
-    CommandFindByNameArgs args;
-
-    args.ip = 0;
-    json_read_string(&c->inp, args.id, sizeof(args.id));
+static void command_find_by_name_args(char * token, Channel * c, CommandFindByNameArgs * args) {
+    args->ip = 0;
+    json_read_string(&c->inp, args->id, sizeof(args->id));
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (peek_stream(&c->inp) != '"' && peek_stream(&c->inp) != 'n') {
-        args.ip = (ContextAddress)json_read_uint64(&c->inp);
+        args->ip = (ContextAddress)json_read_uint64(&c->inp);
         if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     }
-    args.name = json_read_alloc_string(&c->inp);
+    args->name = json_read_alloc_string(&c->inp);
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
-    strlcpy(args.token, token, sizeof(args.token));
-    cache_enter(command_find_by_name_cache_client, c, &args, sizeof(args));
+    strlcpy(args->token, token, sizeof(args->token));
+    cache_enter(command_find_by_name_cache_client, c, args, sizeof(CommandFindByNameArgs));
+}
+
+static void command_find_first(char * token, Channel * c) {
+    CommandFindByNameArgs args;
+    args.find_first = 1;
+    command_find_by_name_args(token, c, &args);
+}
+
+static void command_find_by_name(char * token, Channel * c) {
+    CommandFindByNameArgs args;
+    args.find_first = 0;
+    command_find_by_name_args(token, c, &args);
 }
 
 typedef struct CommandFindByAddrArgs {
@@ -484,16 +524,8 @@ typedef struct CommandListArgs {
     char id[256];
 } CommandListArgs;
 
-static Symbol ** list_buf = NULL;
-static unsigned list_cnt = 0;
-static unsigned list_max = 0;
-
 static void list_callback(void * x, Symbol * sym) {
-    if (list_cnt >= list_max) {
-        list_max = list_max == 0 ? 32 : list_max * 2;
-        list_buf = (Symbol **)loc_realloc(list_buf, sizeof(Symbol *) * list_max);
-    }
-    list_buf[list_cnt++] = sym;
+    list_add(sym);
 }
 
 static void command_list_cache_client(void * x) {
@@ -806,7 +838,8 @@ void ini_symbols_service(Protocol * proto) {
     }
     add_command_handler(proto, SYMBOLS, "getContext", command_get_context);
     add_command_handler(proto, SYMBOLS, "getChildren", command_get_children);
-    add_command_handler(proto, SYMBOLS, "find", command_find_by_name);
+    add_command_handler(proto, SYMBOLS, "find", command_find_first);
+    add_command_handler(proto, SYMBOLS, "findByName", command_find_by_name);
     add_command_handler(proto, SYMBOLS, "findByAddr", command_find_by_addr);
     add_command_handler(proto, SYMBOLS, "findInScope", command_find_in_scope);
     add_command_handler(proto, SYMBOLS, "list", command_list);

@@ -483,12 +483,17 @@ static int find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Cont
         obj = get_dwarf_children(parent);
         while (obj != NULL) {
             switch (obj->mTag) {
+            case TAG_compile_unit:
+            case TAG_partial_unit:
+            case TAG_module:
             case TAG_global_subroutine:
             case TAG_inlined_subroutine:
+            case TAG_lexical_block:
+            case TAG_with_stmt:
+            case TAG_try_block:
+            case TAG_catch_block:
             case TAG_subroutine:
             case TAG_subprogram:
-            case TAG_entry_point:
-            case TAG_lexical_block:
                 if (!check_in_range(obj, rt_offs, ip)) break;
                 if (find_in_object_tree(obj, rt_offs, ip, name, sym)) return 1;
                 break;
@@ -504,8 +509,7 @@ static int find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Cont
         if (obj->mName != NULL && !(obj->mFlags & DOIF_specification)) {
             if (strcmp(obj->mName, name) == 0) {
                 Symbol * s = NULL;
-                obj = find_definition(obj);
-                object2symbol(obj, &s);
+                object2symbol(find_definition(obj), &s);
                 if (*sym == NULL) *sym = s;
                 else add_to_find_symbol_buf(s);
             }
@@ -956,12 +960,17 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
 static int find_by_addr_in_unit(ObjectInfo * obj, int level, ContextAddress rt_offs, ContextAddress addr, Symbol ** res) {
     while (obj != NULL) {
         switch (obj->mTag) {
+        case TAG_compile_unit:
+        case TAG_partial_unit:
+        case TAG_module:
         case TAG_global_subroutine:
         case TAG_inlined_subroutine:
+        case TAG_lexical_block:
+        case TAG_with_stmt:
+        case TAG_try_block:
+        case TAG_catch_block:
         case TAG_subroutine:
         case TAG_subprogram:
-        case TAG_entry_point:
-        case TAG_lexical_block:
             if (check_in_range(obj, rt_offs, addr)) {
                 object2symbol(obj, res);
                 return 1;
@@ -1078,12 +1087,17 @@ static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_
                                  EnumerateSymbolsCallBack * call_back, void * args) {
     while (obj != NULL) {
         switch (obj->mTag) {
+        case TAG_compile_unit:
+        case TAG_partial_unit:
+        case TAG_module:
         case TAG_global_subroutine:
         case TAG_inlined_subroutine:
+        case TAG_lexical_block:
+        case TAG_with_stmt:
+        case TAG_try_block:
+        case TAG_catch_block:
         case TAG_subroutine:
         case TAG_subprogram:
-        case TAG_entry_point:
-        case TAG_lexical_block:
             if (check_in_range(obj, rt_offs, sym_ip)) {
                 enumerate_local_vars(get_dwarf_children(obj), level + 1, rt_offs, call_back, args);
                 if (level == 0) return;
@@ -1098,7 +1112,7 @@ static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_
                 int org_frame = sym_frame;
                 ContextAddress org_ip = sym_ip;
                 Symbol * sym = NULL;
-                object2symbol(obj, &sym);
+                object2symbol(find_definition(obj), &sym);
                 call_back(args, sym);
                 sym_ctx = org_ctx;
                 sym_frame = org_frame;
@@ -1491,7 +1505,15 @@ static int get_object_size(ObjectInfo * obj, unsigned dimension, U8_T * byte_siz
     case TAG_typedef:
         if (obj->mType == NULL) return 0;
         return get_object_size(obj->mType, 0, byte_size, bit_size);
+    case TAG_compile_unit:
+    case TAG_partial_unit:
+    case TAG_module:
     case TAG_global_subroutine:
+    case TAG_inlined_subroutine:
+    case TAG_lexical_block:
+    case TAG_with_stmt:
+    case TAG_try_block:
+    case TAG_catch_block:
     case TAG_subroutine:
     case TAG_subprogram:
         if ((obj->mFlags & DOIF_ranges) == 0 && obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC) {
@@ -2070,7 +2092,7 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
                 return -1;
             }
         }
-        else if (obj->mTag == TAG_member && obj->mParent != NULL) {
+        else if (obj->mParent != NULL) {
             object2symbol(obj->mParent, container);
             return 0;
         }
