@@ -36,6 +36,8 @@ typedef struct Symbol Symbol;
 #define SYM_CLASS_REFERENCE     2   /* Symbol is an address of an object (variable) in memory */
 #define SYM_CLASS_FUNCTION      3   /* Symbol is an address of a function */
 #define SYM_CLASS_TYPE          4   /* Symbol represents a type declaration */
+#define SYM_CLASS_COMP_UNIT     5   /* Symbol represents a compilation unit */
+#define SYM_CLASS_BLOCK         6   /* Symbol represents a block of code */
 
 #define TYPE_CLASS_UNKNOWN      0
 #define TYPE_CLASS_CARDINAL     1
@@ -135,7 +137,7 @@ extern int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Sy
 
 /*
  * find_symbol_* functions return first symbol that matches the search criteria.
- * Clients can use find_next_symbol() to get the rest of mtching symbols,
+ * Clients can use find_next_symbol() to get the rest of matching symbols,
  * for example, to get all symbols for overloaded functions.
  */
 extern int find_next_symbol(Symbol ** sym);

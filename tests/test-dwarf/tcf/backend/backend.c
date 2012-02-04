@@ -374,38 +374,77 @@ static void loc_var_func(void * args, Symbol * sym) {
         error_sym("get_symbol_name", sym);
     }
     if (name != NULL) {
+        int found_next = 0;
         Symbol * find_sym = NULL;
-        Symbol * find_next = NULL;
         name = tmp_strdup(name);
         if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, name, &find_sym) < 0) {
             error("find_symbol_by_name");
         }
-        if (find_next_symbol(&find_next) < 0) {
-            if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
-                error("find_next_symbol");
+        for (;;) {
+            Symbol * find_next = NULL;
+            if (find_next_symbol(&find_next) < 0) {
+                if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                    error("find_next_symbol");
+                }
+                break;
             }
-        }
-        else {
-            errno = ERR_OTHER;
-            error("Invalid result of find_next_symbol()");
+            else if (symcmp(find_sym, find_next) == 0) {
+                errno = ERR_OTHER;
+                error("Invalid result of find_next_symbol()");
+            }
+            else if (symcmp(sym, find_next) == 0) {
+                found_next = 1;
+            }
         }
         if (symcmp(sym, find_sym) != 0) {
-            /* 'sym' is eclipsed by 'find_sym' */
-            Symbol * container = NULL;
-            if (get_symbol_container(find_sym, &container) < 0) {
+            /* 'sym' is eclipsed in the current scope by a nested declaration */
+            Symbol * sym_container = NULL;
+            Symbol * find_container = NULL;
+            if (!found_next) {
+                errno = ERR_OTHER;
+                error("Invalid result of find_next_symbol()");
+            }
+            found_next = 0;
+            if (get_symbol_container(sym, &sym_container) < 0) {
                 error("get_symbol_container");
             }
+            if (find_symbol_in_scope(elf_ctx, STACK_TOP_FRAME, 0, sym_container, name, &find_sym) < 0) {
+                error("find_symbol_in_scope");
+            }
+            if (get_symbol_container(find_sym, &find_container) < 0) {
+                error("get_symbol_container");
+            }
+            if (symcmp(sym_container, find_container) != 0) {
+                errno = ERR_OTHER;
+                error("Invalid result of find_symbol_in_scope()");
+            }
             for (;;) {
-                if (get_symbol_container(container, &container) < 0) {
+                Symbol * find_next = NULL;
+                if (find_next_symbol(&find_next) < 0) {
+                    if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                        error("find_next_symbol");
+                    }
+                    break;
+                }
+                else if (symcmp(find_sym, find_next) == 0) {
+                    errno = ERR_OTHER;
+                    error("Invalid result of find_next_symbol()");
+                }
+                else if (symcmp(sym, find_next) == 0) {
+                    found_next = 1;
+                }
+                if (get_symbol_container(find_next, &find_container) < 0) {
                     error("get_symbol_container");
                 }
-                if (find_symbol_in_scope(elf_ctx, STACK_TOP_FRAME, 0, container, name, &find_sym) < 0) {
-                    if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
-                        error("find_symbol_in_scope");
-                    }
+                if (symcmp(sym_container, find_container) != 0) {
+                    errno = ERR_OTHER;
+                    error("Invalid result of find_next_symbol()");
                 }
-                else {
-                    if (symcmp(sym, find_sym) == 0) break;
+            }
+            if (symcmp(sym, find_sym) != 0) {
+                if (!found_next) {
+                    errno = ERR_OTHER;
+                    error("Invalid result of find_next_symbol()");
                 }
             }
         }
@@ -703,14 +742,16 @@ static void next_pc(void) {
     Trap trap;
     int test_cnt = 0;
     int loaded = mem_region_pos < 0;
+    ContextAddress next_pc = 0;
 
     for (;;) {
+        if (next_pc <= pc) next_pc = pc + 16;
         if (mem_region_pos < 0) {
             mem_region_pos = 0;
             pc = mem_map.regions[mem_region_pos].addr;
         }
-        else if (pc + 8 < mem_map.regions[mem_region_pos].addr + mem_map.regions[mem_region_pos].size) {
-            pc += 8;
+        else if (next_pc < mem_map.regions[mem_region_pos].addr + mem_map.regions[mem_region_pos].size) {
+            pc = next_pc;
         }
         else if (mem_region_pos + 1 < (int)mem_map.region_cnt) {
             mem_region_pos++;
@@ -801,7 +842,9 @@ static void next_pc(void) {
         if (address_to_line(elf_ctx, pc, pc + 1, addr_to_line_callback, &area) < 0) {
             error("address_to_line");
         }
-        else if (area.start_line > 0) {
+        next_pc = area.end_address;
+        if (next_pc > 0) next_pc += test_cnt % 6;
+        if (area.start_line > 0) {
             char * elf_file_name = tmp_strdup(area.file);
             if (area.start_address > pc || area.end_address <= pc) {
                 errno = set_errno(ERR_OTHER, "Invalid line area address");
