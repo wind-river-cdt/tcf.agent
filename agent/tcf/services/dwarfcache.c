@@ -134,6 +134,7 @@ static CompUnit * find_comp_unit(ContextAddress ObjID) {
 }
 
 static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form);
+static void read_object_refs(void);
 
 ObjectInfo * find_object(DWARFCache * Cache, ContextAddress ID) {
     ObjectInfo * Info = Cache->mObjectHash[OBJ_HASH(Cache, ID)];
@@ -163,6 +164,7 @@ ObjectInfo * find_object(DWARFCache * Cache, ContextAddress ID) {
         }
         dio_ExitSection();
         sDebugSection = NULL;
+        read_object_refs();
     }
     sCompUnit = NULL;
 #endif

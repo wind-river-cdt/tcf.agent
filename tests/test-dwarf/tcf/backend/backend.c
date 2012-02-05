@@ -612,19 +612,19 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error("Invalid base type of typedef");
             }
         }
-        if (get_symbol_container(type, &container) < 0) {
-            if (type_class == TYPE_CLASS_MEMBER_PTR) {
+        if (type_class == TYPE_CLASS_MEMBER_PTR) {
+            if (get_symbol_container(type, &container) < 0) {
                 error_sym("get_symbol_container", type);
             }
-        }
-        else if (org_type != NULL) {
-            Symbol * org_container = NULL;
-            if (get_symbol_container(org_type, &org_container) < 0) {
-                error_sym("get_symbol_container", org_type);
-            }
-            if (symcmp(container, org_container) != 0) {
-                errno = ERR_OTHER;
-                error("Invalid container of typedef");
+            else if (org_type != NULL) {
+                Symbol * org_container = NULL;
+                if (get_symbol_container(org_type, &org_container) < 0) {
+                    error_sym("get_symbol_container", org_type);
+                }
+                if (symcmp(container, org_container) != 0) {
+                    errno = ERR_OTHER;
+                    error("Invalid container of typedef");
+                }
             }
         }
         if (get_symbol_length(type, &length) < 0) {

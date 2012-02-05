@@ -2124,11 +2124,11 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
     if (obj != NULL) {
         if (unpack(sym) < 0) return -1;
         if (sym->sym_class == SYM_CLASS_TYPE) {
-            obj = get_original_type(obj);
-            if (obj->mTag == TAG_ptr_to_member_type) {
+            ObjectInfo * org = get_original_type(obj);
+            if (org->mTag == TAG_ptr_to_member_type) {
                 U8_T id = 0;
-                if (get_num_prop(obj, AT_containing_type, &id)) {
-                    ObjectInfo * type = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)id);
+                if (get_num_prop(org, AT_containing_type, &id)) {
+                    ObjectInfo * type = find_object(get_dwarf_cache(org->mCompUnit->mFile), (ContextAddress)id);
                     if (type != NULL) {
                         object2symbol(type, container);
                         return 0;
@@ -2138,12 +2138,12 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
                 return -1;
             }
         }
-        else if (obj->mParent != NULL) {
+        if (obj->mParent != NULL) {
             object2symbol(obj->mParent, container);
             return 0;
         }
     }
-    errno = ERR_UNSUPPORTED;
+    errno = ERR_SYM_NOT_FOUND;
     return -1;
 }
 
