@@ -81,7 +81,11 @@
    typedef unsigned __int32 uint32_t;
    typedef signed __int64 int64_t;
    typedef unsigned __int64 uint64_t;
-   typedef int ssize_t;
+  #if defined(_WIN64)
+   typedef __int64 ssize_t;
+  #elif defined(_WIN32)
+   typedef long ssize_t;
+  #endif
 #  define PRId64 "I64d"
 #  define PRIX64 "I64X"
 #  define SCNx64 "I64x"
