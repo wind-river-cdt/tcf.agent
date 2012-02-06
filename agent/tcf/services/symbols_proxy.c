@@ -45,6 +45,7 @@ typedef struct SymbolsCache {
     LINK link_root;
     LINK link_sym[HASH_SIZE];
     LINK link_find_by_name[HASH_SIZE];
+    LINK link_find_by_addr[HASH_SIZE];
     LINK link_find_in_scope[HASH_SIZE];
     LINK link_list[HASH_SIZE];
     LINK link_frame[HASH_SIZE];
@@ -106,7 +107,7 @@ typedef struct ArraySymCache {
     int disposed;
 } ArraySymCache;
 
-/* Cached result of find_symbol() */
+/* Cached result of find_symbol_by_name(), find_symbol_in_scope(), find_symbol_by_addr(), enumerate_symbols() */
 typedef struct FindSymCache {
     LINK link_syms;
     AbstractCache cache;
@@ -115,26 +116,13 @@ typedef struct FindSymCache {
     int update_policy;
     Context * ctx;
     uint64_t ip;
+    uint64_t addr;
     char * scope;
     char * name;
-    char * id;
+    char ** id_buf;
+    int id_cnt;
     int disposed;
 } FindSymCache;
-
-/* Cached result of enumerate_symbols() */
-typedef struct ListSymCache {
-    LINK link_syms;
-    AbstractCache cache;
-    ReplyHandlerInfo * pending;
-    ErrorReport * error;
-    int update_policy;
-    Context * ctx;
-    uint64_t ip;
-    char ** list;
-    unsigned list_size;
-    unsigned list_max;
-    int disposed;
-} ListSymCache;
 
 typedef struct StackFrameCache {
     LINK link_syms;
@@ -158,7 +146,6 @@ typedef struct StackFrameCache {
 #define root2syms(A) ((SymbolsCache *)((char *)(A) - offsetof(SymbolsCache, link_root)))
 #define syms2sym(A)  ((SymInfoCache *)((char *)(A) - offsetof(SymInfoCache, link_syms)))
 #define syms2find(A) ((FindSymCache *)((char *)(A) - offsetof(FindSymCache, link_syms)))
-#define syms2list(A) ((ListSymCache *)((char *)(A) - offsetof(ListSymCache, link_syms)))
 #define sym2arr(A)   ((ArraySymCache *)((char *)(A) - offsetof(ArraySymCache, link_sym)))
 #define syms2frame(A)((StackFrameCache *)((char *)(A) - offsetof(StackFrameCache, link_syms)))
 
@@ -168,6 +155,10 @@ struct Symbol {
 };
 
 static LINK root = TCF_LIST_INIT(root);
+
+static char ** find_next_buf = NULL;
+static int find_next_pos = 0;
+static int find_next_cnt = 0;
 
 static const char * SYMBOLS = "Symbols";
 
@@ -189,7 +180,7 @@ static unsigned hash_sym_id(const char * id) {
 static unsigned hash_find(Context * ctx, const char * name, uint64_t ip) {
     int i;
     unsigned h = 0;
-    for (i = 0; name[i]; i++) h += name[i];
+    if (name != NULL) for (i = 0; name[i]; i++) h += name[i];
     return (h + ((uintptr_t)ctx >> 4) + (unsigned)ip) % HASH_SIZE;
 }
 
@@ -223,6 +214,7 @@ static SymbolsCache * get_symbols_cache(void) {
         for (i = 0; i < HASH_SIZE; i++) {
             list_init(syms->link_sym + i);
             list_init(syms->link_find_by_name + i);
+            list_init(syms->link_find_by_addr + i);
             list_init(syms->link_find_in_scope + i);
             list_init(syms->link_list + i);
             list_init(syms->link_frame + i);
@@ -276,25 +268,17 @@ static void free_find_sym_cache(FindSymCache * c) {
     list_remove(&c->link_syms);
     c->disposed = 1;
     if (c->pending == NULL) {
+        if (find_next_buf == c->id_buf) {
+            find_next_buf = NULL;
+            find_next_pos = 0;
+            find_next_cnt = 0;
+        }
         cache_dispose(&c->cache);
         release_error_report(c->error);
         context_unlock(c->ctx);
+        loc_free(c->scope);
         loc_free(c->name);
-        loc_free(c->id);
-        loc_free(c);
-    }
-}
-
-static void free_list_sym_cache(ListSymCache * c) {
-    list_remove(&c->link_syms);
-    c->disposed = 1;
-    if (c->pending == NULL) {
-        unsigned j;
-        cache_dispose(&c->cache);
-        release_error_report(c->error);
-        context_unlock(c->ctx);
-        for (j = 0; j < c->list_size; j++) loc_free(c->list[j]);
-        loc_free(c->list);
+        loc_free(c->id_buf);
         loc_free(c);
     }
 }
@@ -334,11 +318,14 @@ static void free_symbols_cache(SymbolsCache * syms) {
         while (!list_is_empty(syms->link_find_by_name + i)) {
             free_find_sym_cache(syms2find(syms->link_find_by_name[i].next));
         }
+        while (!list_is_empty(syms->link_find_by_addr + i)) {
+            free_find_sym_cache(syms2find(syms->link_find_by_addr[i].next));
+        }
         while (!list_is_empty(syms->link_find_in_scope + i)) {
             free_find_sym_cache(syms2find(syms->link_find_in_scope[i].next));
         }
         while (!list_is_empty(syms->link_list + i)) {
-            free_list_sym_cache(syms2list(syms->link_list[i].next));
+            free_find_sym_cache(syms2find(syms->link_list[i].next));
         }
         while (!list_is_empty(syms->link_frame + i)) {
             free_stack_frame_cache(syms2frame(syms->link_frame[i].next));
@@ -437,6 +424,25 @@ static SymInfoCache * get_sym_info_cache(const Symbol * sym) {
     return s;
 }
 
+static char ** string_to_symbol_list(char * id, int * cnt) {
+    if (id[0]) {
+        char ** buf = (char **)loc_alloc_zero(sizeof(char *) * 2 + strlen(id) + 1);
+        buf[0] = (char *)(buf + 2);
+        strcpy(buf[0], id);
+        *cnt = 1;
+        return buf;
+    }
+    *cnt = 0;
+    return NULL;
+}
+
+static char ** read_symbol_list(InputStream * inp, int * id_cnt) {
+    char id[256];
+    if (peek_stream(inp) == '[') return json_read_alloc_string_array(inp, id_cnt);
+    json_read_string(inp, id, sizeof(id));
+    return string_to_symbol_list(id, id_cnt);
+}
+
 static void validate_find(Channel * c, void * args, int error) {
     Trap trap;
     FindSymCache * f = (FindSymCache *)args;
@@ -446,7 +452,7 @@ static void validate_find(Channel * c, void * args, int error) {
         f->pending = NULL;
         if (!error) {
             error = read_errno(&c->inp);
-            f->id = json_read_alloc_string(&c->inp);
+            f->id_buf = read_symbol_list(&c->inp, &f->id_cnt);
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
         }
@@ -456,7 +462,6 @@ static void validate_find(Channel * c, void * args, int error) {
         error = trap.error;
     }
     f->error = get_error_report(error);
-    assert(f->error != NULL || f->id != NULL);
     cache_notify(&f->cache);
     if (f->disposed) free_find_sym_cache(f);
 }
@@ -507,14 +512,14 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const cha
             }
             else {
                 release_error_report(f->error);
-                loc_free(f->id);
                 f->error = NULL;
-                f->id = NULL;
+                loc_free(f->id_buf);
+                f->id_cnt = 0;
             }
             f->update_policy = UPDATE_ON_MEMORY_MAP_CHANGES;
             snprintf(bf, sizeof(bf), "@T.%X.%"PRIX64".%s", sym_class,
                     (uint64_t)(uintptr_t)address, context_get_group(ctx, CONTEXT_GROUP_SYMBOLS)->id);
-            f->id = loc_strdup(bf);
+            f->id_buf = string_to_symbol_list(bf, &f->id_cnt);
         }
     }
 #endif
@@ -527,7 +532,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const cha
         f->ip = ip;
         f->name = loc_strdup(name);
         f->update_policy = ip ? UPDATE_ON_EXE_STATE_CHANGES : UPDATE_ON_MEMORY_MAP_CHANGES;
-        f->pending = protocol_send_command(c, SYMBOLS, "find", validate_find, f);
+        f->pending = protocol_send_command(c, SYMBOLS, "findByName", validate_find, f);
         if (frame != STACK_NO_FRAME) {
             json_write_string(&c->out, frame2id(ctx, frame));
         }
@@ -550,8 +555,83 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const cha
         snprintf(msg, sizeof(msg), "Symbol '%s' not found", name);
         exception(set_errno(set_error_report_errno(f->error), msg));
     }
-    else if (id2symbol(f->id, sym) < 0) {
+    else if (id2symbol(f->id_buf[0], sym) < 0) {
         exception(errno);
+    }
+    else {
+        find_next_buf = f->id_buf;
+        find_next_cnt = f->id_cnt;
+        find_next_pos = 1;
+    }
+    clear_trap(&trap);
+    return 0;
+}
+
+int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol ** sym) {
+    uint64_t ip = 0;
+    LINK * l = NULL;
+    SymbolsCache * syms = NULL;
+    FindSymCache * f = NULL;
+    unsigned h;
+    Trap trap;
+
+    if (!set_trap(&trap)) return -1;
+
+    if (frame == STACK_NO_FRAME) {
+        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
+        ip = addr;
+    }
+    else {
+        StackFrame * info = NULL;
+        if (frame == STACK_TOP_FRAME && (frame = get_top_frame(ctx)) < 0) exception(errno);;
+        if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
+        if (read_reg_value(info, get_PC_definition(ctx), &ip) < 0) exception(errno);
+    }
+
+    h = hash_find(ctx, NULL, ip);
+    syms = get_symbols_cache();
+    for (l = syms->link_find_by_addr[h].next; l != syms->link_find_by_addr + h; l = l->next) {
+        FindSymCache * c = syms2find(l);
+        if (c->ctx == ctx && c->ip == ip && c->addr == addr) {
+            f = c;
+            break;
+        }
+    }
+
+    if (f == NULL) {
+        Channel * c = get_channel(syms);
+        f = (FindSymCache *)loc_alloc_zero(sizeof(FindSymCache));
+        list_add_first(&f->link_syms, syms->link_find_by_addr + h);
+        context_lock(f->ctx = ctx);
+        f->ip = ip;
+        f->addr = addr;
+        f->update_policy = ip ? UPDATE_ON_EXE_STATE_CHANGES : UPDATE_ON_MEMORY_MAP_CHANGES;
+        f->pending = protocol_send_command(c, SYMBOLS, "findByAddr", validate_find, f);
+        if (frame != STACK_NO_FRAME) {
+            json_write_string(&c->out, frame2id(ctx, frame));
+        }
+        else {
+            json_write_string(&c->out, ctx->id);
+        }
+        write_stream(&c->out, 0);
+        json_write_uint64(&c->out, addr);
+        write_stream(&c->out, 0);
+        write_stream(&c->out, MARKER_EOM);
+        cache_wait(&f->cache);
+    }
+    else if (f->pending != NULL) {
+        cache_wait(&f->cache);
+    }
+    else if (f->error != NULL) {
+        exception(set_error_report_errno(f->error));
+    }
+    else if (id2symbol(f->id_buf[0], sym) < 0) {
+        exception(errno);
+    }
+    else {
+        find_next_buf = f->id_buf;
+        find_next_cnt = f->id_cnt;
+        find_next_pos = 1;
     }
     clear_trap(&trap);
     return 0;
@@ -629,55 +709,26 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress addr, Symbol *
         snprintf(msg, sizeof(msg), "Symbol '%s' not found", name);
         exception(set_errno(set_error_report_errno(f->error), msg));
     }
-    else if (id2symbol(f->id, sym) < 0) {
+    else if (id2symbol(f->id_buf[0], sym) < 0) {
         exception(errno);
+    }
+    else {
+        find_next_buf = f->id_buf;
+        find_next_cnt = f->id_cnt;
+        find_next_pos = 1;
     }
     clear_trap(&trap);
     return 0;
 }
 
-int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol ** sym) {
-    errno = ERR_UNSUPPORTED;
-    return -1;
-}
-
 int find_next_symbol(Symbol ** sym) {
-    /* TODO: find_next_symbol() for symbols proxy */
+    if (find_next_buf != NULL && find_next_pos < find_next_cnt) {
+        if (id2symbol(find_next_buf[find_next_pos], sym) < 0) return -1;
+        find_next_pos++;
+        return 0;
+    }
     errno = ERR_SYM_NOT_FOUND;
     return -1;
-}
-
-static void read_sym_list_item(InputStream * inp, void * args) {
-    ListSymCache * f = (ListSymCache *)args;
-    char * id = json_read_alloc_string(inp);
-    if (f->list_size >= f->list_max) {
-        f->list_max += 16;
-        f->list = (char **)loc_realloc(f->list, f->list_max * sizeof(char *));
-    }
-    f->list[f->list_size++] = id;
-}
-
-static void validate_list(Channel * c, void * args, int error) {
-    Trap trap;
-    ListSymCache * f = (ListSymCache *)args;
-    assert(f->pending != NULL);
-    assert(f->error == NULL);
-    if (set_trap(&trap)) {
-        f->pending = NULL;
-        if (!error) {
-            error = read_errno(&c->inp);
-            json_read_array(&c->inp, read_sym_list_item, f);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
-        }
-        clear_trap(&trap);
-    }
-    else {
-        error = trap.error;
-    }
-    f->error = get_error_report(error);
-    cache_notify(&f->cache);
-    if (f->disposed) free_list_sym_cache(f);
 }
 
 int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func, void * args) {
@@ -686,7 +737,7 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func,
     LINK * l;
     Trap trap;
     SymbolsCache * syms = NULL;
-    ListSymCache * f = NULL;
+    FindSymCache * f = NULL;
 
     if (!set_trap(&trap)) return -1;
 
@@ -703,7 +754,7 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func,
     h = hash_list(ctx, ip);
     syms = get_symbols_cache();
     for (l = syms->link_list[h].next; l != syms->link_list + h; l = l->next) {
-        ListSymCache * c = syms2list(l);
+        FindSymCache * c = syms2find(l);
         if (c->ctx == ctx && c->ip == ip) {
             f = c;
             break;
@@ -712,12 +763,12 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func,
 
     if (f == NULL) {
         Channel * c = get_channel(syms);
-        f = (ListSymCache *)loc_alloc_zero(sizeof(ListSymCache));
+        f = (FindSymCache *)loc_alloc_zero(sizeof(FindSymCache));
         list_add_first(&f->link_syms, syms->link_list + h);
         context_lock(f->ctx = ctx);
         f->ip = ip;
         f->update_policy = ip ? UPDATE_ON_EXE_STATE_CHANGES : UPDATE_ON_MEMORY_MAP_CHANGES;
-        f->pending = protocol_send_command(c, SYMBOLS, "list", validate_list, f);
+        f->pending = protocol_send_command(c, SYMBOLS, "list", validate_find, f);
         if (frame != STACK_NO_FRAME) {
             json_write_string(&c->out, frame2id(ctx, frame));
         }
@@ -735,10 +786,10 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func,
         exception(set_error_report_errno(f->error));
     }
     else {
-        unsigned i;
-        for (i = 0; i < f->list_size; i++) {
+        int i;
+        for (i = 0; i < f->id_cnt; i++) {
             Symbol * sym = NULL;
-            if (id2symbol(f->list[i], &sym) < 0) exception(errno);
+            if (id2symbol(f->id_buf[i], &sym) < 0) exception(errno);
             func(args, sym);
         }
     }
@@ -973,7 +1024,7 @@ static void validate_children(Channel * c, void * args, int error) {
         s->done_children = 1;
         if (!error) {
             error = read_errno(&c->inp);
-            s->children_ids = json_read_alloc_string_array(&c->inp, &s->children_count);
+            s->children_ids = read_symbol_list(&c->inp, &s->children_count);
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
         }
@@ -1148,7 +1199,7 @@ static void read_dwarf_location_params(InputStream * inp, const char * nm, void 
     else if (strcmp(nm, "ABI") == 0) cmd->args.loc.reg_id_scope.os_abi = (uint8_t)json_read_long(inp);
     else if (strcmp(nm, "RegIdType") == 0) cmd->args.loc.reg_id_scope.id_type = (uint8_t)json_read_long(inp);
     else if (strcmp(nm, "AddrSize") == 0) cmd->args.loc.addr_size = (size_t)json_read_long(inp);
-    else if (strcmp(nm, "BigEndian") == 0) cmd->args.loc.reg_id_scope.big_endian = cmd->args.loc.big_endian = (int)json_read_long(inp);
+    else if (strcmp(nm, "BigEndian") == 0) cmd->args.loc.reg_id_scope.big_endian = (uint8_t)(cmd->args.loc.big_endian = (int)json_read_long(inp));
 }
 
 static void read_location_command(InputStream * inp, void * args) {
@@ -1404,10 +1455,10 @@ static void flush_syms(Context * ctx, int mode) {
             }
             l = syms->link_list[i].next;
             while (l != syms->link_list + i) {
-                ListSymCache * c = syms2list(l);
+                FindSymCache * c = syms2find(l);
                 l = l->next;
                 if ((mode & (1 << c->update_policy)) && c->ctx == ctx) {
-                    free_list_sym_cache(c);
+                    free_find_sym_cache(c);
                 }
             }
             if (mode & (1 << UPDATE_ON_MEMORY_MAP_CHANGES)) {

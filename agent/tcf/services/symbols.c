@@ -325,6 +325,26 @@ static void command_get_children(char * token, Channel * c) {
     cache_enter(command_get_children_cache_client, c, &args, sizeof(args));
 }
 
+static void write_symbol_list(OutputStream * out) {
+    if (list_cnt == 0) {
+        write_stringz(out, "null");
+    }
+    else if (list_cnt == 1) {
+        json_write_string(out, symbol2id(list_buf[0]));
+        write_stream(out, 0);
+    }
+    else {
+        unsigned i = 0;
+        write_stream(out, '[');
+        for (i = 0; i < list_cnt; i++) {
+            if (i > 0) write_stream(out, ',');
+            json_write_string(out, symbol2id(list_buf[i]));
+        }
+        write_stream(out, ']');
+        write_stream(out, 0);
+    }
+}
+
 typedef struct CommandFindByNameArgs {
     char token[256];
     char id[256];
@@ -348,7 +368,7 @@ static void command_find_by_name_cache_client(void * x) {
     if (err == 0 && find_symbol_by_name(ctx, frame, args->ip, args->name, &sym) < 0) err = errno;
 
     list_cnt = 0;
-    if (err == 0 && args->find_first == 0) {
+    if (err == 0) {
         list_add(sym);
         while (find_next_symbol(&sym) == 0) list_add(sym);
         if (get_error_code(errno) != ERR_SYM_NOT_FOUND) err = errno;
@@ -359,25 +379,7 @@ static void command_find_by_name_cache_client(void * x) {
     write_stringz(&c->out, "R");
     write_stringz(&c->out, args->token);
     write_errno(&c->out, err);
-
-    if (err) {
-        write_stringz(&c->out, "null");
-    }
-    else if (args->find_first) {
-        json_write_string(&c->out, symbol2id(sym));
-        write_stream(&c->out, 0);
-    }
-    else {
-        unsigned i = 0;
-        write_stream(&c->out, '[');
-        for (i = 0; i < list_cnt; i++) {
-            if (i > 0) write_stream(&c->out, ',');
-            json_write_string(&c->out, symbol2id(list_buf[i]));
-        }
-        write_stream(&c->out, ']');
-        write_stream(&c->out, 0);
-    }
-
+    write_symbol_list(&c->out);
     write_stream(&c->out, MARKER_EOM);
     loc_free(args->name);
 }
@@ -430,20 +432,19 @@ static void command_find_by_addr_cache_client(void * x) {
 
     if (err == 0 && find_symbol_by_addr(ctx, frame, args->addr, &sym) < 0) err = errno;
 
+    list_cnt = 0;
+    if (err == 0) {
+        list_add(sym);
+        while (find_next_symbol(&sym) == 0) list_add(sym);
+        if (get_error_code(errno) != ERR_SYM_NOT_FOUND) err = errno;
+    }
+
     cache_exit();
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, args->token);
     write_errno(&c->out, err);
-
-    if (err == 0) {
-        json_write_string(&c->out, symbol2id(sym));
-        write_stream(&c->out, 0);
-    }
-    else {
-        write_stringz(&c->out, "null");
-    }
-
+    write_symbol_list(&c->out);
     write_stream(&c->out, MARKER_EOM);
 }
 
@@ -484,20 +485,19 @@ static void command_find_in_scope_cache_client(void * x) {
     if (err == 0 && args->scope_id[0] && id2symbol(args->scope_id, &scope) < 0) err = errno;
     if (err == 0 && find_symbol_in_scope(ctx, frame, args->ip, scope, args->name, &sym) < 0) err = errno;
 
+    list_cnt = 0;
+    if (err == 0) {
+        list_add(sym);
+        while (find_next_symbol(&sym) == 0) list_add(sym);
+        if (get_error_code(errno) != ERR_SYM_NOT_FOUND) err = errno;
+    }
+
     cache_exit();
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, args->token);
     write_errno(&c->out, err);
-
-    if (err == 0) {
-        json_write_string(&c->out, symbol2id(sym));
-        write_stream(&c->out, 0);
-    }
-    else {
-        write_stringz(&c->out, "null");
-    }
-
+    write_symbol_list(&c->out);
     write_stream(&c->out, MARKER_EOM);
     loc_free(args->name);
 }
