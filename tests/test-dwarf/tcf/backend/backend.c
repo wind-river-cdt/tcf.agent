@@ -37,6 +37,7 @@
 #include <tcf/services/dwarfframe.h>
 #include <tcf/services/dwarfcache.h>
 #include <tcf/services/stacktrace.h>
+#include <tcf/services/expressions.h>
 #include <tcf/services/dwarf.h>
 
 #include <tcf/backend/backend.h>
@@ -364,6 +365,7 @@ static void loc_var_func(void * args, Symbol * sym) {
     size_t value_size = 0;
     int value_big_endian = 0;
     char * name = NULL;
+    char * type_name = NULL;
     StackFrame * frame_info = NULL;
     LocationInfo * loc_info = NULL;
 
@@ -490,15 +492,17 @@ static void loc_var_func(void * args, Symbol * sym) {
     if (get_symbol_type(sym, &type) < 0) {
         error_sym("get_symbol_type", sym);
     }
+    if (type != NULL) {
+        if (get_symbol_name(type, &type_name) < 0) {
+            error_sym("get_symbol_name", type);
+        }
+        if (type_name != NULL) type_name = tmp_strdup(type_name);
+    }
     if (get_symbol_size(sym, &size) < 0) {
         int ok = 0;
         int err = errno;
         if (type != NULL) {
-            char * type_name;
             unsigned type_flags;
-            if (get_symbol_name(type, &type_name) < 0) {
-                error_sym("get_symbol_name", type);
-            }
             if (get_symbol_flags(type, &type_flags) < 0) {
                 error_sym("get_symbol_flags", type);
             }
@@ -517,6 +521,7 @@ static void loc_var_func(void * args, Symbol * sym) {
         int type_type_class = 0;
         Symbol * org_type = NULL;
         Symbol * container = NULL;
+        int container_class = 0;
         if (get_symbol_class(type, &type_sym_class) < 0) {
             error_sym("get_symbol_class", type);
         }
@@ -538,7 +543,6 @@ static void loc_var_func(void * args, Symbol * sym) {
             error_sym("get_symbol_flags", type);
         }
         if (flags & SYM_FLAG_TYPEDEF) {
-            char * type_name = NULL;
             if (get_symbol_object(type) == NULL) {
                 errno = ERR_OTHER;
                 error("Invalid DWARF object of typedef");
@@ -549,9 +553,6 @@ static void loc_var_func(void * args, Symbol * sym) {
             if (symcmp(type, org_type) == 0) {
                 errno = ERR_OTHER;
                 error("Invalid original type of typedef");
-            }
-            if (get_symbol_name(type, &type_name) < 0) {
-                error_sym("get_symbol_name", type);
             }
             if (type_name == NULL) {
                 errno = ERR_OTHER;
@@ -612,11 +613,14 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error("Invalid base type of typedef");
             }
         }
+        if (get_symbol_container(type, &container) < 0) {
+            error_sym("get_symbol_container", type);
+        }
+        if (get_symbol_class(container, &container_class) < 0) {
+            error_sym("get_symbol_class", type);
+        }
         if (type_class == TYPE_CLASS_MEMBER_PTR) {
-            if (get_symbol_container(type, &container) < 0) {
-                error_sym("get_symbol_container", type);
-            }
-            else if (org_type != NULL) {
+            if (org_type != NULL) {
                 Symbol * org_container = NULL;
                 if (get_symbol_container(org_type, &org_container) < 0) {
                     error_sym("get_symbol_container", org_type);
@@ -624,6 +628,42 @@ static void loc_var_func(void * args, Symbol * sym) {
                 if (symcmp(container, org_container) != 0) {
                     errno = ERR_OTHER;
                     error("Invalid container of typedef");
+                }
+            }
+        }
+        else {
+            Symbol * find_sym = NULL;
+            ContextAddress find_size = 0;
+            int find_class = 0;
+            uint64_t n = 0;
+            Value v;
+            if (container_class == SYM_CLASS_COMP_UNIT && type_name != NULL) {
+                if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, type_name, &find_sym) < 0) {
+                    error("find_symbol_by_name");
+                }
+                if (get_symbol_class(find_sym, &find_class) < 0) {
+                    error("get_symbol_class");
+                }
+                switch (find_class) {
+                case SYM_CLASS_REFERENCE:
+                case SYM_CLASS_TYPE:
+                    if (get_symbol_size(find_sym, &find_size) == 0) {
+                        char * expr = tmp_alloc(strlen(type_name) + 32);
+                        sprintf(expr, "sizeof($\"%s\")", type_name);
+                        if (get_symbol_object(find_sym)->mID == 0x4ca048)
+                            printf("");
+                        if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
+                            error("evaluate_expression");
+                        }
+                        if (value_to_unsigned(&v, &n) < 0) {
+                            error("value_to_unsigned");
+                        }
+                        if (n != find_size) {
+                            errno = ERR_OTHER;
+                            error("invalid result of evaluate_expression");
+                        }
+                    }
+                    break;
                 }
             }
         }
@@ -693,6 +733,11 @@ static void loc_var_func(void * args, Symbol * sym) {
             if (get_symbol_children(type, &children, &count) < 0) {
                 error_sym("get_symbol_children", type);
             }
+            if (children != NULL) {
+                Symbol ** buf = tmp_alloc(sizeof(Symbol *) * count);
+                memcpy(buf, children, sizeof(Symbol *) * count);
+                children = buf;
+            }
             for (i = 0; i < count; i++) {
                 int member_class = 0;
                 ContextAddress offs = 0;
@@ -715,6 +760,22 @@ static void loc_var_func(void * args, Symbol * sym) {
                                 error("get_symbol_offset");
                             }
 #endif
+                        }
+                        else {
+                            Value v;
+                            uint64_t n = 0;
+                            char * expr = tmp_alloc(512);
+                            sprintf(expr, "&(((${%s} *)0)->${%s})", tmp_strdup(symbol2id(type)), tmp_strdup(symbol2id(children[i])));
+                            if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
+                                error("evaluate_expression");
+                            }
+                            if (value_to_unsigned(&v, &n) < 0) {
+                                error("value_to_unsigned");
+                            }
+                            if (n != offs) {
+                                errno = ERR_OTHER;
+                                error("invalid result of evaluate_expression");
+                            }
                         }
                     }
                 }
@@ -816,6 +877,7 @@ static void next_pc(void) {
                     }
                 }
                 else {
+                    ContextAddress addr = 0;
                     if (get_symbol_name(sym, &name) < 0) {
                         error_sym("get_symbol_name", sym);
                     }
@@ -826,6 +888,23 @@ static void next_pc(void) {
                     if (strcmp(name_buf, name) != 0) {
                         errno = ERR_OTHER;
                         error_sym("strcmp(name_buf, name)", sym);
+                    }
+                    if (get_symbol_address(sym, &addr) == 0) {
+                        Value v;
+                        SYM_FLAGS flags = 0;
+                        char * expr = (char *)tmp_alloc(strlen(name_buf) + 16);
+                        if (get_symbol_flags(sym, &flags) < 0) {
+                            error_sym("get_symbol_flags", sym);
+                        }
+                        sprintf(expr, "$\"%s\"", name_buf);
+                        if (evaluate_expression(elf_ctx, STACK_TOP_FRAME, 0, expr, 0, &v) < 0) {
+                            error_sym("evaluate_expression", sym);
+                        }
+                        if (flags & SYM_FLAG_EXTERNAL) {
+                            if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, name_buf, &sym) < 0) {
+                                error("find_symbol_by_name");
+                            }
+                        }
                     }
                 }
             }

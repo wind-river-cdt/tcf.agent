@@ -468,7 +468,54 @@ static void add_to_find_symbol_buf(ObjectInfo * obj) {
     object2symbol(obj, find_symbol_buf +find_symbol_cnt++);
 }
 
-static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, const char * name, Symbol ** sym);
+static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symbol ** sym) {
+    PubNamesTable * tbl = &cache->mPubNames;
+    if (tbl->mHash != NULL) {
+        ObjectInfo * decl = NULL;
+        ObjectInfo * type = NULL;
+        ObjectInfo * other = NULL;
+        unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
+        while (n != 0) {
+            ObjectInfo * obj = tbl->mNext[n].mObject;
+            if (strcmp(obj->mName, name) == 0) {
+                if (obj->mFlags & DOIF_external) {
+                    object2symbol(obj, sym);
+                    return 1;
+                }
+                else if (obj->mFlags & DOIF_declaration) {
+                    decl = obj;
+                }
+                else {
+                    switch (obj->mTag) {
+                    case TAG_class_type:
+                    case TAG_structure_type:
+                    case TAG_union_type:
+                    case TAG_enumeration_type:
+                        type = obj;
+                        break;
+                    default:
+                        other = obj;
+                        break;
+                    }
+                }
+            }
+            n = tbl->mNext[n].mNext;
+        }
+        if (other != NULL) {
+            object2symbol(other, sym);
+            return 1;
+        }
+        if (type != NULL) {
+            object2symbol(type, sym);
+            return 1;
+        }
+        if (decl != NULL) {
+            object2symbol(decl, sym);
+            return 1;
+        }
+    }
+    return 0;
+}
 
 /* If 'decl' represents a declaration, replace it with definition - if possible */
 static ObjectInfo * find_definition(ObjectInfo * decl) {
@@ -486,12 +533,7 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
         int found = 0;
         Symbol * sym = NULL;
         DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
-        if (cache->mPubNames.mHash != NULL) {
-            found = find_by_name_in_pub_names(cache, &cache->mPubNames, decl->mName, &sym);
-            if (!found && cache->mPubTypes.mHash != NULL) {
-                found = find_by_name_in_pub_names(cache, &cache->mPubTypes, decl->mName, &sym);
-            }
-        }
+        found = find_by_name_in_pub_names(cache, decl->mName, &sym);
         if (found && sym->obj != NULL &&
             sym->obj->mTag == decl->mTag &&
             (sym->obj->mFlags & DOIF_declaration) == 0) return sym->obj;
@@ -639,31 +681,6 @@ static int find_in_dwarf(const char * name, Symbol ** sym) {
     if (find_symbol_cnt == 0) return 0;
     *sym = find_symbol_buf[find_symbol_pos++];
     return 1;
-}
-
-static int find_by_name_in_pub_names(DWARFCache * cache, PubNamesTable * tbl, const char * name, Symbol ** sym) {
-    ObjectInfo * decl = NULL;
-    unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
-    while (n != 0) {
-        ObjectInfo * obj = tbl->mNext[n].mObject;
-        if (obj == NULL || obj->mName == NULL)
-            str_exception(ERR_INV_DWARF, "Invalid .debug_pubnames section");
-        if (strcmp(obj->mName, name) == 0) {
-            if (obj->mFlags & DOIF_declaration) {
-                decl = obj;
-            }
-            else {
-                object2symbol(obj, sym);
-                return 1;
-            }
-        }
-        n = tbl->mNext[n].mNext;
-    }
-    if (decl != NULL) {
-        object2symbol(decl, sym);
-        return 1;
-    }
-    return 0;
 }
 
 static void create_symbol_names_hash(ELF_Section * tbl) {
@@ -814,15 +831,8 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                 curr_file = file;
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
-                    if (cache->mPubNames.mHash != NULL) {
-                        found = find_by_name_in_pub_names(cache, &cache->mPubNames, name, res);
-                        if (!found && cache->mPubTypes.mHash != NULL) {
-                            found = find_by_name_in_pub_names(cache, &cache->mPubTypes, name, res);
-                        }
-                    }
-                    if (!found) {
-                        found = find_by_name_in_sym_table(cache, name, res);
-                    }
+                    found = find_by_name_in_pub_names(cache, name, res);
+                    if (!found) found = find_by_name_in_sym_table(cache, name, res);
                     clear_trap(&trap);
                 }
                 else {
@@ -902,15 +912,8 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                 Trap trap;
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
-                    if (cache->mPubNames.mHash != NULL) {
-                        found = find_by_name_in_pub_names(cache, &cache->mPubNames, name, res);
-                    }
-                    if (!found && cache->mPubTypes.mHash != NULL) {
-                        found = find_by_name_in_pub_names(cache, &cache->mPubTypes, name, res);
-                    }
-                    if (!found) {
-                        found = find_by_name_in_sym_table(cache, name, res);
-                    }
+                    found = find_by_name_in_pub_names(cache, name, res);
+                    if (!found) found = find_by_name_in_sym_table(cache, name, res);
                     clear_trap(&trap);
                 }
                 else {

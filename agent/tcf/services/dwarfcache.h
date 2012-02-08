@@ -79,6 +79,7 @@ struct FileInfo {
 #define DOIF_aranges            0x0800
 #define DOIF_find_mark          0x1000
 #define DOIF_load_mark          0x2000
+#define DOIF_pub_mark           0x4000
 
 struct ObjectInfo {
 
@@ -240,7 +241,6 @@ struct DWARFCache {
     unsigned mAddrRangesCnt;
     unsigned mAddrRangesMax;
     PubNamesTable mPubNames;
-    PubNamesTable mPubTypes;
     FrameInfoRange * mFrameInfoRanges;
     unsigned mFrameInfoRangesCnt;
     unsigned mFrameInfoRangesMax;

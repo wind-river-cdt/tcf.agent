@@ -67,11 +67,11 @@ extern int evaluate_expression(Context * ctx, int frame, ContextAddress addr, ch
  * Cast a Value to another type ("boolean" means 0 or 1).
  * Returns 0 if no errors, otherwise returns -1 and sets errno.
  */
-int value_to_boolean(Value *v, int *res);
-int value_to_address(Value *v, ContextAddress *res);
-int value_to_signed(Value *v, int64_t *res);
-int value_to_unsigned(Value *v, uint64_t *res);
-int value_to_double(Value *v, double *res);
+int value_to_boolean(Value * v, int * res);
+int value_to_address(Value * v, ContextAddress * res);
+int value_to_signed(Value * v, int64_t * res);
+int value_to_unsigned(Value * v, uint64_t * res);
+int value_to_double(Value * v, double * res);
 
 /*
  * Allocate and fill local data buffer for a value.

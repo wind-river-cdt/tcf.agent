@@ -245,6 +245,7 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
             stk_pos++;
             break;
         case SFT_CMD_FP:
+            if (frame == NULL) str_exception(ERR_INV_CONTEXT, "Invalid stack frame");
             stk[stk_pos++] = frame->fp;
             break;
         case SFT_CMD_DEREF:

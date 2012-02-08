@@ -820,21 +820,31 @@ static int type_name(int mode, Symbol ** type) {
             is_class = 1;
             next_sy();
         }
-    }
-
-    if (text_sy != SY_NAME) return 0;
-    name[0] = 0;
-    do {
-        if (strlen((const char *)(text_val.value)) + strlen(name) >= sizeof(name) - 1) {
-            error(ERR_BUFFER_OVERFLOW, "Type name is too long");
+        name[0] = 0;
+        do {
+            if (strlen((const char *)(text_val.value)) + strlen(name) >= sizeof(name) - 1) {
+                error(ERR_BUFFER_OVERFLOW, "Type name is too long");
+            }
+            if (name[0]) strcat(name, " ");
+            strcat(name, (const char *)(text_val.value));
+            name_cnt++;
+            next_sy();
         }
-        if (name[0]) strcat(name, " ");
-        strcat(name, (const char *)(text_val.value));
-        name_cnt++;
+        while (text_sy == SY_NAME);
+        sym_class = identifier(mode, NULL, name, &v);
+    }
+    else if (text_sy == SY_ID) {
+        Symbol * sym = NULL;
+        const char * id = (const char *)text_val.value;
+        if (id2symbol(id, &sym) < 0) return 0;
+        sym_class = sym2value(mode, sym, &v);
+        strlcpy(name, id, sizeof(name));
         next_sy();
     }
-    while (text_sy == SY_NAME);
-    sym_class = identifier(mode, NULL, name, &v);
+    else {
+        return 0;
+    }
+
     if (sym_class < 0) return 0;
     if (text_sy == SY_SCOPE) {
         Value scope = v;
@@ -1183,7 +1193,7 @@ static void evaluate_symbol_address(Symbol * sym, ContextAddress obj_addr, Conte
     if (get_location_info(sym, &loc_info) < 0) {
         error(errno, "Cannot get symbol location expression");
     }
-    if (get_frame_info(expression_context, expression_frame, &stk_info) < 0) {
+    if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &stk_info) < 0) {
         error(errno, "Cannot get stack frame info");
     }
     state = evaluate_location_expression(expression_context, stk_info, loc_info->cmds, loc_info->cmds_cnt, args, 2);
@@ -1210,7 +1220,8 @@ static void find_field(Symbol * class_sym, ContextAddress obj_addr, const char *
             if (inheritance == NULL) inheritance = (Symbol **)tmp_alloc(sizeof(Symbol *) * count);
             inheritance[h++] = children[i];
         }
-        else if (name != NULL ? strcmp(s, name) == 0 : strcmp(symbol2id(children[i]), id) == 0) {
+        if ((name != NULL && s != NULL && strcmp(s, name) == 0) ||
+                (id != NULL && strcmp(symbol2id(children[i]), id) == 0)) {
             evaluate_symbol_address(children[i], obj_addr, 0, field_addr);
             *field_sym = children[i];
             return;

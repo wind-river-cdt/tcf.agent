@@ -838,11 +838,8 @@ static void load_addr_ranges(void) {
     }
 }
 
-static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, PubNamesTable * tbl) {
-    tbl->mHashSize = tbl->mMax = (unsigned)(pub_names->size / 16) + 16;
-    tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * tbl->mHashSize);
-    tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
-    memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
+static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names) {
+    PubNamesTable * tbl = &sCache->mPubNames;
     dio_EnterSection(NULL, pub_names, 0);
     while (dio_GetPos() < pub_names->size) {
         int dwarf64 = 0;
@@ -874,10 +871,14 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, Pu
                 }
                 info = tbl->mNext + tbl->mCnt;
                 info->mObject = find_loaded_object(sCache, (ContextAddress)(debug_info->addr + unit_offs + obj_offs));
-                if (info->mObject != NULL) {
-                    unsigned h = calc_symbol_name_hash(name) % tbl->mHashSize;
+                if (info->mObject != NULL &&
+                        info->mObject->mName != NULL &&
+                        (info->mObject->mFlags & DOIF_pub_mark) == 0 &&
+                        strcmp(info->mObject->mName, name) == 0) {
+                    unsigned h = calc_symbol_name_hash(info->mObject->mName) % tbl->mHashSize;
                     info->mNext = tbl->mHash[h];
                     tbl->mHash[h] = tbl->mCnt++;
+                    info->mObject->mFlags |= DOIF_pub_mark;
                 }
             }
         }
@@ -887,18 +888,15 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names, Pu
     dio_ExitSection();
 }
 
-static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
+static void create_pub_names(ELF_Section * debug_info) {
     ObjectInfo * unit = sCache->mCompUnits;
-    tbl->mHashSize = tbl->mMax = (unsigned)(debug_info->size / 256) + 16;
-    tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * tbl->mHashSize);
-    tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
-    memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
+    PubNamesTable * tbl = &sCache->mPubNames;
     while (unit != NULL) {
         ObjectInfo * obj = get_dwarf_children(unit);
         while (obj != NULL) {
-            if ((obj->mFlags & DOIF_external) && obj->mDefinition == NULL && obj->mName != NULL) {
-                unsigned h = calc_symbol_name_hash(obj->mName) % tbl->mHashSize;
+            if ((obj->mFlags & DOIF_pub_mark) == 0 && obj->mDefinition == NULL && obj->mName != NULL) {
                 PubNamesInfo * info = NULL;
+                unsigned h = calc_symbol_name_hash(obj->mName) % tbl->mHashSize;
                 if (tbl->mCnt >= tbl->mMax) {
                     tbl->mMax = tbl->mMax * 3 / 2;
                     tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
@@ -907,6 +905,7 @@ static void create_pub_names(ELF_Section * debug_info, PubNamesTable * tbl) {
                 info->mObject = obj;
                 info->mNext = tbl->mHash[h];
                 tbl->mHash[h] = tbl->mCnt++;
+                obj->mFlags |= DOIF_pub_mark;
             }
             obj = obj->mSibling;
         }
@@ -1013,9 +1012,14 @@ static void load_debug_sections(void) {
     }
 
     if (debug_info) {
-        if (pub_names) load_pub_names(debug_info, pub_names, &sCache->mPubNames);
-        else create_pub_names(debug_info, &sCache->mPubNames);
-        if (pub_types) load_pub_names(debug_info, pub_types, &sCache->mPubTypes);
+        PubNamesTable * tbl = &sCache->mPubNames;
+        tbl->mHashSize = tbl->mMax = (unsigned)(debug_info->size / 256) + 16;
+        tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * tbl->mHashSize);
+        tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
+        memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
+        if (pub_names) load_pub_names(debug_info, pub_names);
+        if (pub_types) load_pub_names(debug_info, pub_types);
+        create_pub_names(debug_info);
     }
 
     if (trap.error) exception(trap.error);
@@ -1421,8 +1425,6 @@ static void free_dwarf_cache(ELF_File * file) {
         loc_free(Cache->mFrameInfoRanges);
         loc_free(Cache->mPubNames.mHash);
         loc_free(Cache->mPubNames.mNext);
-        loc_free(Cache->mPubTypes.mHash);
-        loc_free(Cache->mPubTypes.mNext);
         loc_free(Cache->mFileInfoHash);
         loc_free(Cache);
         file->dwarf_dt_cache = NULL;
