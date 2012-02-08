@@ -833,6 +833,7 @@ static int type_name(int mode, Symbol ** type) {
         while (text_sy == SY_NAME);
         sym_class = identifier(mode, NULL, name, &v);
     }
+#if ENABLE_Symbols
     else if (text_sy == SY_ID) {
         Symbol * sym = NULL;
         const char * id = (const char *)text_val.value;
@@ -841,6 +842,7 @@ static int type_name(int mode, Symbol ** type) {
         strlcpy(name, id, sizeof(name));
         next_sy();
     }
+#endif
     else {
         return 0;
     }
