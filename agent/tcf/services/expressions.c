@@ -1185,22 +1185,27 @@ static void op_deref(int mode, Value * v) {
 
 #if ENABLE_Symbols
 static void evaluate_symbol_address(Symbol * sym, ContextAddress obj_addr, ContextAddress index, ContextAddress * addr) {
-    LocationExpressionState * state = NULL;
-    LocationInfo * loc_info = NULL;
-    StackFrame * stk_info = NULL;
-    uint64_t args[2];
-
-    args[0] = obj_addr;
-    args[1] = index;
-    if (get_location_info(sym, &loc_info) < 0) {
-        error(errno, "Cannot get symbol location expression");
+    ContextAddress offs = 0;
+    if (get_symbol_offset(sym, &offs) == 0) {
+        *addr = obj_addr + offs;
     }
-    if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &stk_info) < 0) {
-        error(errno, "Cannot get stack frame info");
+    else {
+        LocationExpressionState * state = NULL;
+        LocationInfo * loc_info = NULL;
+        StackFrame * stk_info = NULL;
+        uint64_t args[2];
+        args[0] = obj_addr;
+        args[1] = index;
+        if (get_location_info(sym, &loc_info) < 0) {
+            error(errno, "Cannot get symbol location expression");
+        }
+        if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &stk_info) < 0) {
+            error(errno, "Cannot get stack frame info");
+        }
+        state = evaluate_location_expression(expression_context, stk_info, loc_info->cmds, loc_info->cmds_cnt, args, 2);
+        if (state->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
+        *addr = (ContextAddress)state->stk[0];
     }
-    state = evaluate_location_expression(expression_context, stk_info, loc_info->cmds, loc_info->cmds_cnt, args, 2);
-    if (state->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
-    *addr = (ContextAddress)state->stk[0];
 }
 
 static void find_field(Symbol * class_sym, ContextAddress obj_addr, const char * name, const char * id, Symbol ** field_sym, ContextAddress * field_addr) {
