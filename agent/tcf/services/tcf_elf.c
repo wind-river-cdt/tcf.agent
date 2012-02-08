@@ -69,11 +69,16 @@ static ino_t elf_ino_cnt = 0;
 
 #if ENABLE_DebugContext
 
-static Context *    elf_list_ctx;
-static unsigned     elf_list_pos;
-static MemoryMap    elf_list;
+typedef struct ElfListState {
+    Context * ctx;
+    unsigned pos;
+    MemoryMap map;
+    struct ElfListState * next;
+} ElfListState;
 
-static MemoryMap    elf_map;
+static ElfListState * elf_list_state = NULL;
+
+static MemoryMap elf_map;
 
 #endif
 
@@ -117,6 +122,11 @@ static void elf_dispose(ELF_File * file) {
     loc_free(file->debug_info_file_name);
     loc_free(file->name);
     loc_free(file);
+}
+
+static void free_elf_list_state(ElfListState * state) {
+    loc_free(state->map.regions);
+    loc_free(state);
 }
 
 static void elf_cleanup_event(void * arg) {
@@ -163,6 +173,12 @@ static void elf_cleanup_event(void * arg) {
             loc_free(n->name);
             loc_free(n);
         }
+    }
+
+    while (elf_list_state != NULL) {
+        ElfListState * state = elf_list_state;
+        elf_list_state = state->next;
+        free_elf_list_state(state);
     }
 }
 
@@ -905,10 +921,12 @@ ELF_File * elf_open_inode(Context * ctx, dev_t dev, ino_t ino, int64_t mtime) {
 }
 
 ELF_File * elf_list_first(Context * ctx, ContextAddress addr_min, ContextAddress addr_max) {
-    elf_list_ctx = ctx;
-    elf_list_pos = 0;
-    if (get_map(ctx, addr_min, addr_max, &elf_list) < 0) return NULL;
-    if (elf_list.region_cnt > 0) {
+    ElfListState * state = (ElfListState *)loc_alloc_zero(sizeof(ElfListState));
+    state->next = elf_list_state;
+    elf_list_state = state;
+    state->ctx = ctx;
+    if (get_map(ctx, addr_min, addr_max, &state->map) < 0) return NULL;
+    if (state->map.region_cnt > 0) {
         ELF_File * f = files;
         while (f != NULL) {
             f->listed = 0;
@@ -921,11 +939,13 @@ ELF_File * elf_list_first(Context * ctx, ContextAddress addr_min, ContextAddress
 }
 
 ELF_File * elf_list_next(Context * ctx) {
-    assert(ctx == elf_list_ctx);
-    assert(elf_list.region_cnt > 0);
-    while (elf_list_pos < elf_list.region_cnt) {
+    ElfListState * state = elf_list_state;
+    assert(state != NULL);
+    assert(state->ctx == ctx);
+    assert(state->map.region_cnt > 0);
+    while (state->pos < state->map.region_cnt) {
         int error = 0;
-        MemoryRegion * r = elf_list.regions + elf_list_pos++;
+        MemoryRegion * r = state->map.regions + state->pos++;
         ELF_File * file = elf_open_memory_region_file(r, &error);
         if (file != NULL) {
             if (file->listed) continue;
@@ -942,10 +962,11 @@ ELF_File * elf_list_next(Context * ctx) {
 }
 
 void elf_list_done(Context * ctx) {
-    assert(ctx == elf_list_ctx);
-    elf_list_ctx = NULL;
-    elf_list_pos = 0;
-    elf_list.region_cnt = 0;
+    ElfListState * state = elf_list_state;
+    assert(state != NULL);
+    assert(state->ctx == ctx);
+    elf_list_state = state->next;
+    free_elf_list_state(state);
 }
 
 UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, ContextAddress addr_max, ContextAddress * range_rt_addr) {
