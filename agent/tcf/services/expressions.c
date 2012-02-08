@@ -1246,7 +1246,6 @@ static void find_field(Symbol * class_sym, ContextAddress obj_addr, const char *
 static void op_field(int mode, Value * v) {
     char * id = NULL;
     char * name = NULL;
-    if (!v->remote) error(ERR_INV_EXPRESSION, "L-value expected");
     if (text_sy == SY_ID) id = (char *)text_val.value;
     else if (text_sy == SY_NAME) name = (char *)text_val.value;
     else error(ERR_INV_EXPRESSION, "Field name expected");
@@ -1258,6 +1257,7 @@ static void op_field(int mode, Value * v) {
         int sym_class = 0;
         ContextAddress addr = 0;
 
+        if (!v->remote) error(ERR_INV_EXPRESSION, "L-value expected");
         find_field(v->type, v->address, name, id, &sym, &addr);
         if (sym == NULL) {
             error(ERR_SYM_NOT_FOUND, "Invalid field name or ID");
