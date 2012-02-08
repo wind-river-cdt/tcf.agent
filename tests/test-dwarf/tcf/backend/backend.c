@@ -345,6 +345,10 @@ static int symcmp(Symbol * x, Symbol * y) {
     return strcmp(id, symbol2id(y));
 }
 
+static int errcmp(int err, const char * msg) {
+    return strncmp(errno_to_str(err), msg, strlen(msg));
+}
+
 static void test(void * args);
 
 static void loc_var_func(void * args, Symbol * sym) {
@@ -455,11 +459,11 @@ static void loc_var_func(void * args, Symbol * sym) {
         if ((get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
             (get_symbol_value(sym, &value, &value_size, &value_big_endian) < 0 || value == NULL)) {
             int err = errno;
-            if (strncmp(errno_to_str(err), "Object location or value info not available", 43) == 0) return;
-            if (strncmp(errno_to_str(err), "No object location info found", 29) == 0) return;
-            if (strncmp(errno_to_str(err), "Object is not available", 23) == 0) return;
-            if (strncmp(errno_to_str(err), "Division by zero in location", 28) == 0) return;
-            if (strncmp(errno_to_str(err), "Cannot find loader debug", 24) == 0) return;
+            if (errcmp(err, "No object location or value info found") == 0) return;
+            if (errcmp(err, "No object location info found") == 0) return;
+            if (errcmp(err, "Object is not available at this location") == 0) return;
+            if (errcmp(err, "Division by zero in location") == 0) return;
+            if (errcmp(err, "Cannot find loader debug") == 0) return;
             errno = err;
             error_sym("get_symbol_value", sym);
         }

@@ -168,7 +168,7 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
             ELF_File * file = info->sym_section->file;
             ELF_Section * sec = NULL;
             if (info->section_index == SHN_UNDEF) {
-                errno = ERR_INV_ADDRESS;
+                set_errno(ERR_OTHER, "Cannot get address of ELF symbol: the symbol is undefined");
                 return -1;
             }
             if (info->section_index == SHN_ABS) {
@@ -176,7 +176,7 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
                 return 0;
             }
             if (info->section_index == SHN_COMMON) {
-                errno = ERR_INV_ADDRESS;
+                set_errno(ERR_OTHER, "Cannot get address of ELF symbol: the symbol is a common block");
                 return -1;
             }
             if (file->type == ET_REL && info->section != NULL) {
@@ -187,7 +187,7 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
             return errno ? -1 : 0;
         }
     }
-    errno = ERR_INV_ADDRESS;
+    set_errno(ERR_OTHER, "Cannot get address of ELF symbol: wrong symbol type");
     return -1;
 }
 
@@ -2358,6 +2358,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
     if (obj != NULL) {
         Trap trap;
         PropertyValue v;
+        Symbol * s = NULL;
         if (set_trap(&trap)) {
             read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_const_value, &v);
             read_object_value(&v, value, size, big_endian);
@@ -2376,7 +2377,8 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         else if (trap.error != ERR_SYM_NOT_FOUND) {
             return -1;
         }
-        set_errno(ERR_OTHER, "Object location or value info not available");
+        if (map_to_sym_table(obj, &s)) return get_symbol_value(s, value, size, big_endian);
+        set_errno(ERR_OTHER, "No object location or value info found in DWARF data");
         return -1;
     }
     if (sym->tbl != NULL) {
@@ -2558,6 +2560,8 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
             }
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) return -1;
             if (map_to_sym_table(obj, &s)) return get_location_info(s, info);
+            set_errno(ERR_OTHER, "No object location info found in DWARF data");
+            return -1;
         }
     }
 
@@ -2570,7 +2574,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
         return 0;
     }
 
-    set_errno(ERR_OTHER, "No object location info found in DWARF data");
+    set_errno(ERR_OTHER, "Symbol does not have a memory address");
     return -1;
 }
 
