@@ -62,6 +62,7 @@ static void add_char(char ch) {
     str_buf[str_pos++] = ch;
 }
 
+/* TODO: parse_context_query() should check for syntax errors and set errno */
 void parse_context_query(const char * q) {
     str_pos = 0;
     str_buf = NULL;
@@ -156,12 +157,7 @@ static int match(Context * ctx, Attribute * attr) {
             if (!match_attribute(ctx, attr->name, attr->value)) return 0;
         }
         else if (strcmp(attr->value, "*") != 0) {
-            if (ctx->name != NULL) {
-                if (strcmp(ctx->name, attr->value) != 0) return 0;
-            }
-            else {
-                if (strcmp(ctx->id, attr->value) != 0) return 0;
-            }
+            if (!match_attribute(ctx, "Name", attr->value)) return 0;
         }
         attr = attr->next;
     }
@@ -211,7 +207,8 @@ static int cmp_id(Context * ctx, const char * v) {
 }
 
 static int cmp_name(Context * ctx, const char * v) {
-    return ctx->name != NULL && strcmp(ctx->name, v) == 0;
+    if (ctx->name != NULL) return strcmp(ctx->name, v) == 0;
+    return strcmp(ctx->id, v) == 0;
 }
 
 void ini_context_query_service(Protocol * proto) {
