@@ -648,10 +648,8 @@ static void loc_var_func(void * args, Symbol * sym) {
                 case SYM_CLASS_REFERENCE:
                 case SYM_CLASS_TYPE:
                     if (get_symbol_size(find_sym, &find_size) == 0) {
-                        char * expr = tmp_alloc(strlen(type_name) + 32);
+                        char * expr = (char *)tmp_alloc(strlen(type_name) + 32);
                         sprintf(expr, "sizeof($\"%s\")", type_name);
-                        if (get_symbol_object(find_sym)->mID == 0x4ca048)
-                            printf("");
                         if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
                             error("evaluate_expression");
                         }
@@ -734,7 +732,7 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error_sym("get_symbol_children", type);
             }
             if (children != NULL) {
-                Symbol ** buf = tmp_alloc(sizeof(Symbol *) * count);
+                Symbol ** buf = (Symbol **)tmp_alloc(sizeof(Symbol *) * count);
                 memcpy(buf, children, sizeof(Symbol *) * count);
                 children = buf;
             }
@@ -764,7 +762,7 @@ static void loc_var_func(void * args, Symbol * sym) {
                         else {
                             Value v;
                             uint64_t n = 0;
-                            char * expr = tmp_alloc(512);
+                            char * expr = (char *)tmp_alloc(512);
                             sprintf(expr, "&(((${%s} *)0)->${%s})", tmp_strdup(symbol2id(type)), tmp_strdup(symbol2id(children[i])));
                             if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
                                 error("evaluate_expression");
