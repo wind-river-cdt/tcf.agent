@@ -347,7 +347,6 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
             state->code_len = cmd->args.loc.code_size;
             state->code_pos = 0;
             state->addr_size = cmd->args.loc.addr_size;
-            state->big_endian = cmd->args.loc.big_endian;
             state->client_op = NULL;
             if (cmd->args.loc.func(state) < 0) exception(errno);
             stk_max = state->stk_max;

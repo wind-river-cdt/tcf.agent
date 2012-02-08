@@ -661,9 +661,21 @@ static void write_commands(OutputStream * out, Context * ctx, StackFrameRegister
                 write_stream(out, ':');
                 json_write_long(out, cmd->args.loc.reg_id_scope.machine);
                 write_stream(out, ',');
-                json_write_string(out, "ABI");
+                if (cmd->args.loc.reg_id_scope.os_abi) {
+                    json_write_string(out, "ABI");
+                    write_stream(out, ':');
+                    json_write_long(out, cmd->args.loc.reg_id_scope.os_abi);
+                    write_stream(out, ',');
+                }
+                if (cmd->args.loc.reg_id_scope.fp_abi) {
+                    json_write_string(out, "FPABI");
+                    write_stream(out, ':');
+                    json_write_long(out, cmd->args.loc.reg_id_scope.fp_abi);
+                    write_stream(out, ',');
+                }
+                json_write_string(out, "ELF64");
                 write_stream(out, ':');
-                json_write_long(out, cmd->args.loc.reg_id_scope.os_abi);
+                json_write_boolean(out, cmd->args.loc.reg_id_scope.elf64);
                 write_stream(out, ',');
                 json_write_string(out, "RegIdType");
                 write_stream(out, ':');
@@ -675,7 +687,7 @@ static void write_commands(OutputStream * out, Context * ctx, StackFrameRegister
                 write_stream(out, ',');
                 json_write_string(out, "BigEndian");
                 write_stream(out, ':');
-                json_write_boolean(out, cmd->args.loc.big_endian);
+                json_write_boolean(out, cmd->args.loc.reg_id_scope.big_endian);
                 write_stream(out, '}');
                 break;
             }

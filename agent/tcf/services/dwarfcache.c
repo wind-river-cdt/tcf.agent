@@ -451,6 +451,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
                 Unit->mRegIdScope.big_endian = sCache->mFile->big_endian;
                 Unit->mRegIdScope.machine = sCache->mFile->machine;
                 Unit->mRegIdScope.os_abi = sCache->mFile->os_abi;
+                Unit->mRegIdScope.elf64 = sCache->mFile->elf64;
                 Unit->mRegIdScope.id_type = REGNUM_DWARF;
                 Info = Unit->mObject;
                 assert(Info->mTag == 0);

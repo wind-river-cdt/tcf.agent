@@ -2467,7 +2467,6 @@ static LocationExpressionCommand * add_dwarf_location_command(PropertyValue * v)
     cmd->args.loc.code_size = info.expr_size;
     cmd->args.loc.reg_id_scope = v->mObject->mCompUnit->mRegIdScope;
     cmd->args.loc.addr_size = v->mObject->mCompUnit->mDesc.mAddressSize;
-    cmd->args.loc.big_endian = v->mBigEndian;
     cmd->args.loc.func = dwarf_location_callback;
     return cmd;
 }

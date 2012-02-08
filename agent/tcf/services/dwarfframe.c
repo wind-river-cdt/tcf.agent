@@ -724,6 +724,7 @@ static void generate_plt_section_commands(Context * ctx, ELF_File * file, U8_T o
     rules.reg_id_scope.big_endian = file->big_endian;
     rules.reg_id_scope.machine = file->machine;
     rules.reg_id_scope.os_abi = file->os_abi;
+    rules.reg_id_scope.elf64 = file->elf64;
     rules.reg_id_scope.id_type = REGNUM_DWARF;
     rules.address_size = file->elf64 ? 8 : 4;
 
@@ -992,6 +993,7 @@ static void read_frame_info_section(Context * ctx, ELF_File * file, U8_T IP, DWA
     rules.reg_id_scope.big_endian = file->big_endian;
     rules.reg_id_scope.machine = file->machine;
     rules.reg_id_scope.os_abi = file->os_abi;
+    rules.reg_id_scope.elf64 = file->elf64;
     rules.reg_id_scope.id_type = rules.eh_frame ? REGNUM_EH_FRAME : REGNUM_DWARF;
     rules.cie_pos = ~(U8_T)0;
 

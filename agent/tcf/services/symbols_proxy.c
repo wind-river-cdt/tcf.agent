@@ -1197,9 +1197,11 @@ static void read_dwarf_location_params(InputStream * inp, const char * nm, void 
     LocationExpressionCommand * cmd = (LocationExpressionCommand *)arg;
     if (strcmp(nm, "Machine") == 0) cmd->args.loc.reg_id_scope.machine = (uint16_t)json_read_long(inp);
     else if (strcmp(nm, "ABI") == 0) cmd->args.loc.reg_id_scope.os_abi = (uint8_t)json_read_long(inp);
+    else if (strcmp(nm, "FPABI") == 0) cmd->args.loc.reg_id_scope.fp_abi = (uint8_t)json_read_long(inp);
+    else if (strcmp(nm, "ELF64") == 0) cmd->args.loc.reg_id_scope.elf64 = json_read_boolean(inp);
     else if (strcmp(nm, "RegIdType") == 0) cmd->args.loc.reg_id_scope.id_type = (uint8_t)json_read_long(inp);
     else if (strcmp(nm, "AddrSize") == 0) cmd->args.loc.addr_size = (size_t)json_read_long(inp);
-    else if (strcmp(nm, "BigEndian") == 0) cmd->args.loc.reg_id_scope.big_endian = (uint8_t)(cmd->args.loc.big_endian = (int)json_read_long(inp));
+    else if (strcmp(nm, "BigEndian") == 0) cmd->args.loc.reg_id_scope.big_endian = (uint8_t)json_read_boolean(inp);
 }
 
 static void read_location_command(InputStream * inp, void * args) {

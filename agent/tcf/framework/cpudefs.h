@@ -74,6 +74,8 @@ struct RegisterDefinition {
 typedef struct RegisterIdScope {
     uint16_t machine;
     uint8_t os_abi;
+    uint8_t fp_abi;
+    uint8_t elf64;
     uint8_t big_endian;
     uint8_t id_type;
 } RegisterIdScope;
@@ -98,7 +100,7 @@ typedef struct RegisterIdScope {
 #define SFT_CMD_SHL            17
 #define SFT_CMD_SHR            18
 #define SFT_CMD_ARG            19
-#define SFT_CMD_LOCATION       20
+#define SFT_CMD_LOCATION       20 /* A DWARF location expression */
 
 typedef struct LocationPiece {
     ContextAddress addr;
@@ -114,7 +116,6 @@ typedef struct LocationExpressionState {
     Context * ctx;
     struct StackFrame * stack_frame;
     RegisterIdScope reg_id_scope;
-    int big_endian;
     size_t addr_size;
     uint64_t * args;
     unsigned args_cnt;
@@ -157,7 +158,6 @@ struct LocationExpressionCommand {
             uint8_t * code_addr;
             size_t code_size;
             size_t addr_size;
-            int big_endian;
         } loc;
         unsigned arg_no;
     } args;

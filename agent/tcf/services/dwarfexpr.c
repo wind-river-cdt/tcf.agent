@@ -366,7 +366,6 @@ void dwarf_evaluate_expression(PropertyValue * PV) {
     sState->ctx = sValue->mContext;
     sState->stack_frame = get_stack_frame(PV);
     sState->addr_size = Unit->mDesc.mAddressSize;
-    sState->big_endian = Unit->mFile->big_endian;
     sState->reg_id_scope = Unit->mRegIdScope;
     sState->args = args;
     sState->client_op = client_op;
@@ -403,7 +402,7 @@ void dwarf_evaluate_expression(PropertyValue * PV) {
     sValue->mAddr = NULL;
     sValue->mValue = 0;
     sValue->mSize = 0;
-    sValue->mBigEndian = sState->big_endian;
+    sValue->mBigEndian = sState->reg_id_scope.big_endian;
     sValue->mPieces = NULL;
     sValue->mPieceCnt = 0;
 

@@ -46,7 +46,7 @@ static uint64_t read_memory(uint64_t addr, size_t size) {
 
     if (context_read_mem(state->ctx, (ContextAddress)addr, buf, size) < 0) exception(errno);
     for (i = 0; i < size; i++) {
-        n = (n << 8) | buf[state->big_endian ? i : size - i - 1];
+        n = (n << 8) | buf[state->reg_id_scope.big_endian ? i : size - i - 1];
     }
     return n;
 }
@@ -59,19 +59,19 @@ static uint8_t read_u1(void) {
 static uint16_t read_u2(void) {
     uint16_t x0 = read_u1();
     uint16_t x1 = read_u1();
-    return state->big_endian ? (x0 << 8) | x1 : x0 | (x1 << 8);
+    return state->reg_id_scope.big_endian ? (x0 << 8) | x1 : x0 | (x1 << 8);
 }
 
 static uint32_t read_u4(void) {
     uint32_t x0 = read_u2();
     uint32_t x1 = read_u2();
-    return state->big_endian ? (x0 << 16) | x1 : x0 | (x1 << 16);
+    return state->reg_id_scope.big_endian ? (x0 << 16) | x1 : x0 | (x1 << 16);
 }
 
 static uint64_t read_u8(void) {
     uint64_t x0 = read_u4();
     uint64_t x1 = read_u4();
-    return state->big_endian ? (x0 << 32) | x1 : x0 | (x1 << 32);
+    return state->reg_id_scope.big_endian ? (x0 << 32) | x1 : x0 | (x1 << 32);
 }
 
 static uint32_t read_u4leb128(void) {
@@ -608,7 +608,7 @@ static void evaluate_expression(void) {
             value_addr = tmp_alloc(value_size);
             memcpy(value_addr, state->stk + state->stk_pos, value_size);
             if (!is_end_of_loc_expr()) inv_dwarf("OP_stack_value must be last instruction");
-            if (big_endian_host() != state->big_endian) {
+            if (big_endian_host() != state->reg_id_scope.big_endian) {
                 size_t i, j, n = value_size >> 1;
                 char * p = (char *)value_addr;
                 for (i = 0, j = value_size - 1; i < n; i++, j--) {

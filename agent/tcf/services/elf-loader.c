@@ -250,6 +250,7 @@ ContextAddress get_tls_address(Context * ctx, ELF_File * file) {
     memset(&reg_id_scope, 0, sizeof(reg_id_scope));
     reg_id_scope.machine = file->machine;
     reg_id_scope.os_abi = file->os_abi;
+    reg_id_scope.elf64 = file->elf64;
     reg_id_scope.big_endian = file->big_endian;
     reg_id_scope.id_type = REGNUM_DWARF;
 
