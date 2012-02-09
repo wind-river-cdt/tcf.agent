@@ -805,7 +805,7 @@ static int type_name(int mode, Symbol ** type) {
     Value v;
     int expr_buf[TYPE_EXPR_LENGTH];
     int expr_len = 0;
-    char name[256];
+    char name[512];
     int sym_class;
     int is_struct = 0;
     int is_class = 0;

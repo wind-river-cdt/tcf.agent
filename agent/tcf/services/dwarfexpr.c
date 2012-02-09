@@ -72,7 +72,7 @@ ObjectInfo * get_parent_function(ObjectInfo * Info) {
         case TAG_entry_point:
             return Info;
         }
-        Info = Info->mParent;
+        Info = get_dwarf_parent(Info);
     }
     return NULL;
 }

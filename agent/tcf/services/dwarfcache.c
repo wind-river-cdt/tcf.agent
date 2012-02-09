@@ -1062,6 +1062,22 @@ ObjectInfo * get_dwarf_children(ObjectInfo * obj) {
     assert(obj->mFlags & DOIF_children_loaded);
     return obj->mChildren;
 }
+
+ObjectInfo * get_dwarf_parent(ObjectInfo * obj) {
+    ObjectInfo * x;
+    if (obj->mParent != NULL) return obj->mParent;
+    if (obj->mTag == TAG_compile_unit) return NULL;
+    x = get_dwarf_children(obj->mCompUnit->mObject);
+    while (x != NULL && x->mID < obj->mID) {
+        if (x->mSibling == NULL || x->mSibling->mID > obj->mID) {
+            x = get_dwarf_children(x);
+        }
+        else {
+            x = x->mSibling;
+        }
+    }
+    return obj->mParent;
+}
 #endif
 
 static U2_T gop_gAttr = 0;

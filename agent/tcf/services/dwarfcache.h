@@ -258,11 +258,14 @@ extern ELF_File * get_dwarf_file(ELF_File * file);
 /* Return DWARF cache for given file, create and populate the cache if needed, throw an exception if error */
 extern DWARFCache * get_dwarf_cache(ELF_File * file);
 
-/* Load children of DWARF object - if not loaded already. Return obj->mChildren */
 #if ENABLE_DWARF_LAZY_LOAD
-extern ObjectInfo * get_dwarf_children(ObjectInfo * obj);
+  /* Load children of DWARF object - if not loaded already. Return obj->mChildren */
+  extern ObjectInfo * get_dwarf_children(ObjectInfo * obj);
+  /* Load parent of DWARF object - if not loaded already. Return obj->mParent */
+  extern ObjectInfo * get_dwarf_parent(ObjectInfo * obj);
 #else
 #  define get_dwarf_children(obj) ((obj)->mChildren)
+#  define get_dwarf_parent(obj) ((obj)->mParent)
 #endif
 
 /* Return file name hash. The hash is used to search FileInfo. */

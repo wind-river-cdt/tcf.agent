@@ -2125,6 +2125,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
 int get_symbol_container(const Symbol * sym, Symbol ** container) {
     ObjectInfo * obj = sym->obj;
     if (obj != NULL) {
+        ObjectInfo * parent = NULL;
         if (unpack(sym) < 0) return -1;
         if (sym->sym_class == SYM_CLASS_TYPE) {
             ObjectInfo * org = get_original_type(obj);
@@ -2141,8 +2142,9 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
                 return -1;
             }
         }
-        if (obj->mParent != NULL) {
-            object2symbol(obj->mParent, container);
+        parent = get_dwarf_parent(obj);
+        if (parent != NULL) {
+            object2symbol(parent, container);
             return 0;
         }
     }
