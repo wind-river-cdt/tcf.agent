@@ -370,8 +370,10 @@ static void command_find_by_name_cache_client(void * x) {
     list_cnt = 0;
     if (err == 0) {
         list_add(sym);
-        while (find_next_symbol(&sym) == 0) list_add(sym);
-        if (get_error_code(errno) != ERR_SYM_NOT_FOUND) err = errno;
+        if (!args->find_first) {
+            while (find_next_symbol(&sym) == 0) list_add(sym);
+            if (get_error_code(errno) != ERR_SYM_NOT_FOUND) err = errno;
+        }
     }
 
     cache_exit();
