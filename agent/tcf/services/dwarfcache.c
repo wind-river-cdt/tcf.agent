@@ -1014,7 +1014,7 @@ static void load_debug_sections(void) {
 
     if (debug_info) {
         PubNamesTable * tbl = &sCache->mPubNames;
-        tbl->mHashSize = tbl->mMax = (unsigned)(debug_info->size / 256) + 16;
+        tbl->mHashSize = tbl->mMax = (unsigned)(debug_info->size / 151) + 16;
         tbl->mHash = (unsigned *)loc_alloc_zero(sizeof(unsigned) * tbl->mHashSize);
         tbl->mNext = (PubNamesInfo *)loc_alloc(sizeof(PubNamesInfo) * tbl->mMax);
         memset(tbl->mNext + tbl->mCnt++, 0, sizeof(PubNamesInfo));
