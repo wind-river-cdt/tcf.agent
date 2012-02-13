@@ -448,9 +448,8 @@ void unplant_breakpoints(Context * ctx) {
         int i;
         BreakInstruction * bi = link_all2bi(l);
         l = l->next;
-        if (!bi->planted) continue;
         if (bi->cb.ctx != ctx) continue;
-        remove_instruction(bi);
+        if (bi->planted) remove_instruction(bi);
         for (i = 0; i < bi->ref_cnt; i++) {
             BreakpointInfo * bp = bi->refs[i].bp;
             assert(bp->instruction_cnt > 0);
