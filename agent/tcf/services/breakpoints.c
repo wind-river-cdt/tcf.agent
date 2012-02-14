@@ -83,6 +83,7 @@ struct BreakpointInfo {
     char ** stop_group;
     char * file;
     char * client_data;
+    int temporary;
     int access_mode;
     int access_size;
     int line;
@@ -918,6 +919,7 @@ static void free_bp(BreakpointInfo * bp) {
     loc_free(bp);
 }
 
+static void remove_ref(BreakpointRef * br);
 static void send_event_context_removed(BreakpointInfo * bp);
 
 static void notify_breakpoints_status(void) {
@@ -1045,14 +1047,25 @@ static void done_all_evaluations(void) {
 
         l = l->next;
 
-        /* Intercept contexts in BP stop groups */
         for (i = 0; i < req->bp_cnt; i++) {
-            BreakpointInfo * bp = req->bp_arr[i].bp;
-            if (req->bp_arr[i].triggered && bp->stop_group != NULL) {
-                char ** ids = bp->stop_group;
-                while (*ids) {
-                    Context * c = id2ctx(*ids++);
-                    if (c != NULL) suspend_debug_context(c);
+            if (req->bp_arr[i].triggered) {
+                BreakpointInfo * bp = req->bp_arr[i].bp;
+                if (bp->stop_group != NULL) {
+                    /* Intercept contexts in BP stop groups */
+                    char ** ids = bp->stop_group;
+                    while (*ids) {
+                        Context * c = id2ctx(*ids++);
+                        if (c != NULL) suspend_debug_context(c);
+                    }
+                }
+                if (bp->temporary) {
+                    LINK * m = bp->link_clients.next;
+                    while (m != &bp->link_clients) {
+                        BreakpointRef * br = link_bp2br(m);
+                        m = m->next;
+                        assert(br->bp == bp);
+                        remove_ref(br);
+                    }
                 }
             }
         }
@@ -1632,6 +1645,9 @@ static int set_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * 
             loc_free(bp->stop_group);
             bp->stop_group = json_read_alloc_string_array(buf_inp, NULL);
         }
+        else if (strcmp(name, BREAKPOINT_TEMPORARY) == 0) {
+            bp->temporary = json_read_boolean(buf_inp);
+        }
         else if (strcmp(name, BREAKPOINT_FILE) == 0) {
             loc_free(bp->file);
             bp->file = json_read_alloc_string(buf_inp);
@@ -1696,6 +1712,9 @@ static int set_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * 
         else if (strcmp(name, BREAKPOINT_STOP_GROUP) == 0) {
             loc_free(bp->stop_group);
             bp->stop_group = NULL;
+        }
+        else if (strcmp(name, BREAKPOINT_TEMPORARY) == 0) {
+            bp->temporary = 0;
         }
         else if (strcmp(name, BREAKPOINT_FILE) == 0) {
             loc_free(bp->file);
@@ -1841,7 +1860,7 @@ static BreakpointInfo * add_breakpoint(Channel * c, BreakpointAttribute * attrs)
     return bp;
 }
 
-static void remove_ref(Channel * c, BreakpointRef * br) {
+static void remove_ref(BreakpointRef * br) {
     BreakpointInfo * bp = br->bp;
     bp->client_cnt--;
     list_remove(&br->link_inp);
@@ -1860,7 +1879,7 @@ static void delete_breakpoint_refs(Channel * c) {
     while (l != &inp2br[hash]) {
         BreakpointRef * br = link_inp2br(l);
         l = l->next;
-        if (br->channel == c) remove_ref(c, br);
+        if (br->channel == c) remove_ref(br);
     }
 }
 
@@ -2117,7 +2136,7 @@ static void command_remove(char * token, Channel * c) {
                 BreakpointRef * br;
                 json_read_string(&c->inp, id, sizeof(id));
                 br = find_breakpoint_ref(find_breakpoint(id), c);
-                if (br != NULL) remove_ref(c, br);
+                if (br != NULL) remove_ref(br);
                 ch = read_stream(&c->inp);
                 if (ch == ',') continue;
                 if (ch == ']') break;
@@ -2208,6 +2227,10 @@ static void command_get_capabilities(char * token, Channel * c) {
     json_write_string(out, "ClientData");
     write_stream(out, ':');
     json_write_boolean(out, 1);
+    write_stream(out, ',');
+    json_write_string(out, "Temporary");
+    write_stream(out, ':');
+    json_write_boolean(out, 1);
 #if ENABLE_ContextBreakpointCapabilities
     {
         /* Back-end context breakpoint capabilities */
@@ -2286,7 +2309,7 @@ void change_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * att
 void delete_breakpoint(BreakpointInfo * bp) {
     BreakpointRef * br = find_breakpoint_ref(bp, NULL);
     assert(br != NULL && br->channel == NULL);
-    remove_ref(NULL, br);
+    remove_ref(br);
 }
 
 void iterate_context_breakpoint_links(Context * ctx, ContextBreakpoint * cb, IterateCBLinksCallBack * callback, void * args) {
@@ -2334,7 +2357,7 @@ void evaluate_breakpoint(Context * ctx) {
                     if (c == NULL) continue;
                     if (need_to_post) continue;
                     if (is_disabled(bp)) continue;
-                    if (bp->condition != NULL || bp->stop_group != NULL) {
+                    if (bp->condition != NULL || bp->stop_group != NULL || bp->temporary) {
                         need_to_post = 1;
                         continue;
                     }
@@ -2357,7 +2380,7 @@ void evaluate_breakpoint(Context * ctx) {
                     if (c == NULL) continue;
                     if (need_to_post) continue;
                     if (is_disabled(bp)) continue;
-                    if (bp->condition != NULL || bp->stop_group != NULL) {
+                    if (bp->condition != NULL || bp->stop_group != NULL || bp->temporary) {
                         need_to_post = 1;
                         continue;
                     }
