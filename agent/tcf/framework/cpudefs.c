@@ -365,7 +365,7 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
 }
 
 void ini_cpudefs(void) {
-#if ENABLE_ini_cpudefs_mdep
+#if defined(ENABLE_ini_cpudefs_mdep) && ENABLE_ini_cpudefs_mdep
     ini_cpudefs_mdep();
 #endif
 }

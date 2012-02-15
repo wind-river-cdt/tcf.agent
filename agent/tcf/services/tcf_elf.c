@@ -67,8 +67,6 @@ static U4_T listeners_max = 0;
 static int elf_cleanup_posted = 0;
 static ino_t elf_ino_cnt = 0;
 
-#if ENABLE_DebugContext
-
 typedef struct ElfListState {
     Context * ctx;
     unsigned pos;
@@ -77,6 +75,8 @@ typedef struct ElfListState {
 } ElfListState;
 
 static ElfListState * elf_list_state = NULL;
+
+#if ENABLE_DebugContext
 
 static MemoryMap elf_map;
 

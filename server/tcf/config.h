@@ -36,9 +36,18 @@
 #if !defined(SERVICE_MemoryMap)
 #define SERVICE_MemoryMap       1
 #endif
-#if !defined(SERVICE_StackTrace)
+
 #define SERVICE_StackTrace      0
-#endif
+#define SERVICE_Processes       0
+#define SERVICE_Terminals       0
+#define SERVICE_ContextQuery    0
+#define SERVICE_RunControl      0
+#define SERVICE_Breakpoints     0
+#define SERVICE_Memory          0
+#define SERVICE_Registers       0
+#define SERVICE_SysMonitor      0
+#define SERVICE_Expressions     0
+#define SERVICE_Streams         0
 
 #if !defined(ENABLE_ZeroCopy)
 #define ENABLE_ZeroCopy         1
@@ -100,5 +109,27 @@
 #if !defined(ENABLE_STREAM_MACROS)
 #define ENABLE_STREAM_MACROS    1
 #endif
+
+#if !defined(ENABLE_AIO)
+#define ENABLE_AIO              0
+#endif
+
+#if !defined(ENABLE_Splice)
+#define ENABLE_Splice           0
+#endif
+
+#if !defined(ENABLE_Plugins)
+#define ENABLE_Plugins          0
+#endif
+
+#if !defined(ENABLE_Cmdline)
+#define ENABLE_Cmdline          0
+#endif
+
+#define ENABLE_RCBP_TEST        0
+
+#define ENABLE_ContextStateProperties           0
+#define ENABLE_ExtendedMemoryErrorReports       0
+#define ENABLE_ContextBreakpointCapabilities    0
 
 #endif /* D_config */
