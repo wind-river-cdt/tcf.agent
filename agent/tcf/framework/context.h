@@ -446,7 +446,7 @@ extern Context * context_get_group(Context * ctx, int group);
 struct ContextBreakpoint {
     Context * ctx;              /* breakpoint context, one of returned by
                                  * context_get_group(..., CONTEXT_GROUP_BREAKPOINT) */
-    ContextAddress address;     /* breakpoint address */
+    ContextAddress address;     /* breakpoint address, or 0 if CTX_BP_ACCESS_NO_ADDRESS */
     ContextAddress length;      /* length of the breakpoint address range */
     unsigned access_types;      /* memory access type, bit set of CTX_BP_ACCESS_* */
     unsigned id;                /* to be used by debug context implementation */
@@ -458,6 +458,7 @@ struct ContextBreakpoint {
 #define CTX_BP_ACCESS_CHANGE         0x08
 #define CTX_BP_ACCESS_VIRTUAL        0x10
 #define CTX_BP_ACCESS_SOFTWARE       0x20
+#define CTX_BP_ACCESS_NO_ADDRESS     0x40
 
 /*
  * Return bitmask of supported CTX_BP_ACCESS_* values.

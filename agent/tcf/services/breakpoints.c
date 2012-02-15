@@ -91,7 +91,6 @@ struct BreakpointInfo {
     int ignore_count;
     int hit_count;
     BreakpointAttribute * attrs;
-    BreakpointAttribute * unsupported;
 
     EventPointCallBack * event_callback;
     void * event_callback_args;
@@ -111,7 +110,6 @@ struct InstructionRef {
 struct BreakInstruction {
     LINK link_all;
     LINK link_adr;
-    int virtual_addr;
     ContextBreakpoint cb;
     char saved_code[16];
     size_t saved_size;
@@ -120,8 +118,10 @@ struct BreakInstruction {
     InstructionRef * refs;
     int ref_size;
     int ref_cnt;
-    int valid;
-    int planted;
+    uint8_t no_addr;
+    uint8_t virtual_addr;
+    uint8_t valid;
+    uint8_t planted;
 };
 
 struct EvaluationArgs {
@@ -171,7 +171,7 @@ static unsigned listener_max = 0;
 
 #define EXT(ctx) ((ContextExtensionBP *)((char *)(ctx) + context_extension_offset))
 
-#define is_disabled(bp) (bp->enabled == 0 || bp->client_cnt == 0 || bp->unsupported != NULL)
+#define is_disabled(bp) (bp->enabled == 0 || bp->client_cnt == 0)
 
 #define ADDR2INSTR_HASH_SIZE (32 * MEM_USAGE_FACTOR - 1)
 #define addr2instr_hash(ctx, addr) ((unsigned)((uintptr_t)(ctx) + (uintptr_t)(addr) + ((uintptr_t)(addr) >> 8)) % ADDR2INSTR_HASH_SIZE)
@@ -222,6 +222,7 @@ static void get_bi_access_types(BreakInstruction * bi, unsigned * access_types, 
     int soft = 1;
     unsigned t = 0;
     ContextAddress sz = 0;
+    if (bi->no_addr) t |= CTX_BP_ACCESS_NO_ADDRESS;
     if (bi->virtual_addr) t |= CTX_BP_ACCESS_VIRTUAL;
     for (i = 0; i < bi->ref_cnt; i++) {
         if (bi->refs[i].cnt) {
@@ -255,7 +256,7 @@ static void plant_instruction(BreakInstruction * bi) {
     if (context_plant_breakpoint(&bi->cb) < 0) error = errno;
 
     if ((bi->cb.access_types & ~CTX_BP_ACCESS_SOFTWARE) == CTX_BP_ACCESS_INSTRUCTION &&
-            get_error_code(errno) == ERR_UNSUPPORTED) {
+            get_error_code(error) == ERR_UNSUPPORTED) {
         uint8_t * break_inst = get_break_instruction(bi->cb.ctx, &bi->saved_size);
         assert(sizeof(bi->saved_code) >= bi->saved_size);
         assert(!bi->virtual_addr);
@@ -268,6 +269,9 @@ static void plant_instruction(BreakInstruction * bi) {
             error = errno;
         }
         planting_instruction = 0;
+    }
+    else if (error == ERR_UNSUPPORTED) {
+        error = set_errno(ERR_OTHER, "Unsupported set of breakpoint attributes");
     }
 
     rp = get_error_report(error);
@@ -322,7 +326,8 @@ static BreakInstruction * find_instruction(Context * ctx, int virtual_addr, Cont
         BreakInstruction * bi = link_adr2bi(l);
         if (bi->cb.ctx == ctx &&
             bi->cb.address == address &&
-            bi->virtual_addr == virtual_addr) return bi;
+            bi->virtual_addr == virtual_addr &&
+            bi->no_addr == 0) return bi;
         l = l->next;
     }
     return NULL;
@@ -337,7 +342,7 @@ static BreakInstruction * add_instruction(Context * ctx, int virtual_addr, Conte
     context_lock(ctx);
     bi->cb.ctx = ctx;
     bi->cb.address = address;
-    bi->virtual_addr = virtual_addr;
+    bi->virtual_addr = (uint8_t)virtual_addr;
     return bi;
 }
 
@@ -540,29 +545,10 @@ int check_breakpoints_on_memory_write(Context * ctx, ContextAddress address, voi
 }
 
 static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
-    BreakpointAttribute * u = bp->unsupported;
-
     assert(*bp->id);
     write_stream(out, '{');
 
-    if (u != NULL) {
-        const char * msg = "Unsupported breakpoint properties: ";
-        json_write_string(out, "Error");
-        write_stream(out, ':');
-        write_stream(out, '"');
-        while (*msg) json_write_char(out, *msg++);
-        while (u != NULL) {
-            msg = u->name;
-            while (*msg) json_write_char(out, *msg++);
-            u = u->next;
-            if (u != NULL) {
-                json_write_char(out, ',');
-                json_write_char(out, ' ');
-            }
-        }
-        write_stream(out, '"');
-    }
-    else if (bp->instruction_cnt) {
+    if (bp->instruction_cnt) {
         int cnt = 0;
         LINK * l = instructions.next;
         json_write_string(out, "Instances");
@@ -654,23 +640,48 @@ static InstructionRef * link_breakpoint_instruction(
     BreakInstruction * bi = NULL;
     InstructionRef * ref = NULL;
 
-    bi = find_instruction(mem, virtual_addr, mem_addr);
-    if (bi == NULL) {
-        bi = add_instruction(mem, virtual_addr, mem_addr);
+    if (mem == NULL) {
+        /* Breakpoint does not have an address, e.g. breakpoint on a signal or I/O event */
+        int hash = addr2instr_hash(ctx, bp);
+        LINK * l = addr2instr[hash].next;
+        assert(ctx_addr == 0);
+        assert(mem_addr == 0);
+        assert(virtual_addr == 0);
+        while (l != addr2instr + hash) {
+            BreakInstruction * i = link_adr2bi(l);
+            if (i->cb.ctx == ctx && i->no_addr && i->ref_cnt == 1 &&
+                i->refs[0].ctx == ctx && i->refs[0].bp == bp) {
+                if (bi_ptr) *bi_ptr = i;
+                return i->refs;
+            }
+            l = l->next;
+        }
+        bi = (BreakInstruction *)loc_alloc_zero(sizeof(BreakInstruction));
+        list_add_last(&bi->link_all, &instructions);
+        list_add_last(&bi->link_adr, addr2instr + hash);
+        context_lock(ctx);
+        bi->cb.ctx = ctx;
+        bi->no_addr = 1;
     }
     else {
-        int i = 0;
-        while (i < bi->ref_cnt) {
-            ref = bi->refs + i;
-            if (ref->bp == bp && ref->ctx == ctx) {
-                assert(!bi->valid);
-                if (ref->size < size) ref->size = size;
-                ref->addr = ctx_addr;
-                ref->cnt++;
-                if (bi_ptr) *bi_ptr = bi;
-                return ref;
+        bi = find_instruction(mem, virtual_addr, mem_addr);
+        if (bi == NULL) {
+            bi = add_instruction(mem, virtual_addr, mem_addr);
+        }
+        else {
+            int i = 0;
+            while (i < bi->ref_cnt) {
+                ref = bi->refs + i;
+                if (ref->bp == bp && ref->ctx == ctx) {
+                    assert(!bi->valid);
+                    if (ref->size < size) ref->size = size;
+                    ref->addr = ctx_addr;
+                    ref->cnt++;
+                    if (bi_ptr) *bi_ptr = bi;
+                    return ref;
+                }
+                i++;
             }
-            i++;
         }
     }
     if (bi->ref_cnt >= bi->ref_size) {
@@ -1322,7 +1333,7 @@ static void evaluate_bp_location(BreakpointInfo * bp, Context * ctx) {
         expr_cache_enter(evaluate_address_expression, bp, ctx);
     }
     else {
-        address_expression_error(NULL, bp, ERR_INV_EXPRESSION);
+        link_breakpoint_instruction(bp, ctx, 0, bp->access_size, NULL, 0, 0, NULL);
     }
 }
 
