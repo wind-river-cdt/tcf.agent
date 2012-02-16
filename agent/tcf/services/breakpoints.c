@@ -247,7 +247,8 @@ static void plant_instruction(BreakInstruction * bi) {
     assert(!bi->planted);
     assert(!bi->cb.ctx->exited);
     assert(bi->valid || bi->virtual_addr);
-    if (bi->cb.address == 0) return;
+    /* TODO: need a better representation of address calculation error then virtual address = 0 */
+    if (bi->virtual_addr && bi->cb.address == 0) return;
     assert(is_all_stopped(bi->cb.ctx));
 
     bi->saved_size = 0;
