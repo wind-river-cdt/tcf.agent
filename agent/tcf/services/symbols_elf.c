@@ -202,6 +202,7 @@ static int is_frame_based_object(Symbol * sym) {
     switch (sym->sym_class) {
     case SYM_CLASS_VALUE:
     case SYM_CLASS_BLOCK:
+    case SYM_CLASS_NAMESPACE:
     case SYM_CLASS_COMP_UNIT:
     case SYM_CLASS_FUNCTION:
         return 0;
@@ -338,6 +339,9 @@ static void object2symbol(ObjectInfo * obj, Symbol ** res) {
     case TAG_try_block:
     case TAG_catch_block:
         sym->sym_class = SYM_CLASS_BLOCK;
+        break;
+    case TAG_namespace:
+        sym->sym_class = SYM_CLASS_NAMESPACE;
         break;
     }
     sym->frame = STACK_NO_FRAME;

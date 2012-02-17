@@ -38,6 +38,7 @@ typedef struct Symbol Symbol;
 #define SYM_CLASS_TYPE          4   /* Symbol represents a type declaration */
 #define SYM_CLASS_COMP_UNIT     5   /* Symbol represents a compilation unit */
 #define SYM_CLASS_BLOCK         6   /* Symbol represents a block of code */
+#define SYM_CLASS_NAMESPACE     7   /* Symbol represents a namespace */
 
 #define TYPE_CLASS_UNKNOWN      0
 #define TYPE_CLASS_CARDINAL     1
