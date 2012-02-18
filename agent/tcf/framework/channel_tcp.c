@@ -1156,6 +1156,12 @@ ChannelServer * channel_tcp_server(PeerServer * ps) {
     const char * port = peer_server_getprop(ps, "Port", NULL);
     int def_port = 0;
     char port_str[16];
+    struct sockaddr_in sin;
+#if defined(_WRS_KERNEL)
+    int sinlen;
+#else
+    socklen_t sinlen;
+#endif
 
     assert(is_dispatch_thread());
     if (port == NULL) {
@@ -1235,24 +1241,18 @@ ChannelServer * channel_tcp_server(PeerServer * ps) {
         errno = error;
         return NULL;
     }
-    if (def_port) {
-        struct sockaddr_in sin;
-#if defined(_WRS_KERNEL)
-        int sinlen;
-#else
-        socklen_t sinlen;
-#endif
-        char str_port[32];
 
-        sinlen = sizeof sin;
-        if (getsockname(sock, (struct sockaddr *)&sin, &sinlen) != 0) {
-            trace(LOG_ALWAYS, "getsockname error: %s", errno_to_str(errno));
-            closesocket(sock);
-            return NULL;
-        }
-        snprintf(str_port, sizeof(str_port), "%d", ntohs(sin.sin_port));
-        peer_server_addprop(ps, loc_strdup("Port"), loc_strdup(str_port));
+    /* Get port property in case the default port could not be used or
+     * the client specified a port that the system converts to a
+     * dynamic port number. */
+    sinlen = sizeof sin;
+    if (getsockname(sock, (struct sockaddr *)&sin, &sinlen) != 0) {
+        trace(LOG_ALWAYS, "getsockname error: %s", errno_to_str(errno));
+        closesocket(sock);
+        return NULL;
     }
+    snprintf(port_str, sizeof(port_str), "%d", ntohs(sin.sin_port));
+    peer_server_addprop(ps, loc_strdup("Port"), loc_strdup(port_str));
 
     return channel_server_create(ps, sock);
 }
