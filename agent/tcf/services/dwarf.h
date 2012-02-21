@@ -86,6 +86,8 @@
 #define TAG_wrs_throw_breakpoint    0x4081
 #define TAG_wrs_catch_breakpoint    0x4082
 #define TAG_wrs_extern_subroutine   0x4083
+#define TAG_GNU_call_site           0x4109
+#define TAG_GNU_call_site_parameter 0x410a
 #define TAG_hi_user                 0xffff
 
 #define CHILDREN_no                 0x00

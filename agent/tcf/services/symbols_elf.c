@@ -2383,6 +2383,43 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         else if (trap.error != ERR_SYM_NOT_FOUND) {
             return -1;
         }
+        if (obj->mTag == TAG_formal_parameter) {
+            /* Search call site info */
+            if (set_trap(&trap)) {
+                RegisterDefinition * reg_def = get_PC_definition(sym_ctx);
+                if (reg_def != NULL) {
+                    uint64_t addr = 0;
+                    ContextAddress rt_addr = 0;
+                    UnitAddressRange * range = NULL;
+                    Symbol * caller = NULL;
+                    StackFrame * info = NULL;
+                    if (get_frame_info(sym_ctx, get_prev_frame(sym_ctx, sym_frame), &info) < 0) exception(errno);
+                    if (read_reg_value(info, reg_def, &addr) < 0) exception(errno);
+                    range = elf_find_unit(sym_ctx, addr, addr, &rt_addr);
+                    if (range != NULL) find_by_addr_in_unit(
+                        get_dwarf_children(range->mUnit->mObject),
+                        0, rt_addr - range->mAddr, addr, &caller);
+                    if (caller != NULL && caller->obj != NULL) {
+                        ObjectInfo * l = get_dwarf_children(caller->obj);
+                        while (l != NULL) {
+                            U8_T call_addr = 0;
+                            if (l->mTag == TAG_GNU_call_site && get_num_prop(l, AT_low_pc, &call_addr)) {
+                                call_addr += rt_addr - range->mAddr;
+                                if (call_addr == addr) {
+                                    printf("");
+                                    /*
+                                    clear_trap(&trap);
+                                    return 0;
+                                    */
+                                }
+                            }
+                            l = l->mSibling;
+                        }
+                    }
+                }
+                exception(ERR_SYM_NOT_FOUND);
+            }
+        }
         if (map_to_sym_table(obj, &s)) return get_symbol_value(s, value, size, big_endian);
         set_errno(ERR_OTHER, "No object location or value info found in DWARF data");
         return -1;
