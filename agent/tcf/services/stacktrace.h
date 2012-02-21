@@ -30,6 +30,9 @@
  */
 extern int get_top_frame(Context * ctx);
 
+extern int get_prev_frame(Context * ctx, int frame);
+extern int get_next_frame(Context * ctx, int frame);
+
 /*
  * Return 1 if 'frame' is the top frame of the context.
  */

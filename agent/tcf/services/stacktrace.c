@@ -373,6 +373,47 @@ int get_top_frame(Context * ctx) {
     return stack->frame_cnt - 1;
 }
 
+int get_prev_frame(Context * ctx, int frame) {
+    if (frame == STACK_TOP_FRAME) {
+        frame = get_top_frame(ctx);
+        if (frame < 0) return frame;
+    }
+
+    if (frame <= 0) {
+        set_errno(ERR_OTHER, "No previous stack frame");
+        return STACK_NO_FRAME;
+    }
+
+    return frame - 1;
+}
+
+int get_next_frame(Context * ctx, int frame) {
+    StackTrace * stack;
+
+    if (frame < 0) {
+        set_errno(ERR_OTHER, "No next stack frame");
+        return STACK_NO_FRAME;
+    }
+
+    if (!ctx->stopped) {
+        errno = ERR_IS_RUNNING;
+        return STACK_NO_FRAME;
+    }
+
+    stack = create_stack_trace(ctx);
+    if (stack->error != NULL) {
+        set_error_report_errno(stack->error);
+        return STACK_NO_FRAME;
+    }
+
+    if (frame >= stack->frame_cnt - 1) {
+        set_errno(ERR_OTHER, "No next stack frame");
+        return STACK_NO_FRAME;
+    }
+
+    return frame + 1;
+}
+
 int get_frame_info(Context * ctx, int frame, StackFrame ** info) {
     StackTrace * stack;
 
