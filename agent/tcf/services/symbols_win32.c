@@ -527,16 +527,19 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
 }
 
 int get_symbol_type(const Symbol * sym, Symbol ** type) {
-    DWORD tag = 0;
-    Symbol * res = alloc_symbol();
-
     assert(sym->magic == SYMBOL_MAGIC);
-    *res = *sym;
-    if (!res->base && !res->info) {
+    if (!sym->base && !sym->info) {
+        DWORD tag = 0;
+        Symbol * res = alloc_symbol();
+        *res = *sym;
         if (get_type_tag(res, &tag)) return -1;
+        assert(res->sym_class == SYM_CLASS_TYPE);
+        if (res->index != sym->index) {
+            *type = res;
+            return 0;
+        }
     }
-    assert(res->sym_class == SYM_CLASS_TYPE);
-    *type = res;
+    *type = (Symbol *)sym;
     return 0;
 }
 

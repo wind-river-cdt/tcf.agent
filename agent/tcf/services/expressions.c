@@ -685,9 +685,32 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
     }
     return sym_class;
 }
-#endif
 
-static int identifier(int mode, Value * scope, char * name, Value * v) {
+static SYM_FLAGS get_all_symbol_flags(Symbol * sym) {
+    SYM_FLAGS all_flags = 0;
+    for (;;) {
+        Symbol * nxt = NULL;
+        SYM_FLAGS sym_flags = 0;
+        if (get_symbol_flags(sym, &sym_flags) < 0) error(errno, "Cannot get symbol flags");
+        if (get_symbol_type(sym, &nxt) < 0) error(errno, "Cannot get symbol type");
+        all_flags |= sym_flags;
+        if (nxt == sym) break;
+        sym = nxt;
+    }
+    return all_flags;
+}
+
+static unsigned flag_count(SYM_FLAGS flags) {
+    unsigned i;
+    unsigned cnt = 0;
+    for (i = 0; i < sizeof(flags) * 8; i++) {
+        if (flags & ((SYM_FLAGS)1 << i)) cnt++;
+    }
+    return cnt;
+}
+#endif /* ENABLE_Symbols */
+
+static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Value * v) {
     int i;
     memset(v, 0, sizeof(Value));
     if (scope == NULL) {
@@ -726,6 +749,16 @@ static int identifier(int mode, Value * scope, char * name, Value * v) {
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) error(errno, "Cannot read symbol data");
         }
         else {
+            if (flags) {
+                const SYM_FLAGS flag_mask = SYM_FLAG_CONST_TYPE | SYM_FLAG_VOLATILE_TYPE |
+                    SYM_FLAG_STRUCT_TYPE | SYM_FLAG_CLASS_TYPE | SYM_FLAG_UNION_TYPE | SYM_FLAG_ENUM_TYPE;
+                Symbol * nxt = NULL;
+                SYM_FLAGS sym_flags = (get_all_symbol_flags(sym) ^ flags) & flag_mask;
+                while (find_next_symbol(&nxt) == 0) {
+                    SYM_FLAGS nxt_flags = (get_all_symbol_flags(nxt) ^ flags) & flag_mask;
+                    if (flag_count(nxt_flags) < flag_count(sym_flags)) sym = nxt;
+                }
+            }
             return sym2value(mode, sym, v);
         }
     }
@@ -749,7 +782,7 @@ static int qualified_name(int mode, Value * scope, Value * v) {
     for (;;) {
         if (text_sy != SY_NAME) error(ERR_INV_EXPRESSION, "Identifier expected");
         if (mode != MODE_SKIP) {
-            sym_class = identifier(mode, scope, (char *)text_val.value, v);
+            sym_class = identifier(mode, scope, (char *)text_val.value, 0, v);
             if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
         }
         else {
@@ -807,21 +840,40 @@ static int type_name(int mode, Symbol ** type) {
     int expr_len = 0;
     char * name = NULL;
     int sym_class;
-    int is_struct = 0;
-    int is_class = 0;
+    SYM_FLAGS sym_flags = 0;
     int name_cnt = 0;
 
     if (text_sy == SY_NAME) {
+        for (;;) {
+            if (strcmp((const char *)(text_val.value), "const") == 0) {
+                sym_flags |= SYM_FLAG_CONST_TYPE;
+                next_sy();
+            }
+            else if (strcmp((const char *)(text_val.value), "volatile") == 0) {
+                sym_flags |= SYM_FLAG_VOLATILE_TYPE;
+                next_sy();
+            }
+            else {
+                break;
+            }
+        }
         if (strcmp((const char *)(text_val.value), "struct") == 0) {
+            sym_flags |= SYM_FLAG_STRUCT_TYPE;
             next_sy();
-            if (text_sy != SY_NAME) return 0;
-            is_struct = 1;
         }
         else if (strcmp((const char *)(text_val.value), "class") == 0) {
+            sym_flags |= SYM_FLAG_CLASS_TYPE;
             next_sy();
-            if (text_sy != SY_NAME) return 0;
-            is_class = 1;
         }
+        else if (strcmp((const char *)(text_val.value), "union") == 0) {
+            sym_flags |= SYM_FLAG_UNION_TYPE;
+            next_sy();
+        }
+        else if (strcmp((const char *)(text_val.value), "enum") == 0) {
+            sym_flags |= SYM_FLAG_ENUM_TYPE;
+            next_sy();
+        }
+        if (text_sy != SY_NAME) return 0;
         do {
             if (name == NULL) {
                 name = tmp_strdup((char *)text_val.value);
@@ -857,6 +909,7 @@ static int type_name(int mode, Symbol ** type) {
                 case '*':
                 case '&':
                 case ']':
+                case ')':
                 case '{':
                 case '}':
                     tmp_buf[0] = (char)text_sy;
@@ -865,6 +918,10 @@ static int type_name(int mode, Symbol ** type) {
                     break;
                 case '[':
                     name = tmp_strdup2(name, " [");
+                    break;
+                case '(':
+                    if (prev_sy == SY_NAME) name = tmp_strdup2(name, " ");
+                    name = tmp_strdup2(name, "(");
                     break;
                 case ',':
                     name = tmp_strdup2(name, ", ");
@@ -886,7 +943,7 @@ static int type_name(int mode, Symbol ** type) {
             }
             while (cnt > 0);
         }
-        sym_class = identifier(mode, NULL, name, &v);
+        sym_class = identifier(mode, NULL, name, sym_flags, &v);
     }
 #if ENABLE_Symbols
     else if (text_sy == SY_ID) {
@@ -909,9 +966,7 @@ static int type_name(int mode, Symbol ** type) {
         sym_class = qualified_name(mode, &scope, &v);
     }
     if (sym_class != SYM_CLASS_TYPE) {
-        if (is_struct || is_class) {
-            error(ERR_INV_EXPRESSION, "Type '%s' not found", name);
-        }
+        if (sym_flags) error(ERR_INV_EXPRESSION, "Type '%s' not found", name);
         return 0;
     }
     expr_len = type_expression(mode, expr_buf);

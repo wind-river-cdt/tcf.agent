@@ -635,25 +635,46 @@ static void loc_var_func(void * args, Symbol * sym) {
                 }
             }
         }
-        else {
+        else if (container_class == SYM_CLASS_COMP_UNIT && type_name != NULL) {
             Symbol * find_sym = NULL;
             ContextAddress find_size = 0;
             int find_class = 0;
+            SYM_FLAGS find_flags = 0;
             uint64_t n = 0;
             Value v;
-            if (container_class == SYM_CLASS_COMP_UNIT && type_name != NULL) {
-                if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, type_name, &find_sym) < 0) {
-                    error("find_symbol_by_name");
-                }
+            if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, type_name, &find_sym) < 0) {
+                error("find_symbol_by_name");
+            }
+            for (;;) {
                 if (get_symbol_class(find_sym, &find_class) < 0) {
                     error("get_symbol_class");
+                }
+                if (get_symbol_flags(find_sym, &find_flags) < 0) {
+                    error("get_symbol_flags");
                 }
                 switch (find_class) {
                 case SYM_CLASS_REFERENCE:
                 case SYM_CLASS_TYPE:
                     if (get_symbol_size(find_sym, &find_size) == 0) {
-                        char * expr = (char *)tmp_alloc(strlen(type_name) + 32);
-                        sprintf(expr, "sizeof(%s)", type_name);
+                        char * expr = (char *)tmp_alloc(strlen(type_name) + 64);
+                        if (find_class != SYM_CLASS_TYPE) {
+                            sprintf(expr, "sizeof(%s)", type_name);
+                        }
+                        else if (find_flags & SYM_FLAG_STRUCT_TYPE) {
+                            sprintf(expr, "sizeof(struct %s)", type_name);
+                        }
+                        else if (find_flags & SYM_FLAG_CLASS_TYPE) {
+                            sprintf(expr, "sizeof(class %s)", type_name);
+                        }
+                        else if (find_flags & SYM_FLAG_UNION_TYPE) {
+                            sprintf(expr, "sizeof(union %s)", type_name);
+                        }
+                        else if (find_flags & SYM_FLAG_ENUM_TYPE) {
+                            sprintf(expr, "sizeof(enum %s)", type_name);
+                        }
+                        else {
+                            sprintf(expr, "sizeof(%s)", type_name);
+                        }
                         if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
                             error("evaluate_expression");
                         }
@@ -667,6 +688,7 @@ static void loc_var_func(void * args, Symbol * sym) {
                     }
                     break;
                 }
+                if (find_next_symbol(&find_sym) < 0) break;
             }
         }
         if (get_symbol_length(type, &length) < 0) {

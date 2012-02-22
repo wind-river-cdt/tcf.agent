@@ -175,7 +175,8 @@ extern int id2symbol(const char * id, Symbol ** sym);
 extern int get_symbol_class(const Symbol * sym, int * symbol_class);
 
 /* Get symbol type.
- * If the symbol is a modified type, like "volatile int", return original (unmodified) type */
+ * If the symbol is a modified type, like "volatile int", return original (unmodified) type.
+ * If the symbol is unmodified type, return the symbol itself. */
 extern int get_symbol_type(const Symbol * sym, Symbol ** type);
 
 /* Get type class, see TYPE_CLASS_* */
