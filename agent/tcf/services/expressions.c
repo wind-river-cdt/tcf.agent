@@ -805,7 +805,7 @@ static int type_name(int mode, Symbol ** type) {
     Value v;
     int expr_buf[TYPE_EXPR_LENGTH];
     int expr_len = 0;
-    char name[512];
+    char * name = NULL;
     int sym_class;
     int is_struct = 0;
     int is_class = 0;
@@ -813,24 +813,79 @@ static int type_name(int mode, Symbol ** type) {
 
     if (text_sy == SY_NAME) {
         if (strcmp((const char *)(text_val.value), "struct") == 0) {
-            is_struct = 1;
             next_sy();
+            if (text_sy != SY_NAME) return 0;
+            is_struct = 1;
         }
         else if (strcmp((const char *)(text_val.value), "class") == 0) {
-            is_class = 1;
             next_sy();
+            if (text_sy != SY_NAME) return 0;
+            is_class = 1;
         }
-        name[0] = 0;
         do {
-            if (strlen((const char *)(text_val.value)) + strlen(name) >= sizeof(name) - 1) {
-                error(ERR_BUFFER_OVERFLOW, "Type name is too long");
+            if (name == NULL) {
+                name = tmp_strdup((char *)text_val.value);
             }
-            if (name[0]) strcat(name, " ");
-            strcat(name, (const char *)(text_val.value));
+            else {
+                name = tmp_strdup2(name, " ");
+                name = tmp_strdup2(name, (char *)text_val.value);
+            }
             name_cnt++;
             next_sy();
         }
         while (text_sy == SY_NAME);
+        if (text_sy == '<') {
+            int prev_sy = 0;
+            unsigned cnt = 0;
+            uint64_t val = 0;
+            char tmp_buf[40];
+            do {
+                switch (text_sy) {
+                case SY_NAME:
+                    if (prev_sy == SY_NAME || prev_sy == '*' || prev_sy == '&')
+                        name = tmp_strdup2(name, " ");
+                    name = tmp_strdup2(name, (char *)text_val.value);
+                    break;
+                case SY_SCOPE:
+                    name = tmp_strdup2(name, "::");
+                    break;
+                case SY_VAL:
+                    value_to_unsigned(&text_val, &val);
+                    snprintf(tmp_buf, sizeof(tmp_buf), "%lu", (unsigned long)val);
+                    name = tmp_strdup2(name, tmp_buf);
+                    break;
+                case '*':
+                case '&':
+                case ']':
+                case '{':
+                case '}':
+                    tmp_buf[0] = (char)text_sy;
+                    tmp_buf[1] = 0;
+                    name = tmp_strdup2(name, tmp_buf);
+                    break;
+                case '[':
+                    name = tmp_strdup2(name, " [");
+                    break;
+                case ',':
+                    name = tmp_strdup2(name, ", ");
+                    break;
+                case '<':
+                    name = tmp_strdup2(name, "<");
+                    cnt++;
+                    break;
+                case '>':
+                    if (prev_sy == '>') name = tmp_strdup2(name, " ");
+                    name = tmp_strdup2(name, ">");
+                    cnt--;
+                    break;
+                default:
+                    return 0;
+                }
+                prev_sy = text_sy;
+                next_sy();
+            }
+            while (cnt > 0);
+        }
         sym_class = identifier(mode, NULL, name, &v);
     }
 #if ENABLE_Symbols
@@ -839,7 +894,7 @@ static int type_name(int mode, Symbol ** type) {
         const char * id = (const char *)text_val.value;
         if (id2symbol(id, &sym) < 0) return 0;
         sym_class = sym2value(mode, sym, &v);
-        strlcpy(name, id, sizeof(name));
+        name = tmp_strdup(id);
         next_sy();
     }
 #endif

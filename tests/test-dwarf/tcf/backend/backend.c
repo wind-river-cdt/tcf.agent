@@ -653,7 +653,7 @@ static void loc_var_func(void * args, Symbol * sym) {
                 case SYM_CLASS_TYPE:
                     if (get_symbol_size(find_sym, &find_size) == 0) {
                         char * expr = (char *)tmp_alloc(strlen(type_name) + 32);
-                        sprintf(expr, "sizeof($\"%s\")", type_name);
+                        sprintf(expr, "sizeof(%s)", type_name);
                         if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
                             error("evaluate_expression");
                         }
