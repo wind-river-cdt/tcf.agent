@@ -126,6 +126,13 @@ char * tmp_strdup(const char * s) {
     return rval;
 }
 
+char * tmp_strdup2(const char * s1, const char * s2) {
+    char * rval = (char *)tmp_alloc(strlen(s1) + strlen(s2) + 1);
+    strcpy(rval, s1);
+    strcat(rval, s2);
+    return rval;
+}
+
 void * loc_alloc(size_t size) {
     void * p;
 
