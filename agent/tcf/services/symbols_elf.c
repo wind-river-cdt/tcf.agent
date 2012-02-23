@@ -2383,6 +2383,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         else if (trap.error != ERR_SYM_NOT_FOUND) {
             return -1;
         }
+#if SERVICE_StackTrace || ENABLE_ContextProxy
         if (obj->mTag == TAG_formal_parameter) {
             /* Search call site info */
             if (set_trap(&trap)) {
@@ -2406,7 +2407,6 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
                             if (l->mTag == TAG_GNU_call_site && get_num_prop(l, AT_low_pc, &call_addr)) {
                                 call_addr += rt_addr - range->mAddr;
                                 if (call_addr == addr) {
-                                    printf("");
                                     /*
                                     clear_trap(&trap);
                                     return 0;
@@ -2420,6 +2420,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
                 exception(ERR_SYM_NOT_FOUND);
             }
         }
+#endif
         if (map_to_sym_table(obj, &s)) return get_symbol_value(s, value, size, big_endian);
         set_errno(ERR_OTHER, "No object location or value info found in DWARF data");
         return -1;

@@ -1486,9 +1486,20 @@ int get_frame_info(Context * ctx, int frame, StackFrame ** info) {
     return -1;
 }
 
+/* TODO: need a cahce for StackTrace.getChildren */
 int get_top_frame(Context * ctx) {
     set_errno(ERR_UNSUPPORTED, "get_top_frame()");
     return STACK_TOP_FRAME;
+}
+
+int get_prev_frame(Context * ctx, int frame) {
+    set_errno(ERR_UNSUPPORTED, "get_prev_frame()");
+    return STACK_NO_FRAME;
+}
+
+int get_next_frame(Context * ctx, int frame) {
+    set_errno(ERR_UNSUPPORTED, "get_next_frame()");
+    return STACK_NO_FRAME;
 }
 
 unsigned context_word_size(Context * ctx) {
