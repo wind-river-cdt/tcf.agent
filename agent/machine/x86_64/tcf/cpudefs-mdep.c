@@ -15,7 +15,7 @@
 
 #include <tcf/config.h>
 
-#if ENABLE_DebugContext
+#if ENABLE_DebugContext && !ENABLE_ContextProxy
 
 #include <stddef.h>
 #include <assert.h>
