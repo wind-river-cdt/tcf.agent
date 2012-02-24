@@ -1339,6 +1339,10 @@
 				Name="x86_64"
 				>
 				<File
+					RelativePath=".\machine\x86_64\tcf\cpudefs-mdep.c"
+					>
+				</File>
+				<File
 					RelativePath=".\machine\x86_64\tcf\cpudefs-mdep.h"
 					>
 				</File>

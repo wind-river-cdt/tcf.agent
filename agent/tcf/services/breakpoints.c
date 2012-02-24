@@ -122,6 +122,7 @@ struct BreakInstruction {
     uint8_t virtual_addr;
     uint8_t valid;
     uint8_t planted;
+    BreakInstruction * ph_addr_bi;
 };
 
 struct EvaluationArgs {
@@ -558,7 +559,7 @@ static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
             int i = 0;
             BreakInstruction * bi = link_all2bi(l);
             l = l->next;
-            if (bi->virtual_addr && bi->planting_error != NULL) continue;
+            if (bi->ph_addr_bi != NULL) continue;
             for (i = 0; i < bi->ref_cnt; i++) {
                 if (bi->refs[i].bp != bp) continue;
                 if (cnt > 0) write_stream(out, ',');
@@ -672,6 +673,7 @@ static BreakInstruction * link_breakpoint_instruction(
         }
         else {
             int i = 0;
+            bi->ph_addr_bi = NULL;
             while (i < bi->ref_cnt) {
                 ref = bi->refs + i;
                 if (ref->bp == bp && ref->ctx == ctx) {
@@ -726,18 +728,21 @@ static void address_expression_error(Context * ctx, BreakpointInfo * bp, int err
 static void plant_breakpoint(Context * ctx, BreakpointInfo * bp, ContextAddress addr, ContextAddress size) {
     Context * mem = NULL;
     ContextAddress mem_addr = 0;
+    BreakInstruction * v_bi = NULL;
+    BreakInstruction * p_bi = NULL;
 
     if (context_get_supported_bp_access_types(ctx) & CTX_BP_ACCESS_VIRTUAL) {
-        BreakInstruction * bi = link_breakpoint_instruction(bp, ctx, addr, size, ctx, 1, addr, NULL);
-        if (!bi->planted) plant_instruction(bi);
-        if (bi->planted) return;
+        v_bi = link_breakpoint_instruction(bp, ctx, addr, size, ctx, 1, addr, NULL);
+        if (!v_bi->planted) plant_instruction(v_bi);
+        if (v_bi->planted) return;
     }
 
     if (context_get_canonical_addr(ctx, addr, &mem, &mem_addr, NULL, NULL) < 0) {
         address_expression_error(ctx, bp, errno);
     }
     else {
-        link_breakpoint_instruction(bp, ctx, addr, size, mem, 0, mem_addr, NULL);
+        p_bi = link_breakpoint_instruction(bp, ctx, addr, size, mem, 0, mem_addr, NULL);
+        if (v_bi != NULL) v_bi->ph_addr_bi = p_bi;
     }
 }
 

@@ -32,8 +32,6 @@ extern LINK context_root;
 
 typedef void ContextAttachCallBack(int, Context *, void *);
 
-typedef struct ContextBreakpoint ContextBreakpoint;
-
 /*
  * A context corresponds to an execution thread, process, address space, etc.
  * A context can belong to a parent context. Contexts hierarchy can be simple

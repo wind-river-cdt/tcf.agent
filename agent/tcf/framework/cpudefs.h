@@ -23,6 +23,7 @@
 #include <tcf/config.h>
 
 typedef struct Context Context;
+typedef struct ContextBreakpoint ContextBreakpoint;
 
 /* Type to represent byte address inside context memory */
 #if ENABLE_ContextProxy
@@ -235,6 +236,26 @@ extern int crawl_stack_frame(StackFrame * frame, StackFrame * down);
 extern LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame * frame,
                                              LocationExpressionCommand * cmds, unsigned cmds_cnt,
                                              uint64_t * args, unsigned args_cnt);
+
+
+/*** CPU hardware breakpoints API ***/
+
+/* Get supported memory access modes */
+extern int cpu_bp_get_capabilities(Context * ctx);
+
+/* Plant hardware breakpoint */
+extern int cpu_bp_plant(ContextBreakpoint * bp);
+
+/* Remove hardware breakpoint */
+extern int cpu_bp_remove(ContextBreakpoint * bp);
+
+/* Setup breakpoint registers for a context that is about to resume */
+extern int cpu_bp_on_resume(Context * ctx, int * single_step);
+
+/* Chcek breakpoint registers for a context that has stopped */
+extern int cpu_bp_on_suspend(Context * ctx, int * triggered);
+
+
 
 extern void ini_cpudefs(void);
 

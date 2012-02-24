@@ -364,6 +364,30 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
     return state;
 }
 
+#if !defined(ENABLE_HardwareBreakpoints) || !ENABLE_HardwareBreakpoints
+int cpu_bp_get_capabilities(Context * ctx) {
+    return 0;
+}
+
+int cpu_bp_plant(ContextBreakpoint * bp) {
+    errno = ERR_UNSUPPORTED;
+    return -1;
+}
+
+int cpu_bp_remove(ContextBreakpoint * bp) {
+    errno = ERR_UNSUPPORTED;
+    return -1;
+}
+
+int cpu_bp_on_resume(Context * ctx, int * single_step) {
+    return 0;
+}
+
+int cpu_bp_on_suspend(Context * ctx, int * triggered) {
+    return 0;
+}
+#endif
+
 void ini_cpudefs(void) {
 #if defined(ENABLE_ini_cpudefs_mdep) && ENABLE_ini_cpudefs_mdep
     ini_cpudefs_mdep();

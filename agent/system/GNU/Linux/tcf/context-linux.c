@@ -95,10 +95,10 @@ typedef struct ContextExtensionLinux {
     ContextAddress          syscall_pc;
     ContextAddress          loader_state;
     int                     end_of_step;
-    REG_SET *               regs;               /* copy of context registers, updated when context stops */
+    REG_SET *               regs;               /* copy of context registers, updated on request */
     ErrorReport *           regs_error;         /* if not NULL, 'regs' is invalid */
-    int                     regs_gp_dirty;      /* if not 0, 'regs->gp' is modified and needs to be saved before context is continued */
-    int                     regs_fp_dirty;      /* if not 0, 'regs->fp' is modified and needs to be saved before context is continued */
+    uint8_t *               regs_valid;
+    uint8_t *               regs_dirty;
     int                     pending_step;
     int                     stop_cnt;
     int                     sigstop_posted;
@@ -228,8 +228,6 @@ int context_stop(Context * ctx) {
     assert(!ctx->exited);
     assert(!ctx->exiting);
     assert(!ctx->stopped);
-    assert(!ext->regs_gp_dirty);
-    assert(!ext->regs_fp_dirty);
     if (ext->stop_cnt > 4) {
         /* Waiting too long, check for zombies */
         int ch = 0;
@@ -278,49 +276,95 @@ static int syscall_never_returns(Context * ctx) {
     return 0;
 }
 
-static int flush_regs(Context * ctx) {
+static void alloc_regs(Context * ctx) {
     ContextExtensionLinux * ext = EXT(ctx);
+    assert(ext->regs == NULL);
+    ext->regs = (REG_SET *)loc_alloc_zero(sizeof(REG_SET));
+    ext->regs_valid = (uint8_t *)loc_alloc_zero(sizeof(REG_SET));
+    ext->regs_dirty = (uint8_t *)loc_alloc_zero(sizeof(REG_SET));
+}
 
-    if (ext->regs_gp_dirty) {
-        if (ptrace(PTRACE_SETREGS, ext->pid, 0, &ext->regs->gp) < 0) {
-            int err = errno;
-            if (err == ESRCH) {
-                ext->regs_gp_dirty = 0;
-                ctx->exiting = 1;
-                send_context_started_event(ctx);
-                return 0;
+static int flush_regs(Context * ctx) {
+    int fp_dirty = 0;
+    int fpx_dirty = 0;
+    ContextExtensionLinux * ext = EXT(ctx);
+    size_t i = 0;
+
+    for (i = 0; i < sizeof(REG_SET); i += sizeof(ContextAddress)) {
+        if (*(ContextAddress *)(ext->regs_dirty + i) != 0) {
+            if (i >= offsetof(REG_SET, fp) && i < offsetof(REG_SET, fp) + sizeof(ext->regs->fp)) {
+                fp_dirty = 1;
             }
-            trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETREGS) failed: ctx %#lx, id %s, error %d %s",
-                ctx, ctx->id, err, errno_to_str(err));
-            errno = err;
-            return -1;
-        }
-        ext->regs_gp_dirty = 0;
-    }
-    if (ext->regs_fp_dirty) {
-#if defined(__i386__)
-        if (ptrace(PTRACE_SETFPXREGS, ext->pid, 0, &ext->regs->fp) < 0) {
-#else
-        if (ptrace(PTRACE_SETFPREGS, ext->pid, 0, &ext->regs->fp) < 0) {
-#endif
-            int err = errno;
-            if (err == ESRCH) {
-                ext->regs_fp_dirty = 0;
-                ctx->exiting = 1;
-                send_context_started_event(ctx);
-                return 0;
+            else if (i >= offsetof(REG_SET, fpx) && i < offsetof(REG_SET, fpx) + sizeof(ext->regs->fpx)) {
+                fpx_dirty = 1;
             }
-            trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETFPREGS) failed: ctx %#lx, id %s, error %d %s",
-                ctx, ctx->id, err, errno_to_str(err));
-            errno = err;
-            return -1;
+            else {
+                if (ptrace(PTRACE_POKEUSER, ext->pid,
+                        (void *)(i - offsetof(REG_SET, user)),
+                        (void *)*(ContextAddress *)((uint8_t *)ext->regs + i)) < 0) {
+                    int err = errno;
+                    if (err == ESRCH) {
+                        ctx->exiting = 1;
+                        memset(ext->regs_dirty, 0, sizeof(REG_SET));
+                        send_context_started_event(ctx);
+                        return 0;
+                    }
+                    trace(LOG_ALWAYS, "error: ptrace(PTRACE_POKEUSER) failed: ctx %#lx, id %s, error %d %s",
+                        ctx, ctx->id, err, errno_to_str(err));
+                    errno = err;
+                    return -1;
+                }
+                *(ContextAddress *)(ext->regs_dirty + i) = 0;
+            }
         }
-        ext->regs_fp_dirty = 0;
     }
+
+    if (fp_dirty && ptrace(PTRACE_SETFPREGS, ext->pid, 0, &ext->regs->fp) < 0) {
+        int err = errno;
+        if (err == ESRCH) {
+            ctx->exiting = 1;
+            memset(ext->regs_dirty, 0, sizeof(REG_SET));
+            send_context_started_event(ctx);
+            return 0;
+        }
+        trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETFPREGS) failed: ctx %#lx, id %s, error %d %s",
+            ctx, ctx->id, err, errno_to_str(err));
+        errno = err;
+        return -1;
+    }
+
+    if (fpx_dirty && ptrace(PTRACE_SETFPXREGS, ext->pid, 0, &ext->regs->fpx) < 0) {
+        int err = errno;
+        if (err == ESRCH) {
+            ctx->exiting = 1;
+            memset(ext->regs_dirty, 0, sizeof(REG_SET));
+            send_context_started_event(ctx);
+            return 0;
+        }
+        trace(LOG_ALWAYS, "error: ptrace(PTRACE_SETFPXREGS) failed: ctx %#lx, id %s, error %d %s",
+            ctx, ctx->id, err, errno_to_str(err));
+        errno = err;
+        return -1;
+    }
+
+    memset(ext->regs_dirty, 0, sizeof(REG_SET));
     return 0;
 }
 
+static void free_regs(Context * ctx) {
+    ContextExtensionLinux * ext = EXT(ctx);
+    loc_free(ext->regs);
+    loc_free(ext->regs_valid);
+    loc_free(ext->regs_dirty);
+    release_error_report(ext->regs_error);
+    ext->regs = NULL;
+    ext->regs_valid = NULL;
+    ext->regs_dirty = NULL;
+    ext->regs_error = NULL;
+}
+
 int context_continue(Context * ctx) {
+    int cpu_bp_step = 0;
     int signal = 0;
     ContextExtensionLinux * ext = EXT(ctx);
 #if USE_PTRACE_SYSCALL
@@ -336,6 +380,8 @@ int context_continue(Context * ctx) {
     assert(!ext->pending_step);
     assert(!ctx->exited);
 
+    if (cpu_bp_on_resume(ctx, &cpu_bp_step) < 0) return -1;
+    if (cpu_bp_step) return context_single_step(ctx);
     if (skip_breakpoint(ctx, 0)) return 0;
 
     if (!ext->syscall_enter && !ext->ptrace_event) {
@@ -355,9 +401,9 @@ int context_continue(Context * ctx) {
 
     trace(LOG_CONTEXT, "context: resuming ctx %#lx, id %s, with signal %d", ctx, ctx->id, signal);
 #if defined(__i386__) || defined(__x86_64__)
-    if (ext->regs->gp.eflags & 0x100) {
-        ext->regs->gp.eflags &= ~0x100;
-        ext->regs_gp_dirty = 1;
+    if (ext->regs->user.regs.eflags & 0x100) {
+        ext->regs->user.regs.eflags &= ~0x100;
+        memset(ext->regs_dirty + offsetof(REG_SET, user.regs.eflags), 0xff, 4);
     }
 #endif
     if (flush_regs(ctx) < 0) return -1;
@@ -396,13 +442,9 @@ int context_continue(Context * ctx) {
             l = prs->children.next;
             while (l != &prs->children) {
                 Context * c = cldl2ctxp(l);
-                ContextExtensionLinux * e = EXT(c);
                 l = l->next;
                 if (!c->exited) {
-                    release_error_report(e->regs_error);
-                    e->regs_error = NULL;
-                    loc_free(e->regs);
-                    e->regs = NULL;
+                    free_regs(c);
                     send_context_exited_event(c);
                 }
             }
@@ -415,6 +457,7 @@ int context_continue(Context * ctx) {
 }
 
 int context_single_step(Context * ctx) {
+    int cpu_bp_step = 0;
     ContextExtensionLinux * ext = EXT(ctx);
 
     assert(is_dispatch_thread());
@@ -424,6 +467,7 @@ int context_single_step(Context * ctx) {
     assert(!ext->pending_step);
     assert(!ctx->exited);
 
+    if (cpu_bp_on_resume(ctx, &cpu_bp_step) < 0) return -1;
     if (skip_breakpoint(ctx, 1)) return 0;
 
     if (syscall_never_returns(ctx)) return context_continue(ctx);
@@ -617,6 +661,8 @@ int context_get_mem_error_info(MemoryErrorInfo * info) {
 #endif
 
 int context_write_reg(Context * ctx, RegisterDefinition * def, unsigned offs, unsigned size, void * buf) {
+    int valid = 1;
+    size_t i = 0;
     ContextExtensionLinux * ext = EXT(ctx);
 
     assert(is_dispatch_thread());
@@ -629,13 +675,18 @@ int context_write_reg(Context * ctx, RegisterDefinition * def, unsigned offs, un
         set_error_report_errno(ext->regs_error);
         return -1;
     }
+    for (i = def->offset + offs; i < def->offset + offs + size; i++) {
+        if (ext->regs_valid[i] == 0) valid = 0;
+    }
+    if (!valid) memset(ext->regs_valid + def->offset + offs, 0xff, size);
+    else if (memcmp((uint8_t *)ext->regs + def->offset + offs, buf, size) == 0) return 0;
     memcpy((uint8_t *)ext->regs + def->offset + offs, buf, size);
-    if (def->offset < offsetof(REG_SET, fp)) ext->regs_gp_dirty = 1;
-    else ext->regs_fp_dirty = 1;
+    memset(ext->regs_dirty + def->offset + offs, 0xff, size);
     return 0;
 }
 
 int context_read_reg(Context * ctx, RegisterDefinition * def, unsigned offs, unsigned size, void * buf) {
+    size_t i = 0;
     ContextExtensionLinux * ext = EXT(ctx);
 
     assert(is_dispatch_thread());
@@ -648,6 +699,38 @@ int context_read_reg(Context * ctx, RegisterDefinition * def, unsigned offs, uns
         set_error_report_errno(ext->regs_error);
         return -1;
     }
+
+    for (i = def->offset + offs; i < def->offset + offs + size; i++) {
+        if (ext->regs_valid[i] == 0) {
+            if (i >= offsetof(REG_SET, fp) && i < offsetof(REG_SET, fp) + sizeof(ext->regs->fp)) {
+                if (ptrace(PTRACE_GETFPREGS, ext->pid, 0, &ext->regs->fp) < 0 && errno != ESRCH) {
+                    int err = errno;
+                    trace(LOG_ALWAYS, "error: ptrace(PTRACE_GETFPREGS) failed: ctx %#lx, id %s, error %d %s",
+                        ctx, ctx->id, err, errno_to_str(err));
+                    errno = err;
+                    return -1;
+                }
+                memset(ext->regs_valid + offsetof(REG_SET, fp), 0xff, sizeof(ext->regs->fp));
+            }
+            else if (i >= offsetof(REG_SET, fpx) && i < offsetof(REG_SET, fpx) + sizeof(ext->regs->fpx)) {
+                if (ptrace(PTRACE_GETFPXREGS, ext->pid, 0, &ext->regs->fpx) < 0 && errno != ESRCH) {
+                    int err = errno;
+                    trace(LOG_ALWAYS, "error: ptrace(PTRACE_GETFPXREGS) failed: ctx %#lx, id %s, error %d %s",
+                        ctx, ctx->id, err, errno_to_str(err));
+                    errno = err;
+                    return -1;
+                }
+                memset(ext->regs_valid + offsetof(REG_SET, fpx), 0xff, sizeof(ext->regs->fpx));
+            }
+            else if (i >= offsetof(REG_SET, user) && i < offsetof(REG_SET, user) + sizeof(ext->regs->user)) {
+                size_t j = i - (i - offsetof(REG_SET, user)) % sizeof(ContextAddress);
+                *(ContextAddress *)((uint8_t *)ext->regs + j) = (ContextAddress)ptrace(PTRACE_PEEKUSER,
+                    ext->pid, (void *)(j - offsetof(REG_SET, user)), 0);
+                memset(ext->regs_valid + j, 0xff, sizeof(ContextAddress));
+            }
+        }
+    }
+
     memcpy(buf, (uint8_t *)ext->regs + def->offset + offs, size);
     return 0;
 }
@@ -682,17 +765,15 @@ Context * context_get_group(Context * ctx, int group) {
 }
 
 int context_get_supported_bp_access_types(Context * ctx) {
-    return 0;
+    return cpu_bp_get_capabilities(ctx);
 }
 
 int context_plant_breakpoint(ContextBreakpoint * bp) {
-    errno = ERR_UNSUPPORTED;
-    return -1;
+    return cpu_bp_plant(bp);
 }
 
 int context_unplant_breakpoint(ContextBreakpoint * bp) {
-    errno = ERR_UNSUPPORTED;
-    return -1;
+    return cpu_bp_remove(bp);
 }
 
 int context_get_memory_map(Context * ctx, MemoryMap * map) {
@@ -828,18 +909,12 @@ static void event_pid_exited(pid_t pid, int status, int signal) {
                 if (!c->exited) {
                     c->exiting = 1;
                     if (c->stopped) send_context_started_event(c);
-                    release_error_report(EXT(c)->regs_error);
-                    loc_free(EXT(c)->regs);
-                    EXT(c)->regs_error = NULL;
-                    EXT(c)->regs = NULL;
+                    free_regs(c);
                     send_context_exited_event(c);
                 }
             }
         }
-        release_error_report(EXT(ctx)->regs_error);
-        loc_free(EXT(ctx)->regs);
-        EXT(ctx)->regs_error = NULL;
-        EXT(ctx)->regs = NULL;
+        free_regs(ctx);
         send_context_exited_event(ctx);
     }
     assert(context_find_from_pid(pid, 1) == NULL);
@@ -900,7 +975,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             assert(prs->ref_count == 0);
             ctx = create_context(pid2id(pid, pid));
             EXT(ctx)->pid = pid;
-            EXT(ctx)->regs = (REG_SET *)loc_alloc(sizeof(REG_SET));
+            alloc_regs(ctx);
             ctx->pending_intercept = 1;
             ctx->mem = prs;
             ctx->big_endian = prs->big_endian;
@@ -1014,7 +1089,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             ctx2 = create_context(pid2id(msg, EXT(prs2)->pid));
             EXT(ctx2)->pid = msg;
             EXT(ctx2)->attach_children = EXT(prs2)->attach_children;
-            EXT(ctx2)->regs = (REG_SET *)loc_alloc(sizeof(REG_SET));
+            alloc_regs(ctx2);
             ctx2->mem = prs2;
             ctx2->big_endian = prs2->big_endian;
             ctx2->sig_dont_stop = ctx->sig_dont_stop;
@@ -1040,7 +1115,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 Context * ctx2 = create_context(pid2id(child_pid, EXT(prs)->pid));
                 EXT(ctx2)->pid = child_pid;
                 EXT(ctx2)->attach_children = EXT(prs)->attach_children;
-                EXT(ctx2)->regs = (REG_SET *)loc_alloc(sizeof(REG_SET));
+                alloc_regs(ctx2);
                 ctx2->mem = prs;
                 ctx2->big_endian = prs->big_endian;
                 ctx2->sig_dont_stop = ctx->sig_dont_stop;
@@ -1057,8 +1132,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             }
         }
         ctx->exiting = 1;
-        ext->regs_gp_dirty = 0;
-        ext->regs_fp_dirty = 0;
+        memset(ext->regs_dirty, 0, sizeof(REG_SET));
         break;
     }
 
@@ -1078,13 +1152,11 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         ContextAddress pc0 = 0;
         ContextAddress pc1 = 0;
 
-        assert(!ext->regs_gp_dirty);
-        assert(!ext->regs_fp_dirty);
-
         ext->end_of_step = 0;
         ext->ptrace_event = event;
         ctx->signal = signal;
         ctx->stopped_by_bp = 0;
+        ctx->stopped_by_cb = NULL;
         ctx->stopped_by_exception = stopped_by_exception;
         ctx->stopped = 1;
 
@@ -1096,7 +1168,8 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             pc0 = get_regs_PC(ctx);
         }
 
-        if (ptrace(PTRACE_GETREGS, ext->pid, 0, &ext->regs->gp) < 0) {
+        memset(ext->regs_valid, 0, sizeof(REG_SET));
+        if (ptrace(PTRACE_GETREGS, ext->pid, 0, &ext->regs->user.regs) < 0) {
             assert(errno != 0);
             if (errno == ESRCH) {
                 ctx->stopped = 0;
@@ -1108,23 +1181,8 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 ext->pid, errno, errno_to_str(errno));
         }
         else {
+            memset(ext->regs_valid + offsetof(REG_SET, user.regs), 0xff, sizeof(ext->regs->user.regs));
             pc1 = get_regs_PC(ctx);
-        }
-
-#if defined(__i386__)
-        if (ext->regs_error == NULL && ptrace(PTRACE_GETFPXREGS, ext->pid, 0, &ext->regs->fp) < 0) {
-#else
-        if (ext->regs_error == NULL && ptrace(PTRACE_GETFPREGS, ext->pid, 0, &ext->regs->fp) < 0) {
-#endif
-            assert(errno != 0);
-            if (errno == ESRCH) {
-                ctx->stopped = 0;
-                ctx->exiting = 1;
-                return;
-            }
-            ext->regs_error = get_error_report(errno);
-            trace(LOG_ALWAYS, "error: ptrace(PTRACE_GETFPREGS) failed; pid %d, error %d %s",
-                ext->pid, errno, errno_to_str(errno));
         }
 
         if (syscall && !ext->regs_error) {
@@ -1169,10 +1227,12 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         }
 
         if (signal == SIGTRAP && event == 0 && !syscall) {
+            int cb_found = 0;
             size_t break_size = 0;
+            cpu_bp_on_suspend(ctx, &cb_found);
             get_break_instruction(ctx, &break_size);
             ctx->stopped_by_bp = !ext->regs_error && is_breakpoint_address(ctx, pc1 - break_size);
-            ext->end_of_step = !ctx->stopped_by_bp && ext->pending_step;
+            ext->end_of_step = !ctx->stopped_by_cb && !ctx->stopped_by_bp && ext->pending_step;
             if (ctx->stopped_by_bp) set_regs_PC(ctx, pc1 - break_size);
         }
         ext->pending_step = 0;
