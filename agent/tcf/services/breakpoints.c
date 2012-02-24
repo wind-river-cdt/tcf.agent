@@ -229,7 +229,7 @@ static void get_bi_access_types(BreakInstruction * bi, unsigned * access_types, 
         if (bi->refs[i].cnt) {
             char * type = bi->refs[i].bp->type;
             int md = bi->refs[i].bp->access_mode;
-            t |= md ? md : CTX_BP_ACCESS_INSTRUCTION;
+            t |= md || bi->no_addr ? md : CTX_BP_ACCESS_INSTRUCTION;
             if (sz < bi->refs[i].size) sz = bi->refs[i].size;
             if (type == NULL || strcmp(type, "Software") != 0) soft = 0;
         }
