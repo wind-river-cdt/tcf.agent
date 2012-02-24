@@ -567,20 +567,25 @@ static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
                 json_write_string(out, "LocationContext");
                 write_stream(out, ':');
                 json_write_string(out, bi->refs[i].ctx->id);
-                write_stream(out, ',');
                 if (bi->address_error != NULL) {
+                    write_stream(out, ',');
                     json_write_string(out, "Error");
                     write_stream(out, ':');
                     json_write_string(out, errno_to_str(set_error_report_errno(bi->address_error)));
                 }
                 else {
-                    json_write_string(out, "Address");
-                    write_stream(out, ':');
-                    json_write_uint64(out, bi->refs[i].addr);
-                    write_stream(out, ',');
-                    json_write_string(out, "Size");
-                    write_stream(out, ':');
-                    json_write_uint64(out, bi->refs[i].size);
+                    if (!bi->no_addr) {
+                        write_stream(out, ',');
+                        json_write_string(out, "Address");
+                        write_stream(out, ':');
+                        json_write_uint64(out, bi->refs[i].addr);
+                    }
+                    if (bi->refs[i].size > 0) {
+                        write_stream(out, ',');
+                        json_write_string(out, "Size");
+                        write_stream(out, ':');
+                        json_write_uint64(out, bi->refs[i].size);
+                    }
                     if (bi->planting_error != NULL) {
                         write_stream(out, ',');
                         json_write_string(out, "Error");
@@ -654,6 +659,7 @@ static BreakInstruction * link_breakpoint_instruction(
                     i->refs[0].ctx == ctx && i->refs[0].bp == bp &&
                     compare_error_reports(address_error, i->address_error)) {
                 release_error_report(address_error);
+                i->refs[0].cnt++;
                 return i;
             }
             l = l->next;
