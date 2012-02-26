@@ -1461,7 +1461,7 @@ static void op_index(int mode, Value * v) {
     if (get_symbol_size(type, &size) < 0) {
         error(errno, "Cannot get array element size");
     }
-    if (get_symbol_lower_bound(v->type, &lower_bound) < 0) {
+    if (v->type_class == TYPE_CLASS_ARRAY && get_symbol_lower_bound(v->type, &lower_bound) < 0) {
         error(errno, "Cannot get array lower bound");
     }
     offs = (ContextAddress)(to_int(mode, &i) - lower_bound) * size;
