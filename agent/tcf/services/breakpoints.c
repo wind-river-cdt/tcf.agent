@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -95,6 +95,7 @@ struct BreakpointInfo {
     EventPointCallBack * event_callback;
     void * event_callback_args;
 
+    int attrs_changed;
     int status_changed;
 };
 
@@ -381,6 +382,7 @@ static void flush_instructions(void) {
     LINK * l = instructions.next;
     while (l != &instructions) {
         int i = 0;
+        int replant = 0;
         BreakInstruction * bi = link_all2bi(l);
         l = l->next;
         if (bi->valid) continue;
@@ -391,8 +393,10 @@ static void flush_instructions(void) {
                 context_unlock(bi->refs[i].ctx);
                 memmove(bi->refs + i, bi->refs + i + 1, sizeof(InstructionRef) * (bi->ref_cnt - i - 1));
                 bi->ref_cnt--;
+                replant = 1;
             }
             else {
+                if (bi->refs[i].bp->attrs_changed) replant = 1;
                 i++;
             }
         }
@@ -405,14 +409,9 @@ static void flush_instructions(void) {
             else if (!bi->planted) {
                 plant_instruction(bi);
             }
-            else {
-                unsigned type = 0;
-                ContextAddress size = 0;
-                get_bi_access_types(bi, &type, &size);
-                if (bi->cb.access_types != type || bi->cb.length != size) {
-                    remove_instruction(bi);
-                    plant_instruction(bi);
-                }
+            else if (replant) {
+                remove_instruction(bi);
+                plant_instruction(bi);
             }
         }
     }
@@ -978,6 +977,7 @@ static void notify_breakpoints_status(void) {
             }
         }
 #endif
+        bp->attrs_changed = 0;
         if (bp->client_cnt == 0) {
             if (bp->instruction_cnt == 0) {
                 send_event_context_removed(bp);
@@ -1523,7 +1523,7 @@ static BreakpointAttribute * read_breakpoint_properties(InputStream * inp) {
         for (;;) {
             int ch;
             char name[256];
-            BreakpointAttribute * attr = (BreakpointAttribute *)loc_alloc(sizeof(BreakpointAttribute));
+            BreakpointAttribute * attr = (BreakpointAttribute *)loc_alloc_zero(sizeof(BreakpointAttribute));
 
             json_read_string(inp, name, sizeof(name));
             if (read_stream(inp) != ':') exception(ERR_JSON_SYNTAX);
@@ -1531,7 +1531,6 @@ static BreakpointAttribute * read_breakpoint_properties(InputStream * inp) {
             attr->value = json_read_object(inp);
             *p = attr;
             p = &attr->next;
-            attr->next = NULL;
 
             ch = read_stream(inp);
             if (ch == ',') continue;
@@ -1854,6 +1853,7 @@ static BreakpointInfo * add_breakpoint(Channel * c, BreakpointAttribute * attrs)
         list_add_last(&bp->link_id, id2bp + hash);
     }
     chng = set_breakpoint_attributes(bp, attrs);
+    if (chng) bp->attrs_changed = 1;
     if (list_is_empty(&bp->link_clients)) added = 1;
     else r = find_breakpoint_ref(bp, c);
     if (r == NULL) {
@@ -2314,6 +2314,7 @@ void change_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * att
     int chng = set_breakpoint_attributes(bp, attrs);
     assert(!list_is_empty(&bp->link_clients));
     if (chng) {
+        bp->attrs_changed = 1;
         replant_breakpoint(bp);
         send_event_context_changed(bp);
     }
