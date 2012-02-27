@@ -37,6 +37,11 @@
 
 #define OBJECT_ARRAY_SIZE 128
 
+/* Pseudo object IDs for fundamental types */
+#define OBJECT_ID_VOID ((ContextAddress)-1)
+#define OBJECT_ID_CHAR ((ContextAddress)-2)
+#define OBJECT_ID_LAST ((ContextAddress)-8)
+
 typedef struct ObjectArray {
     struct ObjectArray * mNext;
     ObjectInfo mArray[OBJECT_ARRAY_SIZE];
@@ -82,8 +87,10 @@ static ObjectInfo * add_object_info(ContextAddress ID) {
         if (Info->mID == ID) return Info;
         Info = Info->mHashNext;
     }
-    if (ID < sDebugSection->addr) str_exception(ERR_INV_DWARF, "Invalid entry reference");
-    if (ID > sDebugSection->addr + sDebugSection->size) str_exception(ERR_INV_DWARF, "Invalid entry reference");
+    if (ID < OBJECT_ID_LAST) {
+        if (ID < sDebugSection->addr) str_exception(ERR_INV_DWARF, "Invalid entry reference");
+        if (ID > sDebugSection->addr + sDebugSection->size) str_exception(ERR_INV_DWARF, "Invalid entry reference");
+    }
     if (sCache->mObjectArrayPos >= OBJECT_ARRAY_SIZE) {
         ObjectArray * Buf = (ObjectArray *)loc_alloc_zero(sizeof(ObjectArray));
         Buf->mNext = sCache->mObjectList;
@@ -475,11 +482,43 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
             Info->mCompUnit = sCompUnit;
         }
         else {
-            if (Tag == TAG_compile_unit) {
+            switch (Tag) {
+            case TAG_compile_unit:
                 assert(sCache->mCompUnitsIndex == NULL);
                 if (Sibling == 0) Sibling = sUnitDesc.mUnitOffs + sUnitDesc.mUnitSize;
                 sCompUnit->mDesc = sUnitDesc;
                 sCache->mCompUnitsCnt++;
+                break;
+            case TAG_global_subroutine:
+            case TAG_inlined_subroutine:
+            case TAG_subroutine:
+            case TAG_subprogram:
+            case TAG_entry_point:
+            case TAG_pointer_type:
+            case TAG_mod_pointer:
+            case TAG_const_type:
+            case TAG_volatile_type:
+                if (Info->mType == NULL) {
+                    /* NULL here means "void" */
+                    Info->mType = add_object_info(OBJECT_ID_VOID);
+                    if (Info->mType->mTag == 0) {
+                        Info->mType->mTag = TAG_fund_type;
+                        Info->mType->mCompUnit = sCompUnit;
+                        Info->mType->u.mFundType = FT_void;
+                    }
+                }
+                break;
+            case TAG_string_type:
+                if (Info->mType == NULL) {
+                    /* NULL here means "char" */
+                    Info->mType = add_object_info(OBJECT_ID_CHAR);
+                    if (Info->mType->mTag == 0) {
+                        Info->mType->mTag = TAG_fund_type;
+                        Info->mType->mCompUnit = sCompUnit;
+                        Info->mType->u.mFundType = FT_char;
+                    }
+                }
+                break;
             }
             if (sPrevSibling != NULL) sPrevSibling->mSibling = Info;
             else if (sParentObject != NULL) sParentObject->mChildren = Info;

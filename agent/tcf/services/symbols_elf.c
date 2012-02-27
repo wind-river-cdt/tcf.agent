@@ -2041,12 +2041,8 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
             if (sym->base->obj != NULL && sym->base->obj->mType != NULL) {
                 if (unpack(sym->base) < 0) return -1;
                 object2symbol(sym->base->obj->mType, base_type);
+                return 0;
             }
-            else {
-                /* Function return type is 'void' */
-                alloc_cardinal_type_pseudo_symbol(sym->ctx, 0, base_type);
-            }
-            return 0;
         }
         *base_type = sym->base;
         return 0;
@@ -2068,17 +2064,6 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
             if (idx != NULL && idx->mSibling != NULL) {
                 object2symbol(obj, base_type);
                 (*base_type)->dimension = sym->dimension + 1;
-                return 0;
-            }
-        }
-        if (obj->mType == NULL) {
-            if (obj->mTag == TAG_string_type) {
-                alloc_cardinal_type_pseudo_symbol(sym->ctx, 1, base_type);
-                return 0;
-            }
-            if (obj->mTag == TAG_pointer_type || obj->mTag == TAG_mod_pointer) {
-                /* pointer to void */
-                alloc_cardinal_type_pseudo_symbol(sym->ctx, 0, base_type);
                 return 0;
             }
         }
