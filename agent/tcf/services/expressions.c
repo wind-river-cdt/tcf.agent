@@ -908,20 +908,15 @@ static int type_name(int mode, Symbol ** type) {
                     break;
                 case '*':
                 case '&':
+                case '[':
                 case ']':
+                case '(':
                 case ')':
                 case '{':
                 case '}':
                     tmp_buf[0] = (char)text_sy;
                     tmp_buf[1] = 0;
                     name = tmp_strdup2(name, tmp_buf);
-                    break;
-                case '[':
-                    name = tmp_strdup2(name, " [");
-                    break;
-                case '(':
-                    if (prev_sy == SY_NAME) name = tmp_strdup2(name, " ");
-                    name = tmp_strdup2(name, "(");
                     break;
                 case ',':
                     name = tmp_strdup2(name, ", ");

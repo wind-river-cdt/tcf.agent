@@ -469,7 +469,13 @@ static void add_to_find_symbol_buf(ObjectInfo * obj) {
         find_symbol_max += 32;
         find_symbol_buf = (Symbol **)loc_realloc(find_symbol_buf, sizeof(Symbol *) * find_symbol_max);
     }
-    object2symbol(obj, find_symbol_buf +find_symbol_cnt++);
+    object2symbol(obj, find_symbol_buf + find_symbol_cnt++);
+}
+
+static int check_obj_name(ObjectInfo * obj, const char * n) {
+    const char * s = obj->mName;
+    if (s == NULL) return 0;
+    return cmp_symbol_names(s, n) == 0;
 }
 
 static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symbol ** sym) {
@@ -481,7 +487,7 @@ static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symb
         unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
         while (n != 0) {
             ObjectInfo * obj = tbl->mNext[n].mObject;
-            if (strcmp(obj->mName, name) == 0) {
+            if (check_obj_name(obj, name)) {
                 if (obj->mFlags & DOIF_external) {
                     object2symbol(obj, sym);
                     return 1;
@@ -579,10 +585,8 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
     /* Search current scope */
     obj = children;
     while (obj != NULL) {
-        if (obj->mName != NULL && !(obj->mFlags & DOIF_specification)) {
-            if (strcmp(obj->mName, name) == 0) {
-                add_to_find_symbol_buf(find_definition(obj));
-            }
+        if ((obj->mFlags & DOIF_specification) == 0 && check_obj_name(obj, name)) {
+            add_to_find_symbol_buf(find_definition(obj));
         }
         if (parent->mTag == TAG_subprogram && ip != 0) {
             if (!obj_ptr_chk) {
@@ -633,13 +637,13 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
             find_in_object_tree(obj->mType, 0, 0, name);
             break;
         case TAG_imported_declaration:
-            if (obj->mName == NULL || strcmp(obj->mName, name) == 0) {
+            if (check_obj_name(obj, name)) {
                 PropertyValue p;
                 ObjectInfo * decl;
                 read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_import, &p);
                 decl = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
                 if (decl != NULL) {
-                    if (obj->mName != NULL || (decl->mName != NULL && strcmp(decl->mName, name) == 0)) {
+                    if (obj->mName != NULL || check_obj_name(decl, name)) {
                         add_to_find_symbol_buf(find_definition(decl));
                     }
                 }
@@ -733,8 +737,7 @@ static int find_by_name_in_sym_table(DWARFCache * cache, const char * name, Symb
                             case TAG_subroutine:
                             case TAG_subprogram:
                             case TAG_variable:
-                                if ((obj->mFlags & DOIF_external) != 0 &&
-                                        obj->mName != NULL && strcmp(obj->mName, name) == 0) {
+                                if ((obj->mFlags & DOIF_external) != 0 && check_obj_name(obj, name)) {
                                     object2symbol(obj, res);
                                     found = 1;
                                     cnt++;

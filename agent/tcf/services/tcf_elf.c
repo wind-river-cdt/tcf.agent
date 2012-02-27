@@ -1195,6 +1195,10 @@ unsigned calc_symbol_name_hash(const char * s) {
     while (*s) {
         unsigned g;
         if (s[0] == '@' && s[1] == '@') break;
+        if (s[0] == ' ' && (s[1] == '{' || s[1] == '(' || s[1] == '[')) {
+            s++;
+            continue;
+        }
         h = (h << 4) + (unsigned char)*s++;
         g = h & 0xf0000000;
         if (g) h ^= g >> 24;
@@ -1204,12 +1208,28 @@ unsigned calc_symbol_name_hash(const char * s) {
 }
 
 int cmp_symbol_names(const char * x, const char * y) {
-    while (*x && *x == *y) {
-        x++;
-        y++;
+    for (;;) {
+        if (*x != *y) {
+            if (*x == 0 && *y == '@' && y[1] == '@') return 0;
+            if (*y == 0 && *x == '@' && x[1] == '@') return 0;
+            if (*y == ' ' && (*x == '{' || *x == '(' || *x == '[')) {
+                y++;
+                continue;
+            }
+            if (*x == ' ' && (*y == '{' || *y == '(' || *y == '[')) {
+                x++;
+                continue;
+            }
+            break;
+        }
+        else if (*x == 0) {
+            return 0;
+        }
+        else {
+            x++;
+            y++;
+        }
     }
-    if (*x == 0 && *y == '@' && y[1] == '@') return 0;
-    if (*y == 0 && *x == '@' && x[1] == '@') return 0;
     if (*x < *y) return -1;
     if (*x > *y) return +1;
     return 0;
