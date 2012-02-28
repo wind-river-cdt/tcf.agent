@@ -40,7 +40,7 @@ static void elf_relocate(void) {
         break;
     case R_386_PC32:
         if (data_size < 4) str_exception(ERR_INV_FORMAT, "Invalid relocation record");
-        *(U4_T *)data_buf = (U4_T)(section->addr + reloc_offset + sym_value + reloc_addend);
+        *(U4_T *)data_buf = (U4_T)(sym_value + reloc_addend - (section->addr + reloc_offset));
         if (section->file->byte_swap) SWAP(*(U4_T *)data_buf);
         break;
     default:

@@ -1347,6 +1347,14 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="i386"
+				>
+				<File
+					RelativePath=".\machine\i386\tcf\dwarfreloc-mdep.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<File
 			RelativePath=".\tcf\config.h"
