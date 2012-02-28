@@ -850,10 +850,7 @@ static void process_output_streams_callback(VirtualStream * stream, int event_co
             err = out->req.error;
         }
         if (buf_len == 0) eos = 1;
-        if (out->prs == NULL) {
-            eos = 1;
-            err = 0;
-        }
+        if (err && out->prs == NULL) err = 0;
 
         assert((size_t)buf_len <= sizeof(out->buf));
         assert(out->buf_pos <= (size_t)buf_len);
