@@ -141,18 +141,20 @@ static int match_attribute(Context * ctx, const char * key, const char * val) {
     return 0;
 }
 
-static int match(Context * ctx, Attribute * attr) {
+static int match(Context * ctx, Attribute * attr, GetContextParent * get_parent) {
+    Context * parent = get_parent(ctx);
     if (attr->name == NULL && strcmp(attr->value, "**") == 0) {
         if (attr->parent == NULL) return 1;
-        if (match(ctx, attr->parent)) return 1;
-        while (ctx->parent != NULL) {
-            ctx = ctx->parent;
-            if (match(ctx, attr->parent)) return 1;
+        if (match(ctx, attr->parent, get_parent)) return 1;
+        while (parent != NULL) {
+            ctx = parent;
+            parent = get_parent(ctx);
+            if (match(ctx, attr->parent, get_parent)) return 1;
         }
         return 0;
     }
-    if (attr->parent != NULL && (ctx->parent == NULL || !match(ctx->parent, attr->parent))) return 0;
-    if (attr->parent == NULL && abs_path && ctx->parent != NULL) return 0;
+    if (attr->parent != NULL && (parent == NULL || !match(parent, attr->parent, get_parent))) return 0;
+    if (attr->parent == NULL && abs_path && parent != NULL) return 0;
     while (attr != NULL) {
         if (attr->name != NULL) {
             if (!match_attribute(ctx, attr->name, attr->value)) return 0;
@@ -165,9 +167,17 @@ static int match(Context * ctx, Attribute * attr) {
     return 1;
 }
 
+static Context * get_context_parent(Context * ctx) {
+    return ctx->parent;
+}
+
 int run_context_query(Context * ctx) {
+    return run_context_query_ext(ctx, get_context_parent);
+}
+
+int run_context_query_ext(Context * ctx, GetContextParent * get_parent) {
     if (attrs == NULL) return !abs_path;
-    return match(ctx, attrs);
+    return match(ctx, attrs, get_parent);
 }
 
 int context_query(Context * ctx, const char * query) {
@@ -226,6 +236,7 @@ void ini_context_query_service(Protocol * proto) {
 void add_context_query_comparator(const char * attr_name, ContextQueryComparator * callback) {}
 void parse_context_query(const char * query) {}
 int run_context_query(Context * ctx) { return 0; }
+int run_context_query_ext(Context * ctx, GetContextParent * get_parent) { return 0; }
 int context_query(Context * ctx, const char * query) { return query == NULL || *query == 0; }
 
 #endif

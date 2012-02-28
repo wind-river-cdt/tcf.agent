@@ -82,11 +82,14 @@ the root of the context tree.
 #include <tcf/framework/context.h>
 
 typedef int ContextQueryComparator(Context *, const char *);
+typedef Context * GetContextParent(Context *);
+
 
 extern void add_context_query_comparator(const char * attr_name, ContextQueryComparator * callback);
 
 extern void parse_context_query(const char * query);
 extern int run_context_query(Context * ctx);
+extern int run_context_query_ext(Context * ctx, GetContextParent * get_parent);
 
 extern int context_query(Context * ctx, const char * query);
 
