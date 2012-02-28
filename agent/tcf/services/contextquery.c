@@ -144,6 +144,7 @@ static int match_attribute(Context * ctx, const char * key, const char * val) {
 static int match(Context * ctx, Attribute * attr) {
     if (attr->name == NULL && strcmp(attr->value, "**") == 0) {
         if (attr->parent == NULL) return 1;
+        if (match(ctx, attr->parent)) return 1;
         while (ctx->parent != NULL) {
             ctx = ctx->parent;
             if (match(ctx, attr->parent)) return 1;
