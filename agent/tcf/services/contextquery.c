@@ -193,6 +193,7 @@ static void command_query(char * token, Channel * c) {
         if (run_context_query(ctx)) {
             if (cnt > 0)  write_stream(&c->out, ',');
             json_write_string(&c->out, ctx->id);
+            cnt++;
         }
     }
 
