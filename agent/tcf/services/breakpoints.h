@@ -62,6 +62,8 @@ struct BreakpointAttribute {
 #define BREAKPOINT_UNITS            "TimeUnits"
 #define BREAKPOINT_CONDITION        "Condition"
 #define BREAKPOINT_TEMPORARY        "Temporary"
+#define BREAKPOINT_EVENT_TYPE       "EventType"
+#define BREAKPOINT_EVENT_ARGS       "EventArgs"
 #define BREAKPOINT_CLIENT_DATA      "ClientData"
 #define BREAKPOINT_CONTEXT_QUERY    "ContextQuery"
 
