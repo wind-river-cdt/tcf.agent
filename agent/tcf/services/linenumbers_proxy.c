@@ -110,7 +110,7 @@ static LineNumbersCache * get_line_numbers_cache(void) {
     LINK * l = NULL;
     LineNumbersCache * cache = NULL;
     Channel * c = cache_channel();
-    if (c == NULL) exception(ERR_SYM_NOT_FOUND);
+    if (c == NULL) str_exception(ERR_OTHER, "get_line_numbers_cache(): illegal cache access");
     for (l = root.next; l != &root; l = l->next) {
         LineNumbersCache * x = root2cache(l);
         if (x->channel == c) {
@@ -198,7 +198,6 @@ static void validate_map_to_memory(Channel * c, void * args, int error) {
     f->error = get_error_report(error);
     cache_notify(&f->cache);
     if (f->disposed) free_line_address_cache(f);
-    if (trap.error) exception(trap.error);
 }
 
 int line_to_address(Context * ctx, char * file, int line, int column,
@@ -226,7 +225,7 @@ int line_to_address(Context * ctx, char * file, int line, int column,
 
     if (f == NULL) {
         Channel * c = cache_channel();
-        if (c == NULL) exception(ERR_UNSUPPORTED);
+        if (c == NULL || is_channel_closed(c)) exception(ERR_UNSUPPORTED);
         f = (LineAddressCache *)loc_alloc_zero(sizeof(LineAddressCache));
         list_add_first(&f->link_cache, cache->link_addr + h);
         f->magic = LINE_NUMBERS_CACHE_MAGIC;

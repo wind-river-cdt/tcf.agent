@@ -196,9 +196,7 @@ static SymbolsCache * get_symbols_cache(void) {
     LINK * l = NULL;
     SymbolsCache * syms = NULL;
     Channel * c = cache_channel();
-    if (c == NULL) {
-        str_exception(ERR_OTHER, "get_symbols_cache(): illegal cache access");
-    }
+    if (c == NULL) str_exception(ERR_OTHER, "get_symbols_cache(): illegal cache access");
     for (l = root.next; l != &root; l = l->next) {
         SymbolsCache * x = root2syms(l);
         if (x->channel == c) {
@@ -413,7 +411,7 @@ static SymInfoCache * get_sym_info_cache(const Symbol * sym) {
     }
     else if (!s->done_context) {
         Channel * c = cache_channel();
-        if (c == NULL) exception(ERR_SYM_NOT_FOUND);
+        if (c == NULL || is_channel_closed(c)) exception(ERR_SYM_NOT_FOUND);
         s->pending_get_context = protocol_send_command(c, SYMBOLS, "getContext", validate_context, s);
         json_write_string(&c->out, s->id);
         write_stream(&c->out, 0);
@@ -498,7 +496,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const cha
     }
 
 #if ENABLE_RCBP_TEST
-    if ((f == NULL && !syms->service_available) || (f != NULL && f->pending == NULL && f->error != NULL)) {
+    if (f == NULL && !syms->service_available) {
         void * address = NULL;
         int sym_class = 0;
         if (find_test_symbol(ctx, name, &address, &sym_class) >= 0) {
@@ -1054,7 +1052,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     }
     else if (!s->done_children) {
         Channel * c = cache_channel();
-        if (c == NULL) exception(ERR_SYM_NOT_FOUND);
+        if (c == NULL || is_channel_closed(c)) exception(ERR_SYM_NOT_FOUND);
         s->pending_get_children = protocol_send_command(c, SYMBOLS, "getChildren", validate_children, s);
         json_write_string(&c->out, s->id);
         write_stream(&c->out, 0);
@@ -1119,7 +1117,7 @@ int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
     }
     if (a == NULL) {
         Channel * c = cache_channel();
-        if (c == NULL) exception(ERR_SYM_NOT_FOUND);
+        if (c == NULL || is_channel_closed(c)) exception(ERR_SYM_NOT_FOUND);
         a = (ArraySymCache *)loc_alloc_zero(sizeof(*a));
         list_add_first(&a->link_sym, &s->array_syms);
         a->length = length;

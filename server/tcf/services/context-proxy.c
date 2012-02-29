@@ -1113,9 +1113,18 @@ static void read_register_property(InputStream * inp, const char * name, void * 
 
 static unsigned get_reg_index(ContextCache * cache, const char * id) {
     unsigned r = 0;
-    while (r < cache->reg_pos) {
-        if (strcmp(id, cache->reg_props[r].id) == 0) return r;
-        r++;
+    if (*id++ == 'R') {
+        for (;;) {
+            if (*id == '.' || *id != '@') {
+                return r;
+            }
+            else if (*id >= '0' && *id <= '9') {
+                r = r * 10 + (*id++ - '0');
+            }
+            else {
+                break;
+            }
+        }
     }
     str_exception(ERR_OTHER, "Invalid register ID");
     return 0;
