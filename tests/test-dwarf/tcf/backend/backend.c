@@ -464,6 +464,7 @@ static void loc_var_func(void * args, Symbol * sym) {
             if (errcmp(err, "Object is not available at this location") == 0) return;
             if (errcmp(err, "Division by zero in location") == 0) return;
             if (errcmp(err, "Cannot find loader debug") == 0) return;
+            if (errcmp(err, "Cannot get TLS module ID") == 0) return;
             errno = err;
             error_sym("get_symbol_value", sym);
         }
