@@ -39,6 +39,22 @@
 
 bool tcf_cpp_test_bool = false;
 
+template <class T> T tcf_cpp_test_template_func(T a, T b) {
+    return a + b;
+}
+
+template <class T> class tcf_cpp_test_template_class {
+    T values[2];
+public:
+    tcf_cpp_test_template_class(T a, T b) {
+        values[0] = a;
+        values[1] = b;
+    }
+};
+
+tcf_cpp_test_template_class<int> tcf_cpp_test_template_class_int(1, 2);
+tcf_cpp_test_template_class<double> tcf_cpp_test_template_class_double(1.0, 2.0);
+
 class tcf_cpp_test_class {
 public:
     static int s_int;
