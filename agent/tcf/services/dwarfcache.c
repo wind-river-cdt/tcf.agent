@@ -595,7 +595,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         break;
     case AT_name:
         dio_ChkString(Form);
-        Info->mName = (char *)dio_gFormDataAddr;
+        if (*(char *)dio_gFormDataAddr) Info->mName = (char *)dio_gFormDataAddr;
         break;
     case AT_specification_v2:
         dio_ChkRef(Form);
