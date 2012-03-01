@@ -36,12 +36,10 @@ static void elf_relocate(void) {
     case R_386_32:
         if (data_size < 4) str_exception(ERR_INV_FORMAT, "Invalid relocation record");
         *(U4_T *)data_buf = (U4_T)(sym_value + reloc_addend);
-        if (section->file->byte_swap) SWAP(*(U4_T *)data_buf);
         break;
     case R_386_PC32:
         if (data_size < 4) str_exception(ERR_INV_FORMAT, "Invalid relocation record");
         *(U4_T *)data_buf = (U4_T)(sym_value + reloc_addend - (section->addr + reloc_offset));
-        if (section->file->byte_swap) SWAP(*(U4_T *)data_buf);
         break;
     default:
         str_exception(ERR_INV_FORMAT, "Unsupported relocation type");

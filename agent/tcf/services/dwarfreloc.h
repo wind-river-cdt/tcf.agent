@@ -28,6 +28,10 @@
 
 #include <tcf/services/tcf_elf.h>
 
+/* Apply relocation for a vulue in 'buf' that is taken from section 's' at offset 'offset' and
+ * has size of 'size' bytes. 'dst' is set to relocation target section.
+ * Note: 'buf' has host endianness.
+ */
 extern void drl_relocate(ELF_Section * s, U8_T offset, void * buf, size_t size, ELF_Section ** dst);
 
 #endif /* ENABLE_ELF */
