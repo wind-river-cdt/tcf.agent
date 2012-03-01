@@ -135,7 +135,7 @@ void parse_context_query(const char * q) {
 static int match_attribute(Context * ctx, const char * key, const char * val) {
     Comparator * c = comparators;
     while (c != NULL) {
-        if (strcmp(c->attr_name, key) == 0) return c->callback(ctx, val);
+        if (stricmp(c->attr_name, key) == 0) return c->callback(ctx, val);
         c = c->next;
     }
     return 0;
