@@ -1150,8 +1150,13 @@ static void plant_at_address_expression(Context * ctx, ContextAddress ip, Breakp
 
 static void evaluate_address_expression(void * x) {
     EvaluationArgs * args = (EvaluationArgs *)x;
+    Context * ctx = args->ctx;
+
     assert(cache_enter_cnt > 0);
-    plant_at_address_expression(args->ctx, 0, args->bp);
+    if (!ctx->exited && !ctx->exiting && !EXT(ctx)->empty_bp_grp) {
+        plant_at_address_expression(ctx, 0, args->bp);
+    }
+
     expr_cache_exit(args);
 }
 
@@ -1173,14 +1178,19 @@ static void plant_breakpoint_address_iterator(CodeArea * area, void * x) {
 
 static void evaluate_text_location(void * x) {
     EvaluationArgs * args = (EvaluationArgs *)x;
-    BreakpointInfo * bp = args->bp;
+    Context * ctx = args->ctx;
 
-    bp_ip = 0;
     assert(cache_enter_cnt > 0);
-    if (line_to_address(args->ctx, bp->file, bp->line, bp->column, plant_breakpoint_address_iterator, args) < 0) {
-        address_expression_error(args->ctx, bp, errno);
+    if (!ctx->exited && !ctx->exiting && !EXT(ctx)->empty_bp_grp) {
+        BreakpointInfo * bp = args->bp;
+        bp_ip = 0;
+        assert(cache_enter_cnt > 0);
+        if (line_to_address(ctx, bp->file, bp->line, bp->column, plant_breakpoint_address_iterator, args) < 0) {
+            address_expression_error(ctx, bp, errno);
+        }
+        if (bp_ip != 0) plant_at_address_expression(ctx, bp_ip, args->bp);
     }
-    if (bp_ip != 0) plant_at_address_expression(args->ctx, bp_ip, args->bp);
+
     expr_cache_exit(args);
 }
 #endif
@@ -1321,6 +1331,7 @@ static void evaluate_condition(void * x) {
 }
 
 static void evaluate_bp_location(BreakpointInfo * bp, Context * ctx) {
+    assert(!ctx->exited);
     if (is_disabled(bp)) return;
     if (!check_context_ids_location(bp, ctx)) return;
     if (bp->file != NULL) {
