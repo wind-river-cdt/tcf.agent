@@ -17,6 +17,10 @@
 
 #if SERVICE_ContextQuery
 
+#if defined(__linux__)
+#  include<strings.h>
+#  define stricmp(x,y) strcasecmp(x,y)
+#endif
 #include <tcf/framework/json.h>
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/exceptions.h>
