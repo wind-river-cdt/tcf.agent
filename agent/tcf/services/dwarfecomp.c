@@ -118,8 +118,8 @@ static void op_addr(void) {
     }
     else {
         addr = elf_map_to_run_time_address(expr_ctx, expr->unit->mFile, section, addr);
+        if (errno) str_exception(errno, "Cannot get object run-time address");
     }
-    if (errno) str_exception(errno, "Cannot get object run-time address");
     add(OP_constu);
     add_uleb128(addr);
 }
