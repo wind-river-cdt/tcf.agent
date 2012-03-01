@@ -22,7 +22,7 @@
  * Run control service manages a queue of such requests ("safe events queue") and
  * makes a fair effort to optimize such requests. It can, for example, coalesce
  * multiple requests for same address space, which often significantly improves performance.
- * "Safe event" code is guarantied to run while relevant contexts are stopped and will not be resumed
+ * "Safe event" code is guaranteed to run while relevant contexts are stopped and will not be resumed
  * during the event execution, with a single exception of single instruction step support
  * that would resume only the specified context.
  *
@@ -38,7 +38,7 @@
  *          else intercept the context and report breakpoint hit up to UI - call suspend_debug_context()
  *   4. if no more safe events, run control resumes all contexts that are not intercepted.
  * Despite the fact that many contexts can be stopped as result of breakpoint hit,
- * normaly, only one of them will be intercepted, and only one "suspended" message will be sent up to UI.
+ * normally, only one of them will be intercepted, and only one "suspended" message will be sent up to UI.
  * If a breakpoint needs to intercept more then one context,
  * it can be be done using breakpoint attribute "StopGroup".
  */
@@ -116,7 +116,7 @@ extern int detach_debug_context(Context * ctx);
  * 'c' - channel to access symbols info, can be NULL if the info is provided locally.
  * 'mode' - of context resume modes defined in context.h
  * 'count' - number of steps if 'mode' is stepping mode.
- * 'range_start', range_end' - istruction address range if 'mode' is stepping in a range.
+ * 'range_start', range_end' - instruction address range if 'mode' is stepping in a range.
  * Returns 0 if no errors, otherwise returns -1 and sets errno.
  * Note: this function is asynchronous, it returns before contexts are resumed.
  */

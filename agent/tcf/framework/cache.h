@@ -59,7 +59,7 @@
         Context ctx = id2ctx(args->id);
         int result = context_has_state(ctx);
 
-        // Done retreiving cached data.
+        // Done retrieving cached data.
 
         cache_exit();
 

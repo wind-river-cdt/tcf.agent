@@ -63,7 +63,7 @@ extern void post_event_with_delay(EventCallBack * handler, void * arg, unsigned 
  * Cancel pending event with matching 'handler' and 'arg', or if event
  * is not pending and 'wait' is true then wait for matching event to
  * be posted.  Can only be called from the dispatch thread.  Returns
- * true if a posted event was cancelled.
+ * true if a posted event was canceled.
  */
 extern int cancel_event(EventCallBack * handler, void * arg, int wait);
 

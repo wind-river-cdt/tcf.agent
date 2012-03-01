@@ -166,7 +166,7 @@ extern int id2symbol(const char * id, Symbol ** sym);
 
 /*************** Functions for retrieving symbol properties ***************************************/
 /*
- * Each function retireves one particular attribute of an object or type.
+ * Each function retrieves one particular attribute of an object or type.
  * On error returns -1 and sets errno.
  * On success returns 0.
  */

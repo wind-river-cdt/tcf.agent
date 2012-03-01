@@ -28,7 +28,7 @@
 #include <tcf/services/tcf_elf.h>
 
 /*
- * Return run-time address of the debug structrure that is normally pointed by DT_DEBUG entry in ".dynamic" section.
+ * Return run-time address of the debug structure that is normally pointed by DT_DEBUG entry in ".dynamic" section.
  * "file" is assigned a file that contains DT_DEBUG entry.
  * Return 0 if the structure could not be found.
  */

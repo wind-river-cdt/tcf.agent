@@ -154,13 +154,13 @@ extern void channel_clear_broadcast_group(Channel *);
 
 /*
  * Lock a channel. A closed channel will not be deallocated until it is unlocked.
- * Each call of this function incremnets the channel reference counter.
+ * Each call of this function increments the channel reference counter.
  */
 extern void channel_lock(Channel *);
 
 /*
  * Unlock a channel.
- * Each call of this function decremnets the channel reference counter.
+ * Each call of this function decrements the channel reference counter.
  * If channel is closed and reference count is zero, then the channel object is deallocated.
  */
 extern void channel_unlock(Channel *);

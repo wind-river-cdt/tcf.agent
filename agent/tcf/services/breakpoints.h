@@ -151,7 +151,7 @@ extern char ** get_context_breakpoint_ids(Context * ctx);
  * When a context is stopped by breakpoint, it is necessary to disable
  * the breakpoint temporarily before the context can be resumed.
  * This function function removes break instruction, then does single step
- * over breakpoint location, then restores break intruction.
+ * over breakpoint location, then restores break instruction.
  * Return 0 if it is OK to resume context from current state,
  * return 1 if context needs to step over a breakpoint.
  */
@@ -167,7 +167,7 @@ extern void clone_breakpoints_on_process_fork(Context * parent, Context * child)
 extern void unplant_breakpoints(Context * ctx);
 
 /*
- * Check if memory data buffer contans planted break instructions and remove them.
+ * Check if memory data buffer contains planted break instructions and remove them.
  * Return -1 and set errno if the check cannot be done.
  */
 extern int check_breakpoints_on_memory_read(Context * ctx, ContextAddress address, void * buf, size_t size);

@@ -45,7 +45,7 @@ pid=4711
         Matches any context with a property pid, which has the value 4711.
 
 /server/ **
-        Matches all contexts which are decendants of the top level context
+        Matches all contexts which are descendants of the top level context
         named "server".
 
 "Linux 2.6.14"/Kernel/ *
@@ -55,7 +55,7 @@ pid=4711/ *
         All threads in processes with the pid 4711.
 
 /server/ ** /HasState=true
-        All threads which are decendants of the context "server".
+        All threads which are descendants of the context "server".
 
 The contexts are assumed to be placed in a tree. Each context has zero
 or one parent. If it has zero parents it is a child of the root of the

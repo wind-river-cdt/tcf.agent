@@ -207,7 +207,7 @@ struct CompUnit {
 /* Address range of a compilation unit. A unit can occupy multiple address ranges. */
 struct UnitAddressRange {
     CompUnit * mUnit;       /* Compilation unit */
-    ELF_Section * mSection; /* ELF file secdtion that contains the range */
+    ELF_Section * mSection; /* ELF file section that contains the range */
     ContextAddress mAddr;   /* Link-time start address of the range */
     ContextAddress mSize;   /* Size of the range */
 };

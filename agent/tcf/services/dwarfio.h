@@ -70,7 +70,7 @@ extern U8_T dio_ReadUX(int Size);
 /*
  * Read link-time address value.
  * Relocation tables are used if necessary to compute the address value.
- * For a file that can be relotated at run-time, 's' is assigned a section that the address points to.
+ * For a file that can be relocated at run-time, 's' is assigned a section that the address points to.
  */
 extern U8_T dio_ReadAddressX(ELF_Section ** s, int Size);
 extern U8_T dio_ReadAddress(ELF_Section ** s);
@@ -81,7 +81,7 @@ extern void dio_ReadAttribute(U2_T Attr, U2_T Form);
 
 typedef void (*DIO_EntryCallBack)(U2_T /* Tag */, U2_T /* Attr */, U2_T /* Form */);
 /*
- * CallBack is called berore each DWARF entry with Atrr = 0 and Form != 0,
+ * CallBack is called before each DWARF entry with Atrr = 0 and Form != 0,
  * then is is called for each entry attribute with appropriate Attr and Form values,
  * and then called after the entry with Attr = 0 and Form = 0.
  * This sequence is repeated for each entry in the debug info unit.

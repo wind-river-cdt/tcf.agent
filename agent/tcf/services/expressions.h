@@ -46,7 +46,7 @@ typedef struct Value Value;
 
 /*
  * ExpressionIdentifierCallBack is called for every identifier found in an expression during evaluation,
- * If callback knows value of the idenfifier it should fill Value struct and return 1,
+ * If callback knows value of the identifier it should fill Value struct and return 1,
  * otherwise it should return 0.
  */
 typedef int ExpressionIdentifierCallBack(Context *, int /*frame*/, char * /*name*/, Value *);
