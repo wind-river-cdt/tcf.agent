@@ -412,7 +412,7 @@ static void break_process_event(void * args) {
 
         assert(debug_state->break_posted);
         debug_state->break_posted = 0;
-        if (!ctx->exited && debug_state->break_thread == NULL) {
+        if (!ctx->exited && debug_state->break_thread == NULL && ext->debug_state->detach == 0) {
             for (l = ctx->children.next; l != &ctx->children; l = l->next) {
                 Context * c  = cldl2ctxp(l);
                 if (EXT(c)->stop_pending) {
@@ -486,6 +486,7 @@ static int win32_resume(Context * ctx, int step) {
     if (skip_breakpoint(ctx, step)) return 0;
 
     /* Update CPU trace flag */
+    if (debug_state->detach) step = 0;
     if (!step && ext->trace_flag) {
         get_registers(ctx);
         ext->regs->EFlags &= ~0x100;
@@ -526,7 +527,7 @@ static int win32_resume(Context * ctx, int step) {
             return -1;
         }
     }
-    if (debug_state->reporting_debug_event) {
+    if (debug_state->reporting_debug_event && !debug_state->detach) {
         ext->start_pending = 1;
     }
     else {
@@ -818,9 +819,14 @@ static void early_debug_event_handler(void * x) {
 }
 
 static void debugger_detach_handler(void * x) {
+    LINK * l = NULL;
     DebugState * debug_state = (DebugState *)x;
     Context * prs = context_find_from_pid(debug_state->process_id, 0);
 
+    for (l = prs->children.next; l != &prs->children; l = l->next) {
+        Context * ctx = cldl2ctxp(l);
+        if (ctx->stopped) win32_resume(ctx, 0);
+    }
     if (prs != NULL && !prs->exited) event_win32_context_exited(prs, 1);
 
     log_error("ReleaseSemaphore", SetEvent(debug_state->debug_event_inp));
@@ -845,6 +851,7 @@ static void debugger_exit_handler(void * x) {
 static DWORD WINAPI debugger_thread_func(LPVOID x) {
     DebugState * debug_state = (DebugState *)x;
     DebugEvent debug_event;
+    unsigned timeout_cnt = 0;
 
     if (DebugActiveProcess(debug_state->process_id) == 0) {
         debug_state->error = GetLastError();
@@ -864,20 +871,27 @@ static DWORD WINAPI debugger_thread_func(LPVOID x) {
         DEBUG_EVENT * win32_event = &debug_event.win32_event;
 
         memset(win32_event, 0, sizeof(DEBUG_EVENT));
-        if (WaitForDebugEvent(win32_event, INFINITE) == 0) {
+        if (WaitForDebugEvent(win32_event, 400) == 0) {
+            /* If we detach with debug events pending,
+             * the events will be sent to inferior and it will crash.
+             * Wait until no more debug events found. */
+            if (debug_state->detach && timeout_cnt >= 5) {
+                post_event(debugger_detach_handler, debug_state);
+                WaitForSingleObject(debug_state->debug_event_inp, INFINITE);
+                if (!DebugActiveProcessStop(debug_state->process_id)) {
+                    trace(LOG_ALWAYS, "DebugActiveProcessStop() error %d", GetLastError());
+                }
+                break;
+            }
+            if (GetLastError() == ERROR_SEM_TIMEOUT) {
+                timeout_cnt++;
+                continue;
+            }
             trace(LOG_ALWAYS, "WaitForDebugEvent() error %d", GetLastError());
             break;
         }
 
-        if (debug_state->detach) {
-            post_event(debugger_detach_handler, debug_state);
-            WaitForSingleObject(debug_state->debug_event_inp, INFINITE);
-            if (!DebugActiveProcessStop(debug_state->process_id)) {
-                trace(LOG_ALWAYS, "DebugActiveProcessStop() error %d", GetLastError());
-            }
-            break;
-        }
-
+        timeout_cnt = 0;
         assert(debug_state->process_id == win32_event->dwProcessId);
         debug_event.continue_status = DBG_CONTINUE;
 
@@ -1018,10 +1032,6 @@ static int context_detach(Context * ctx) {
     for (l = ctx->children.next; l != &ctx->children; l = l->next) {
         Context * c = cldl2ctxp(l);
         if (!c->exited) c->exiting = 1;
-        if (c->stopped && win32_resume(c, 0) < 0) return -1;
-    }
-    if (!debug_state->break_posted) {
-        post_break_process_event(ctx);
     }
     return 0;
 }

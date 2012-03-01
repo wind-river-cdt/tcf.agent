@@ -554,6 +554,7 @@ RegisterDefinition * get_PC_definition(Context * ctx) {
 #if ENABLE_HardwareBreakpoints
 
 #define MAX_HW_BPS 4
+#define ENABLE_BP_ACCESS_INSTRUCTION 0
 
 typedef struct ContextExtensionX86 {
     ContextBreakpoint * triggered_hw_bps[MAX_HW_BPS + 1];
@@ -605,13 +606,10 @@ static RegisterDefinition * get_DR_definition(unsigned no) {
 #endif
 }
 
-static int skip_read_only_breakpoint(Context * ctx, ContextBreakpoint * bp) {
+static int skip_read_only_breakpoint(Context * ctx, uint8_t dr6, ContextBreakpoint * bp) {
     int i;
     int read_write_hit = 0;
     ContextExtensionX86 * bps = EXT(context_get_group(ctx, CONTEXT_GROUP_BREAKPOINT));
-    uint32_t dr6 = 0;
-
-    if (context_read_reg(ctx, get_DR_definition(6), 0, sizeof(dr6), &dr6) < 0) return -1;
 
     for (i = 0; i < MAX_HW_BPS; i++) {
         if (bps->hw_bps[i] != bp) continue;
@@ -633,7 +631,9 @@ int cpu_bp_get_capabilities(Context * ctx) {
     return
         CTX_BP_ACCESS_DATA_READ |
         CTX_BP_ACCESS_DATA_WRITE |
+#if ENABLE_BP_ACCESS_INSTRUCTION
         CTX_BP_ACCESS_INSTRUCTION |
+#endif
         CTX_BP_ACCESS_VIRTUAL;
 }
 
@@ -647,7 +647,8 @@ int cpu_bp_plant(ContextBreakpoint * bp) {
             unsigned n = 1;
             unsigned m = 0;
             if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
-                /* Don't use more then 2 HW slots for regular instruction breakpoints */
+#if ENABLE_BP_ACCESS_INSTRUCTION
+                /* Don't use more then 2 HW slots for instruction access breakpoints */
                 int cnt = 0;
                 for (i = 0; i < MAX_HW_BPS; i++) {
                     assert(bps->hw_bps[i] != bp);
@@ -659,6 +660,10 @@ int cpu_bp_plant(ContextBreakpoint * bp) {
                     errno = ERR_UNSUPPORTED;
                     return -1;
                 }
+#else
+                errno = ERR_UNSUPPORTED;
+                return -1;
+#endif
             }
             else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
                 n = 2;
@@ -715,26 +720,24 @@ int cpu_bp_on_resume(Context * ctx, int * single_step) {
         int step_over_hw_bp = 0;
 
         if (context_read_reg(ctx, get_PC_definition(ctx), 0, sizeof(ip), &ip) < 0) return -1;
-        if (context_read_reg(ctx, get_DR_definition(7), 0, sizeof(dr7), &dr7) < 0) return -1;
 
         for (i = 0; i < MAX_HW_BPS; i++) {
             ContextBreakpoint * bp = bps->hw_bps[i];
-            if (bp != NULL && ip == bp->address &&
-                    (bp->access_types & CTX_BP_ACCESS_INSTRUCTION)) {
+            if (bp == NULL) {
+                /* nothing */
+            }
+            else if (bp->address == ip && (bp->access_types & CTX_BP_ACCESS_INSTRUCTION)) {
                 /* Skipping the breakpoint */
                 step_over_hw_bp = 1;
-                bp = NULL;
             }
-            dr7 &= ~((uint32_t)3 << (i * 2));
-            if (bp != NULL) {
+            else {
                 if (context_write_reg(ctx, get_DR_definition(i), 0, sizeof(bp->address), &bp->address) < 0) return -1;
                 dr7 |= (uint32_t)1 << (i * 2);
                 if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
-                    dr7 &= ~((uint32_t)3 << (i * 4 + 16));
+                    /* nothing */
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
                     if (bps->hw_idx[i] == 0) {
-                        dr7 &= ~((uint32_t)3 << (i * 4 + 16));
                         dr7 |= (uint32_t)1 << (i * 4 + 16);
                     }
                     else {
@@ -742,7 +745,6 @@ int cpu_bp_on_resume(Context * ctx, int * single_step) {
                     }
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
-                    dr7 &= ~((uint32_t)3 << (i * 4 + 16));
                     dr7 |= (uint32_t)1 << (i * 4 + 16);
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
@@ -753,17 +755,15 @@ int cpu_bp_on_resume(Context * ctx, int * single_step) {
                     return -1;
                 }
                 if (bp->length == 1) {
-                    dr7 &= ~((uint32_t)3 << (i * 4 + 18));
+                    /* nothing */
                 }
                 else if (bp->length == 2) {
-                    dr7 &= ~((uint32_t)3 << (i * 4 + 18));
                     dr7 |= (uint32_t)1 << (i * 4 + 18);
                 }
                 else if (bp->length == 4) {
                     dr7 |= (uint32_t)3 << (i * 4 + 18);
                 }
                 else if (bp->length == 8) {
-                    dr7 &= ~((uint32_t)3 << (i * 4 + 18));
                     dr7 |= (uint32_t)2 << (i * 4 + 18);
                 }
                 else {
@@ -785,8 +785,9 @@ int cpu_bp_on_resume(Context * ctx, int * single_step) {
 
 int cpu_bp_on_suspend(Context * ctx, int * triggered) {
     int cb_found = 0;
-    uint32_t dr6 = 0;
+    uint8_t dr6 = 0;
 
+    if (ctx->exiting) return 0;
     if (context_read_reg(ctx, get_DR_definition(6), 0, sizeof(dr6), &dr6) < 0) return -1;
 
     if (dr6 & 0xfu) {
@@ -799,13 +800,15 @@ int cpu_bp_on_suspend(Context * ctx, int * triggered) {
                 if (bp == NULL) continue;
                 cb_found = 1;
                 if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
-                    if (skip_read_only_breakpoint(ctx, bp)) continue;
+                    if (skip_read_only_breakpoint(ctx, dr6, bp)) continue;
                 }
                 ctx->stopped_by_cb = ext->triggered_hw_bps;
                 ctx->stopped_by_cb[j++] = bp;
                 ctx->stopped_by_cb[j] = NULL;
             }
         }
+        dr6 = 0;
+        if (context_write_reg(ctx, get_DR_definition(6), 0, sizeof(dr6), &dr6) < 0) return -1;
     }
     *triggered = cb_found;
     return 0;

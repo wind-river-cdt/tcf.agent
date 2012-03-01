@@ -363,6 +363,34 @@ static void free_regs(Context * ctx) {
     ext->regs_error = NULL;
 }
 
+static int do_single_step(Context * ctx) {
+    ContextExtensionLinux * ext = EXT(ctx);
+
+    assert(!ext->pending_step);
+
+    if (skip_breakpoint(ctx, 1)) return 0;
+
+    if (syscall_never_returns(ctx)) return context_continue(ctx);
+    trace(LOG_CONTEXT, "context: single step ctx %#lx, id %s", ctx, ctx->id);
+    if (flush_regs(ctx) < 0) return -1;
+    if (!ctx->stopped) return 0;
+    if (ptrace(PTRACE_SINGLESTEP, ext->pid, 0, 0) < 0) {
+        int err = errno;
+        if (err == ESRCH) {
+            ctx->exiting = 1;
+            send_context_started_event(ctx);
+            return 0;
+        }
+        trace(LOG_ALWAYS, "error: ptrace(PTRACE_SINGLESTEP, ...) failed: ctx %#lx, id %s, error %d %s",
+            ctx, ctx->id, err, errno_to_str(err));
+        errno = err;
+        return -1;
+    }
+    ext->pending_step = 1;
+    send_context_started_event(ctx);
+    return 0;
+}
+
 int context_continue(Context * ctx) {
     int cpu_bp_step = 0;
     int signal = 0;
@@ -381,7 +409,7 @@ int context_continue(Context * ctx) {
     assert(!ctx->exited);
 
     if (cpu_bp_on_resume(ctx, &cpu_bp_step) < 0) return -1;
-    if (cpu_bp_step) return context_single_step(ctx);
+    if (cpu_bp_step) return do_single_step(ctx);
     if (skip_breakpoint(ctx, 0)) return 0;
 
     if (!ext->syscall_enter && !ext->ptrace_event) {
@@ -458,37 +486,15 @@ int context_continue(Context * ctx) {
 
 int context_single_step(Context * ctx) {
     int cpu_bp_step = 0;
-    ContextExtensionLinux * ext = EXT(ctx);
 
     assert(is_dispatch_thread());
     assert(context_has_state(ctx));
     assert(ctx->stopped);
     assert(!is_intercepted(ctx));
-    assert(!ext->pending_step);
     assert(!ctx->exited);
 
     if (cpu_bp_on_resume(ctx, &cpu_bp_step) < 0) return -1;
-    if (skip_breakpoint(ctx, 1)) return 0;
-
-    if (syscall_never_returns(ctx)) return context_continue(ctx);
-    trace(LOG_CONTEXT, "context: single step ctx %#lx, id %s", ctx, ctx->id);
-    if (flush_regs(ctx) < 0) return -1;
-    if (!ctx->stopped) return 0;
-    if (ptrace(PTRACE_SINGLESTEP, ext->pid, 0, 0) < 0) {
-        int err = errno;
-        if (err == ESRCH) {
-            ctx->exiting = 1;
-            send_context_started_event(ctx);
-            return 0;
-        }
-        trace(LOG_ALWAYS, "error: ptrace(PTRACE_SINGLESTEP, ...) failed: ctx %#lx, id %s, error %d %s",
-            ctx, ctx->id, err, errno_to_str(err));
-        errno = err;
-        return -1;
-    }
-    ext->pending_step = 1;
-    send_context_started_event(ctx);
-    return 0;
+    return do_single_step(ctx);
 }
 
 int context_resume(Context * ctx, int mode, ContextAddress range_start, ContextAddress range_end) {
@@ -702,7 +708,18 @@ int context_read_reg(Context * ctx, RegisterDefinition * def, unsigned offs, uns
 
     for (i = def->offset + offs; i < def->offset + offs + size; i++) {
         if (ext->regs_valid[i] == 0) {
-            if (i >= offsetof(REG_SET, fp) && i < offsetof(REG_SET, fp) + sizeof(ext->regs->fp)) {
+            if (i >= offsetof(REG_SET, user.regs) && i < offsetof(REG_SET, user.regs) + sizeof(ext->regs->user.regs)) {
+                if (ptrace(PTRACE_GETREGS, ext->pid, 0, &ext->regs->user.regs) < 0 && errno != ESRCH) {
+                    int err = errno;
+                    trace(LOG_ALWAYS, "error: ptrace(PTRACE_GETREGS) failed: ctx %#lx, id %s, error %d %s",
+                        ctx, ctx->id, err, errno_to_str(err));
+                    ext->regs_error = get_error_report(err);
+                    errno = err;
+                    return -1;
+                }
+                memset(ext->regs_valid + offsetof(REG_SET, user.regs), 0xff, sizeof(ext->regs->user.regs));
+            }
+            else if (i >= offsetof(REG_SET, fp) && i < offsetof(REG_SET, fp) + sizeof(ext->regs->fp)) {
                 if (ptrace(PTRACE_GETFPREGS, ext->pid, 0, &ext->regs->fp) < 0 && errno != ESRCH) {
                     int err = errno;
                     trace(LOG_ALWAYS, "error: ptrace(PTRACE_GETFPREGS) failed: ctx %#lx, id %s, error %d %s",
@@ -1149,6 +1166,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         if (event != PTRACE_EVENT_EXEC) send_context_changed_event(ctx);
     }
     else {
+        int cb_found = 0;
         ContextAddress pc0 = 0;
         ContextAddress pc1 = 0;
 
@@ -1169,21 +1187,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         }
 
         memset(ext->regs_valid, 0, sizeof(REG_SET));
-        if (ptrace(PTRACE_GETREGS, ext->pid, 0, &ext->regs->user.regs) < 0) {
-            assert(errno != 0);
-            if (errno == ESRCH) {
-                ctx->stopped = 0;
-                ctx->exiting = 1;
-                return;
-            }
-            ext->regs_error = get_error_report(errno);
-            trace(LOG_ALWAYS, "error: ptrace(PTRACE_GETREGS) failed; pid %d, error %d %s",
-                ext->pid, errno, errno_to_str(errno));
-        }
-        else {
-            memset(ext->regs_valid + offsetof(REG_SET, user.regs), 0xff, sizeof(ext->regs->user.regs));
-            pc1 = get_regs_PC(ctx);
-        }
+        pc1 = get_regs_PC(ctx);
 
         if (syscall && !ext->regs_error) {
             if (!ext->syscall_enter) {
@@ -1226,10 +1230,9 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             trace(LOG_EVENTS, "event: pid %d stopped at PC = %#lx", pid, pc1);
         }
 
+        cpu_bp_on_suspend(ctx, &cb_found);
         if (signal == SIGTRAP && event == 0 && !syscall) {
-            int cb_found = 0;
             size_t break_size = 0;
-            cpu_bp_on_suspend(ctx, &cb_found);
             get_break_instruction(ctx, &break_size);
             ctx->stopped_by_bp = !ext->regs_error && is_breakpoint_address(ctx, pc1 - break_size);
             ext->end_of_step = !ctx->stopped_by_cb && !ctx->stopped_by_bp && ext->pending_step;
