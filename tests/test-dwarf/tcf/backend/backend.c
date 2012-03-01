@@ -1085,6 +1085,9 @@ static void next_file(void) {
         r->file_name = loc_strdup(elf_file_name);
         r->file_offs = p->offset;
         r->size = (ContextAddress)p->mem_size;
+        if ((p->flags & PF_X) == 0 && (r->size % 0x1000) != 0) {
+            r->size = r->size + 0x1000 - r->size % 0x1000;
+        }
         r->flags = MM_FLAG_R | MM_FLAG_W;
         if (p->flags & PF_X) r->flags |= MM_FLAG_X;
         r->dev = st.st_dev;
