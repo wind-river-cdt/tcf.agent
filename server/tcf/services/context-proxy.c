@@ -65,12 +65,8 @@ struct ContextCache {
     /* Register definitions */
     AbstractCache regs_cache;
     ErrorReport * reg_error;
-    unsigned reg_pos;
     unsigned reg_max;
     unsigned reg_size;
-    unsigned reg_ids_cnt;
-    char ** reg_ids;
-    char * reg_ids_str;
     RegisterProps * reg_props;
     RegisterDefinition * reg_defs;
     RegisterDefinition * pc_def;
@@ -274,14 +270,12 @@ static void free_context_cache(ContextCache * c) {
     loc_free(c->file);
     context_clear_memory_map(&c->mmap);
     loc_free(c->mmap.regions);
-    loc_free(c->reg_ids);
-    loc_free(c->reg_ids_str);
     loc_free(c->reg_defs);
     loc_free(c->signal_name);
     loc_free(c->bp_ids);
     if (c->reg_props != NULL) {
         unsigned i;
-        for (i = 0; i < c->reg_pos; i++) {
+        for (i = 0; i < c->reg_max; i++) {
             loc_free(c->reg_props[i].id);
             loc_free(c->reg_props[i].role);
         }
@@ -1113,9 +1107,9 @@ static void read_register_property(InputStream * inp, const char * name, void * 
 
 static unsigned get_reg_index(ContextCache * cache, const char * id) {
     unsigned r = 0;
-    if (*id++ == 'R') {
+    while (*id++ == 'R') {
         for (;;) {
-            if (*id == '.' || *id != '@') {
+            if (*id == '.' || *id == '@') {
                 return r;
             }
             else if (*id >= '0' && *id <= '9') {
@@ -1134,67 +1128,73 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
     ContextCache * cache = (ContextCache *)args;
     Trap trap;
 
-    if (cache->reg_ids == NULL) {
-        /* Registers.getChildren reply */
-        assert(cache->reg_ids_str == NULL);
-        assert(cache->reg_error == NULL);
-        assert(cache->pending_regs_cnt == 1);
+    assert(cache->pending_regs_cnt > 0);
+    cache->pending_regs_cnt--;
+
+    if (error) {
+        if (cache->reg_error == NULL) cache->reg_error = get_error_report(error);
+    }
+    else if (cache->reg_error != NULL) {
+        int i = 0;
+        do i = read_stream(&c->inp);
+        while (i != MARKER_EOM && i != MARKER_EOS);
+    }
+    else {
         if (set_trap(&trap)) {
-            cache->pending_regs_cnt--;
-            if (!error) {
+            error = read_errno(&c->inp);
+            if (!error && peek_stream(&c->inp) == '[') {
+                /* Registers.getChildren reply */
                 unsigned i;
-                error = read_errno(&c->inp);
                 ids_buf_pos = 0;
                 str_buf_pos = 0;
                 json_read_array(&c->inp, read_ids_item, NULL);
-                cache->reg_ids_cnt = ids_buf_pos;
-                cache->reg_ids = (char **)loc_alloc(sizeof(char *) * ids_buf_pos);
-                cache->reg_ids_str = (char *)loc_alloc(str_buf_pos);
-                memcpy(cache->reg_ids_str, str_buf, str_buf_pos);
-                for (i = 0; i < ids_buf_pos; i++) {
-                    assert(ids_buf[i] < str_buf_pos);
-                    cache->reg_ids[i] = cache->reg_ids_str + ids_buf[i];
-                }
                 if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
                 if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
-                if (!error && cache->reg_ids_cnt == 0) error = set_errno(
-                    ERR_INV_CONTEXT, "Register definitions not available");
+                for (i = 0; i < ids_buf_pos; i++) {
+                    cache->pending_regs_cnt++;
+                    protocol_send_command(c, "Registers", "getContext", validate_registers_cache, cache);
+                    json_write_string(&c->out, str_buf + ids_buf[i]);
+                    write_stream(&c->out, 0);
+                    write_stream(&c->out, MARKER_EOM);
+                    context_lock(cache->ctx);
+                }
             }
-            clear_trap(&trap);
-        }
-        else {
-            error = trap.error;
-        }
-        cache->reg_error = get_error_report(error);
-        cache_notify(&cache->regs_cache);
-    }
-    else {
-        /* Registers.getContext reply */
-        assert(cache->pending_regs_cnt > 0);
-        if (set_trap(&trap)) {
-            cache->pending_regs_cnt--;
-            if (!error) {
+            else if (!error && peek_stream(&c->inp) == '{') {
+                /* Registers.getContext reply */
                 unsigned i;
                 RegisterProps props;
                 memset(&props, 0, sizeof(props));
                 props.def.dwarf_id = -1;
                 props.def.eh_frame_id = -1;
-                error = read_errno(&c->inp);
                 json_read_struct(&c->inp, read_register_property, &props);
                 if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
                 if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
-                if (cache->reg_pos >= cache->reg_max) {
+                i = get_reg_index(cache, props.id);
+                if (i >= cache->reg_max) {
+                    unsigned pos = cache->reg_max;
                     cache->reg_max += 256;
+                    if (i >= cache->reg_max) cache->reg_max = i + 2;
                     cache->reg_props = (RegisterProps *)loc_realloc(cache->reg_props, cache->reg_max * sizeof(RegisterProps));
-                    cache->reg_defs = (RegisterDefinition *)loc_realloc(cache->reg_defs, (cache->reg_max + 1) * sizeof(RegisterDefinition));
+                    cache->reg_defs = (RegisterDefinition *)loc_realloc(cache->reg_defs, cache->reg_max * sizeof(RegisterDefinition));
+                    memset(cache->reg_props + pos, 0, (cache->reg_max - pos) * sizeof(RegisterProps));
+                    memset(cache->reg_defs + pos, 0, (cache->reg_max - pos) * sizeof(RegisterDefinition));
                 }
-                i = cache->reg_pos++;
                 cache->reg_props[i] = props;
                 cache->reg_defs[i] = props.def;
-                memset(cache->reg_defs + cache->reg_pos, 0, sizeof(RegisterDefinition));
                 if (props.role != NULL && strcmp(props.role, "PC") == 0) {
                     cache->pc_def = cache->reg_defs + i;
                 }
+                cache->pending_regs_cnt++;
+                protocol_send_command(c, "Registers", "getChildren", validate_registers_cache, cache);
+                json_write_string(&c->out, props.id);
+                write_stream(&c->out, 0);
+                write_stream(&c->out, MARKER_EOM);
+                context_lock(cache->ctx);
+            }
+            else {
+                int i = 0;
+                do i = read_stream(&c->inp);
+                while (i != MARKER_EOM && i != MARKER_EOS);
             }
             clear_trap(&trap);
         }
@@ -1202,17 +1202,19 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
             error = trap.error;
         }
         cache->reg_error = get_error_report(error);
-        if (cache->pending_regs_cnt == 0) {
-            unsigned i;
-            unsigned offs = 0;
-            for (i = 0; i < cache->reg_pos; i++) {
-                RegisterDefinition * r = cache->reg_defs + i;
+    }
+    if (cache->pending_regs_cnt == 0) {
+        unsigned i;
+        unsigned offs = 0;
+        for (i = 0; i < cache->reg_max; i++) {
+            RegisterDefinition * r = cache->reg_defs + i;
+            if (r->name != NULL) {
                 r->offset = offs;
                 offs += r->size;
             }
-            cache->reg_size = offs;
-            cache_notify(&cache->regs_cache);
         }
+        cache->reg_size = offs;
+        cache_notify(&cache->regs_cache);
     }
     context_unlock(cache->ctx);
 }
@@ -1220,7 +1222,7 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
 static void check_registers_cache(ContextCache * cache) {
     if (cache->pending_regs_cnt > 0) cache_wait(&cache->regs_cache);
     if (cache->reg_error != NULL) exception(set_error_report_errno(cache->reg_error));
-    if (cache->reg_ids == NULL) {
+    if (cache->reg_defs == NULL) {
         Channel * c = cache->peer->target;
         cache->pending_regs_cnt++;
         protocol_send_command(c, "Registers", "getChildren", validate_registers_cache, cache);
@@ -1228,22 +1230,6 @@ static void check_registers_cache(ContextCache * cache) {
         write_stream(&c->out, 0);
         write_stream(&c->out, MARKER_EOM);
         context_lock(cache->ctx);
-        cache_wait(&cache->regs_cache);
-    }
-    if (cache->reg_defs == NULL) {
-        unsigned i;
-        cache->reg_max = 256;
-        cache->reg_defs = (RegisterDefinition *)loc_alloc_zero(sizeof(RegisterDefinition) * (cache->reg_max + 1));
-        cache->reg_props = (RegisterProps *)loc_alloc_zero(sizeof(RegisterProps) * cache->reg_max);
-        for (i = 0; i < cache->reg_ids_cnt; i++) {
-            Channel * c = cache->peer->target;
-            cache->pending_regs_cnt++;
-            protocol_send_command(c, "Registers", "getContext", validate_registers_cache, cache);
-            json_write_string(&c->out, cache->reg_ids[i]);
-            write_stream(&c->out, 0);
-            write_stream(&c->out, MARKER_EOM);
-            context_lock(cache->ctx);
-        }
         cache_wait(&cache->regs_cache);
     }
 }
@@ -1271,7 +1257,7 @@ static void validate_reg_values_cache(Channel * c, void * args, int error) {
         s->pending = NULL;
         if (!error) {
             int r = 0;
-            int n = s->info.is_top_frame ? s->ctx->reg_pos : s->reg_cnt;
+            int n = s->info.is_top_frame ? s->ctx->reg_max : s->reg_cnt;
             JsonReadBinaryState state;
             error = read_errno(&c->inp);
             json_read_binary_start(&state, &c->inp);
