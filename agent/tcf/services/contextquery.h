@@ -84,13 +84,25 @@ the root of the context tree.
 typedef int ContextQueryComparator(Context *, const char *);
 typedef Context * GetContextParent(Context *);
 
-
+/* Register a function that compare a context attribute with a given pattern (value) */
 extern void add_context_query_comparator(const char * attr_name, ContextQueryComparator * callback);
 
+/* Parse context query string. Parsing results are stored in an internal buffer and
+ * and used by run_context_query() and run_context_query_ext() */
 extern void parse_context_query(const char * query);
+
+/* Compare context 'ctx' with parsed context query, return 1 if they match, return 0 othewise. */
 extern int run_context_query(Context * ctx);
 extern int run_context_query_ext(Context * ctx, GetContextParent * get_parent);
 
+/* If called from ContextQueryComparator, return current attribute name. */
+extern const char * get_context_query_attr_name(void);
+
+/* Parse and run context query.
+ * Return 1 if the context and the query match, return 0 othewise.
+ * If a client needs to match multiple contexts, it is more efficient to call
+ * parse_context_query(), and then call run_context_query() for each context.
+ */
 extern int context_query(Context * ctx, const char * query);
 
 extern void ini_context_query_service(Protocol * proto);

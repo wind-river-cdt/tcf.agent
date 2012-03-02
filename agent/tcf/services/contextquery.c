@@ -17,10 +17,6 @@
 
 #if SERVICE_ContextQuery
 
-#if defined(__linux__)
-#  include<strings.h>
-#  define stricmp(x,y) strcasecmp(x,y)
-#endif
 #include <tcf/framework/json.h>
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/exceptions.h>
@@ -57,6 +53,7 @@ static char * str_buf = NULL;
 static size_t str_pos = 0;
 static size_t str_max = 0;
 static int abs_path = 0;
+static const char * query_attr_name = NULL;
 
 static void add_char(char ch) {
     if (str_pos >= str_max) {
@@ -137,12 +134,18 @@ void parse_context_query(const char * q) {
 }
 
 static int match_attribute(Context * ctx, const char * key, const char * val) {
+    int res = 0;
     Comparator * c = comparators;
+    query_attr_name = key;
     while (c != NULL) {
-        if (stricmp(c->attr_name, key) == 0) return c->callback(ctx, val);
+        if (strcasecmp(c->attr_name, key) == 0) {
+            res = c->callback(ctx, val);
+            break;
+        }
         c = c->next;
     }
-    return 0;
+    query_attr_name = NULL;
+    return res;
 }
 
 static int match(Context * ctx, Attribute * attr, GetContextParent * get_parent) {
@@ -184,6 +187,10 @@ int run_context_query_ext(Context * ctx, GetContextParent * get_parent) {
     return match(ctx, attrs, get_parent);
 }
 
+const char * get_context_query_attr_name(void) {
+    return query_attr_name;
+}
+
 int context_query(Context * ctx, const char * query) {
     parse_context_query(query);
     return run_context_query(ctx);
@@ -206,7 +213,7 @@ static void command_query(char * token, Channel * c) {
         Context * ctx = ctxl2ctxp(l);
         if (ctx->exited) continue;
         if (run_context_query(ctx)) {
-            if (cnt > 0)  write_stream(&c->out, ',');
+            if (cnt > 0) write_stream(&c->out, ',');
             json_write_string(&c->out, ctx->id);
             cnt++;
         }
@@ -216,6 +223,30 @@ static void command_query(char * token, Channel * c) {
     write_stream(&c->out, 0);
     write_stream(&c->out, MARKER_EOM);
     loc_free(query);
+}
+
+static void command_get_attr_names(char * token, Channel * c) {
+    unsigned cnt = 0;
+    Comparator * l = NULL;
+
+    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+
+    write_stringz(&c->out, "R");
+    write_stringz(&c->out, token);
+    write_errno(&c->out, 0);
+    write_stream(&c->out, '[');
+
+    l = comparators;
+    while (l != NULL) {
+        if (cnt > 0) write_stream(&c->out, ',');
+        json_write_string(&c->out, l->attr_name);
+        l = l->next;
+        cnt++;
+    }
+
+    write_stream(&c->out, ']');
+    write_stream(&c->out, 0);
+    write_stream(&c->out, MARKER_EOM);
 }
 
 static int cmp_id(Context * ctx, const char * v) {
@@ -231,6 +262,7 @@ void ini_context_query_service(Protocol * proto) {
     add_context_query_comparator("ID", cmp_id);
     add_context_query_comparator("Name", cmp_name);
     add_command_handler(proto, CONTEXT_QUERY, "query", command_query);
+    add_command_handler(proto, CONTEXT_QUERY, "getAttrNames", command_get_attr_names);
 }
 
 #else

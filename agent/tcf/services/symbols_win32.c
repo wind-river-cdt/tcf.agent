@@ -792,7 +792,7 @@ static RegisterDefinition * find_register(Context * ctx, const char * name) {
     RegisterDefinition * defs = get_reg_definitions(ctx);
     if (defs == NULL) return NULL;
     while (defs->name != NULL) {
-        if (stricmp(defs->name, name) == 0) return defs;
+        if (strcasecmp(defs->name, name) == 0) return defs;
         defs++;
     }
     return NULL;
