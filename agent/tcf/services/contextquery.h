@@ -81,6 +81,12 @@ the root of the context tree.
 #include <tcf/framework/protocol.h>
 #include <tcf/framework/context.h>
 
+/* An debug context back-end can register default comparator using this as the comparator name.
+ * Default comparator is used when a regular comparator not found for an attribute.
+ * As a cortesy to clients, back-end should register regular comparators when possible,
+ * because default comparator prevents clients from getting a list of supported attribute names. */
+#define DEFAULT_CONTEXT_QUERY_COMPARATOR "*"
+
 typedef int ContextQueryComparator(Context *, const char *);
 typedef Context * GetContextParent(Context *);
 

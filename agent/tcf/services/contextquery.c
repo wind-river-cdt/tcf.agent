@@ -144,6 +144,17 @@ static int match_attribute(Context * ctx, const char * key, const char * val) {
         }
         c = c->next;
     }
+    if (c == NULL) {
+        /* Comparator not found, check default comparators */
+        c = comparators;
+        while (c != NULL) {
+            if (strcmp(c->attr_name, DEFAULT_CONTEXT_QUERY_COMPARATOR) == 0) {
+                res = c->callback(ctx, val);
+                if (res) break;
+            }
+            c = c->next;
+        }
+    }
     query_attr_name = NULL;
     return res;
 }
