@@ -338,7 +338,7 @@ static void send_eof_and_close(Channel * channel, int err) {
     }
     else {
         trace(LOG_PROTOCOL, "channel %#lx disconnected", c);
-        protocol_release(channel->protocol);
+        if (channel->protocol != NULL) protocol_release(channel->protocol);
     }
     channel->protocol = NULL;
 }
