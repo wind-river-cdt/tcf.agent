@@ -82,24 +82,24 @@ static void relocate(void * r) {
                 SWAP(bf.st_other);
                 SWAP(bf.st_shndx);
             }
-            if (symbols->file->type != ET_EXEC) {
-                switch (bf.st_shndx) {
-                case SHN_ABS:
-                    sym_value = bf.st_value;
-                    break;
-                case SHN_COMMON:
-                case SHN_UNDEF:
-                    str_exception(ERR_INV_FORMAT, "Invalid relocation record");
-                    break;
-                default:
-                    if (bf.st_shndx >= symbols->file->section_cnt) str_exception(ERR_INV_FORMAT, "Invalid relocation record");
-                    sym_value = (symbols->file->sections + bf.st_shndx)->addr + bf.st_value;
-                    *destination_section = symbols->file->sections + bf.st_shndx;
-                    break;
-                }
-            }
-            else {
+            switch (bf.st_shndx) {
+            case SHN_ABS:
                 sym_value = bf.st_value;
+                break;
+            case SHN_COMMON:
+            case SHN_UNDEF:
+                str_exception(ERR_INV_FORMAT, "Invalid relocation record");
+                break;
+            default:
+                if (bf.st_shndx >= symbols->file->section_cnt) str_exception(ERR_INV_FORMAT, "Invalid relocation record");
+                if (symbols->file->type != ET_EXEC) {
+                    sym_value = (symbols->file->sections + bf.st_shndx)->addr + bf.st_value;
+                }
+                else {
+                    sym_value = bf.st_value;
+                }
+                *destination_section = symbols->file->sections + bf.st_shndx;
+                break;
             }
         }
     }
@@ -135,24 +135,24 @@ static void relocate(void * r) {
                 SWAP(bf.st_other);
                 SWAP(bf.st_shndx);
             }
-            if (symbols->file->type != ET_EXEC) {
-                switch (bf.st_shndx) {
-                case SHN_ABS:
-                    sym_value = bf.st_value;
-                    break;
-                case SHN_COMMON:
-                case SHN_UNDEF:
-                    str_exception(ERR_INV_FORMAT, "Invalid relocation record");
-                    break;
-                default:
-                    if (bf.st_shndx >= symbols->file->section_cnt) str_exception(ERR_INV_FORMAT, "Invalid relocation record");
-                    sym_value = (symbols->file->sections + bf.st_shndx)->addr + bf.st_value;
-                    *destination_section = symbols->file->sections + bf.st_shndx;
-                    break;
-                }
-            }
-            else {
+            switch (bf.st_shndx) {
+            case SHN_ABS:
                 sym_value = bf.st_value;
+                break;
+            case SHN_COMMON:
+            case SHN_UNDEF:
+                str_exception(ERR_INV_FORMAT, "Invalid relocation record");
+                break;
+            default:
+                if (bf.st_shndx >= symbols->file->section_cnt) str_exception(ERR_INV_FORMAT, "Invalid relocation record");
+                if (symbols->file->type != ET_EXEC) {
+                    sym_value = (symbols->file->sections + bf.st_shndx)->addr + bf.st_value;
+                }
+                else {
+                    sym_value = bf.st_value;
+                }
+                *destination_section = symbols->file->sections + bf.st_shndx;
+                break;
             }
         }
     }
