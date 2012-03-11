@@ -149,6 +149,11 @@ extern void cache_notify(AbstractCache * cache);
 extern Channel * cache_channel(void);
 
 /*
+ * Return unique ID of current cache client transaction.
+ */
+extern unsigned cache_transaction_id(void);
+
+/*
  * Dispose a cache.
  */
 extern void cache_dispose(AbstractCache * cache);

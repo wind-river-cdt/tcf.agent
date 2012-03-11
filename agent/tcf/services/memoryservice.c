@@ -341,32 +341,34 @@ static MemoryCommandArgs * read_command_args(char * token, Channel * c, int cmd)
 void send_event_memory_changed(Context * ctx, ContextAddress addr, unsigned long size) {
     OutputStream * out = &broadcast_group->out;
 
-    write_stringz(out, "E");
-    write_stringz(out, MEMORY);
-    write_stringz(out, "memoryChanged");
+    if (is_intercepted(ctx)) {
+        write_stringz(out, "E");
+        write_stringz(out, MEMORY);
+        write_stringz(out, "memoryChanged");
 
-    json_write_string(out, ctx->id);
-    write_stream(out, 0);
+        json_write_string(out, ctx->id);
+        write_stream(out, 0);
 
-    /* <array of addres ranges> */
-    write_stream(out, '[');
-    write_stream(out, '{');
+        /* <array of addres ranges> */
+        write_stream(out, '[');
+        write_stream(out, '{');
 
-    json_write_string(out, "addr");
-    write_stream(out, ':');
-    json_write_uint64(out, addr);
+        json_write_string(out, "addr");
+        write_stream(out, ':');
+        json_write_uint64(out, addr);
 
-    write_stream(out, ',');
+        write_stream(out, ',');
 
-    json_write_string(out, "size");
-    write_stream(out, ':');
-    json_write_ulong(out, size);
+        json_write_string(out, "size");
+        write_stream(out, ':');
+        json_write_ulong(out, size);
 
-    write_stream(out, '}');
-    write_stream(out, ']');
-    write_stream(out, 0);
+        write_stream(out, '}');
+        write_stream(out, ']');
+        write_stream(out, 0);
 
-    write_stream(out, MARKER_EOM);
+        write_stream(out, MARKER_EOM);
+    }
 }
 
 static void safe_memory_set(void * parm) {

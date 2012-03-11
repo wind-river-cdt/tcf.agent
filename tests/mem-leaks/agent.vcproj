@@ -42,7 +42,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".;..\..\agent;..\..\agent\system\Windows;..\..\agent\machine\i386"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
+				PreprocessorDefinitions="_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -117,7 +117,7 @@
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
 				AdditionalIncludeDirectories=".;..\..\agent;..\..\agent\system\Windows;..\..\agent\machine\i386"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
+				PreprocessorDefinitions="NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="0"
@@ -217,6 +217,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\agent\tcf\services\contextquery.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\services\contextquery.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\agent\tcf\services\diagnostics.c"
 				>
 			</File>
@@ -254,6 +262,14 @@
 			</File>
 			<File
 				RelativePath="..\..\agent\tcf\services\filesystem.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\services\funccall.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\services\funccall.h"
 				>
 			</File>
 			<File
@@ -604,6 +620,30 @@
 				RelativePath=".\tcf\services\memtrace.h"
 				>
 			</File>
+		</Filter>
+		<Filter
+			Name="machine"
+			>
+			<Filter
+				Name="x86_64"
+				>
+				<File
+					RelativePath="..\..\agent\machine\x86_64\tcf\cpudefs-mdep.c"
+					>
+				</File>
+				<File
+					RelativePath="..\..\agent\machine\x86_64\tcf\cpudefs-mdep.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="i386"
+				>
+				<File
+					RelativePath="..\..\agent\machine\i386\tcf\dwarfreloc-mdep.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="system"

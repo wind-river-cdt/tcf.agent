@@ -28,6 +28,7 @@
 #include <tcf/framework/cache.h>
 
 typedef struct WaitingCacheClient {
+    unsigned id;
     CacheClient * client;
     Channel * channel;
     void * args;
@@ -39,11 +40,12 @@ typedef struct WaitingCacheClient {
 #endif
 } WaitingCacheClient;
 
-static WaitingCacheClient current_client = {0, 0, 0, 0, 0};
+static WaitingCacheClient current_client = {0, 0, 0, 0, 0, 0};
 static int client_exited = 0;
 static int cache_miss_cnt = 0;
 static WaitingCacheClient * wait_list_buf;
 static unsigned wait_list_max;
+static unsigned id_cnt = 0;
 static LINK cache_list = TCF_LIST_INIT(cache_list);
 
 static void run_cache_client(void) {
@@ -72,6 +74,7 @@ void cache_enter(CacheClient * client, Channel * channel, void * args, size_t ar
     assert(channel != NULL);
     assert(!is_channel_closed(channel));
     assert(current_client.client == NULL);
+    current_client.id = id_cnt++;
     current_client.client = client;
     current_client.channel = channel;
     current_client.args = args;
@@ -146,6 +149,10 @@ void cache_notify(AbstractCache * cache) {
 
 Channel * cache_channel(void) {
     return current_client.channel;
+}
+
+unsigned cache_transaction_id(void) {
+    return current_client.id;
 }
 
 void cache_dispose(AbstractCache * cache) {

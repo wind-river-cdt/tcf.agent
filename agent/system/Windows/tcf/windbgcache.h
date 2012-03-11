@@ -204,6 +204,8 @@ enum DataKind {
    DataIsConstant
 };
 
+#define CV_CALL_NEAR_C 0x00
+
 #define SymInitialize LocSymInitialize
 #define SymGetOptions LocSymGetOptions
 #define SymSetOptions LocSymSetOptions

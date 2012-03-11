@@ -884,6 +884,7 @@ static void next_pc(void) {
             if (get_symbol_name(sym, &name) < 0) {
                 error("get_symbol_name");
             }
+            if (name != NULL) name = tmp_strdup(name);
             if (get_symbol_address(sym, &addr) < 0) {
                 error("get_symbol_address");
             }
@@ -895,38 +896,39 @@ static void next_pc(void) {
                 error("invalid symbol address");
             }
             if (name != NULL) {
-                char * name_buf = tmp_strdup(name);
-                if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, name_buf, &sym) < 0) {
+                Symbol * fnd_sym = NULL;
+                if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, name, &fnd_sym) < 0) {
                     if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
                         error("find_symbol_by_name");
                     }
                 }
                 else {
-                    ContextAddress addr = 0;
-                    if (get_symbol_name(sym, &name) < 0) {
-                        error_sym("get_symbol_name", sym);
+                    char * fnd_name = NULL;
+                    ContextAddress fnd_addr = 0;
+                    if (get_symbol_name(fnd_sym, &fnd_name) < 0) {
+                        error_sym("get_symbol_name", fnd_sym);
                     }
-                    if (name == NULL) {
+                    if (fnd_name == NULL) {
                         errno = ERR_OTHER;
-                        error_sym("invalid symbol name", sym);
+                        error_sym("invalid symbol name", fnd_sym);
                     }
-                    if (strcmp(name_buf, name) != 0) {
+                    if (strcmp(fnd_name, name) != 0) {
                         errno = ERR_OTHER;
-                        error_sym("strcmp(name_buf, name)", sym);
+                        error_sym("strcmp(name_buf, name)", fnd_sym);
                     }
-                    if (get_symbol_address(sym, &addr) == 0) {
+                    if (get_symbol_address(fnd_sym, &fnd_addr) == 0) {
                         Value v;
                         SYM_FLAGS flags = 0;
-                        char * expr = (char *)tmp_alloc(strlen(name_buf) + 16);
-                        if (get_symbol_flags(sym, &flags) < 0) {
-                            error_sym("get_symbol_flags", sym);
+                        char * expr = (char *)tmp_alloc(strlen(name) + 16);
+                        if (get_symbol_flags(fnd_sym, &flags) < 0) {
+                            error_sym("get_symbol_flags", fnd_sym);
                         }
-                        sprintf(expr, "$\"%s\"", name_buf);
+                        sprintf(expr, "$\"%s\"", name);
                         if (evaluate_expression(elf_ctx, STACK_TOP_FRAME, 0, expr, 0, &v) < 0) {
-                            error_sym("evaluate_expression", sym);
+                            error_sym("evaluate_expression", fnd_sym);
                         }
                         if (flags & SYM_FLAG_EXTERNAL) {
-                            if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, name_buf, &sym) < 0) {
+                            if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, name, &fnd_sym) < 0) {
                                 error("find_symbol_by_name");
                             }
                         }

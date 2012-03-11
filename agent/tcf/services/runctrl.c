@@ -51,7 +51,7 @@
 #define STOP_ALL_MAX_CNT 20
 
 typedef struct Listener {
-    RunControlEventListener * func;
+    RunControlEventListener * listener;
     void * args;
 } Listener;
 
@@ -104,6 +104,7 @@ typedef struct GetContextArgs {
 
 static SafeEvent * safe_event_list = NULL;
 static SafeEvent * safe_event_last = NULL;
+static int safe_event_active = 0;
 static int safe_event_pid_count = 0;
 static int run_ctrl_lock_cnt = 0;
 static int stop_all_timer_cnt = 0;
@@ -827,20 +828,6 @@ static void command_detach(char * token, Channel * c) {
     send_simple_result(c, token, err);
 }
 
-static void notify_context_intercepted(Context * ctx) {
-    unsigned i;
-    ContextExtensionRC * ext = EXT(ctx);
-    assert(!ext->intercepted);
-    ext->intercepted = 1;
-    ctx->pending_intercept = 0;
-    for (i = 0; i < listener_cnt; i++) {
-        Listener * l = listeners + i;
-        if (l->func->context_intercepted == NULL) continue;
-        l->func->context_intercepted(ctx, l->args);
-    }
-    assert(ctx->pending_intercept == 0);
-}
-
 static void notify_context_released(Context * ctx) {
     unsigned i;
     ContextExtensionRC * ext = EXT(ctx);
@@ -848,8 +835,8 @@ static void notify_context_released(Context * ctx) {
     ext->intercepted = 0;
     for (i = 0; i < listener_cnt; i++) {
         Listener * l = listeners + i;
-        if (l->func->context_released == NULL) continue;
-        l->func->context_released(ctx, l->args);
+        if (l->listener->context_released == NULL) continue;
+        l->listener->context_released(ctx, l->args);
     }
 }
 
@@ -907,9 +894,14 @@ static void send_event_context_removed(Context * ctx) {
 static void send_event_context_suspended(void) {
     LINK p0; /* List of contexts intercepted by breakpoint or exception */
     LINK p1; /* List of all other intercepted contexts */
+    LINK p2; /* List for notify_context_intercepted() */
     LINK * l = context_root.next;
+    unsigned i;
+
     list_init(&p0);
     list_init(&p1);
+    list_init(&p2);
+
     while (l != &context_root) {
         Context * x = ctxl2ctxp(l);
         l = l->next;
@@ -920,7 +912,9 @@ static void send_event_context_suspended(void) {
             assert(!e->intercepted);
             assert(!e->safe_single_step);
             cancel_step_mode(x);
-            notify_context_intercepted(x);
+            assert(!e->intercepted);
+            e->intercepted = 1;
+            x->pending_intercept = 0;
             if (get_context_breakpoint_ids(x) != NULL) e->intercepted_by_bp++;
             if (e->intercepted_by_bp || x->stopped_by_exception) n = &p0;
             list_add_last(&e->link, n);
@@ -934,6 +928,7 @@ static void send_event_context_suspended(void) {
         int container = list_is_empty(&p0) && p1.next != p1.prev;
 
         list_remove(n);
+        list_add_last(n, &p2);
 
         write_stringz(out, "E");
         write_stringz(out, RUN_CONTROL);
@@ -947,19 +942,33 @@ static void send_event_context_suspended(void) {
         if (container) {
             write_stream(out, '[');
             json_write_string(out, ctx->id);
-            l = p1.next;
-            while (l != &p1) {
-                Context * x = link2ctx(l);
+            assert(!list_is_empty(&p1));
+            while (!list_is_empty(&p1)) {
+                LINK * m = p1.next;
+                Context * x = link2ctx(m);
+                list_remove(m);
+                list_add_last(m, &p2);
                 write_stream(out, ',');
                 json_write_string(out, x->id);
-                l = l->next;
             }
             write_stream(out, ']');
             write_stream(out, 0);
-            list_init(&p1);
+            assert(list_is_empty(&p1));
         }
 
         write_stream(out, MARKER_EOM);
+    }
+
+    l = p2.next;
+    while (l != &p2) {
+        Context * x = link2ctx(l);
+        l = l->next;
+        for (i = 0; i < listener_cnt; i++) {
+            Listener * l = listeners + i;
+            if (l->listener->context_intercepted == NULL) continue;
+            l->listener->context_intercepted(x, l->args);
+        }
+        assert(x->pending_intercept == 0);
     }
 }
 
@@ -1633,6 +1642,7 @@ static void run_safe_events(void * arg) {
         }
         assert(is_all_stopped(i->grp));
         safe_event_list = i->next;
+        safe_event_active = 1;
         if (set_trap(&trap)) {
             i->done(i->arg);
             clear_trap(&trap);
@@ -1641,6 +1651,7 @@ static void run_safe_events(void * arg) {
             trace(LOG_ALWAYS, "Unhandled exception in \"safe\" event dispatch: %d %s",
                   trap.error, errno_to_str(trap.error));
         }
+        safe_event_active = 0;
         run_ctrl_unlock();
         context_unlock(i->grp);
         loc_free(i);
@@ -1676,6 +1687,10 @@ void post_safe_event(Context * ctx, EventCallBack * done, void * arg) {
     if (safe_event_list == NULL) safe_event_list = i;
     else safe_event_last->next = i;
     safe_event_last = i;
+}
+
+int is_safe_event(void) {
+    return safe_event_active;
 }
 
 int safe_context_single_step(Context * ctx) {
@@ -1719,9 +1734,23 @@ void add_run_control_event_listener(RunControlEventListener * listener, void * a
         listener_max += 8;
         listeners = (Listener *)loc_realloc(listeners, listener_max * sizeof(Listener));
     }
-    listeners[listener_cnt].func = listener;
+    listeners[listener_cnt].listener = listener;
     listeners[listener_cnt].args = args;
     listener_cnt++;
+}
+
+void rem_run_control_event_listener(RunControlEventListener * listener) {
+    unsigned i = 0;
+    while (i < listener_cnt) {
+        if (listeners[i++].listener == listener) {
+            while (i < listener_cnt) {
+                listeners[i - 1] = listeners[i];
+                i++;
+            }
+            listener_cnt--;
+            break;
+        }
+    }
 }
 
 static void event_context_created(Context * ctx, void * client_data) {
@@ -1833,15 +1862,6 @@ void ini_run_ctrl_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     add_context_query_comparator("ParentID", cmp_parent_id);
     add_context_query_comparator("CreatorID", cmp_creator_id);
     add_context_query_comparator("ProcessID", cmp_process_id);
-}
-
-#else
-
-#include <tcf/services/runctrl.h>
-#include <assert.h>
-
-void post_safe_event(Context * ctx, EventCallBack * done, void * arg) {
-    post_event(done, arg);
 }
 
 #endif /* SERVICE_RunControl */

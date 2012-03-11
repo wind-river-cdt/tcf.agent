@@ -33,6 +33,7 @@
 #include <tcf/services/symbols.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/memorymap.h>
+#include <tcf/services/funccall.h>
 #include <system/Windows/tcf/windbgcache.h>
 #include <system/Windows/tcf/context-win32.h>
 #if ENABLE_RCBP_TEST
@@ -194,10 +195,12 @@ static void tag2symclass(Symbol * sym, int tag) {
     case SymTagBaseType:
     case SymTagTypedef:
     case SymTagBaseClass:
-    case SymTagFunctionArgType:
     case SymTagCustomType:
     case SymTagManagedType:
         sym->sym_class = SYM_CLASS_TYPE;
+        break;
+    case SymTagFunctionArgType:
+        sym->sym_class = SYM_CLASS_REFERENCE;
         break;
     }
 }
@@ -230,9 +233,16 @@ static int get_type_tag(Symbol * type, DWORD * tag) {
     DWORD dword;
     for (;;) {
         if (get_type_info(type, TI_GET_SYMTAG, &dword) < 0) return -1;
-        if (dword != SymTagTypedef && dword != SymTagFunction && dword != SymTagData) break;
-        if (get_type_info(type, TI_GET_TYPE, &dword) < 0) return -1;
-        type->index = dword;
+        switch (dword) {
+        case SymTagTypedef:
+        case SymTagFunction:
+        case SymTagData:
+        case SymTagFunctionArgType:
+            if (get_type_info(type, TI_GET_TYPE, &dword) < 0) return -1;
+            type->index = dword;
+            continue;
+        }
+        break;
     }
     type->sym_class = SYM_CLASS_TYPE;
     *tag = dword;
@@ -530,14 +540,23 @@ int get_symbol_type(const Symbol * sym, Symbol ** type) {
     assert(sym->magic == SYMBOL_MAGIC);
     if (!sym->base && !sym->info) {
         DWORD tag = 0;
+        DWORD index = 0;
         Symbol * res = alloc_symbol();
         *res = *sym;
-        if (get_type_tag(res, &tag)) return -1;
-        assert(res->sym_class == SYM_CLASS_TYPE);
-        if (res->index != sym->index) {
+        if (get_type_info(sym, TI_GET_SYMTAG, &tag) < 0) return -1;
+        switch (tag) {
+        case SymTagTypedef:
+        case SymTagFunction:
+        case SymTagPublicSymbol:
+        case SymTagData:
+        case SymTagFunctionArgType:
+            if (get_type_info(sym, TI_GET_TYPE, &index) < 0) return -1;
+            res->sym_class = SYM_CLASS_TYPE;
+            res->index = index;
             *type = res;
             return 0;
         }
+        assert(sym->sym_class == SYM_CLASS_TYPE);
     }
     *type = (Symbol *)sym;
     return 0;
@@ -572,7 +591,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** type) {
     Symbol * res = alloc_symbol();
 
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (sym->base && sym->length) {
         res->ctx = sym->ctx;
         res->sym_class = SYM_CLASS_TYPE;
         res->info = basic_type_info + BST_UNSIGNED;
@@ -582,7 +601,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** type) {
         *type = res;
         return 0;
     }
-    if (sym->info) {
+    if (sym->base || sym->info) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -605,19 +624,23 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
     DWORD tag = 0;
 
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
-        *length = sym->length == 0 ? 1 : sym->length;
+    if (sym->base && sym->length) {
+        *length = sym->length;
         return 0;
     }
-    if (sym->info) {
+    if (sym->base || sym->info) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
     if (get_type_tag(&type, &tag)) return -1;
-    if (get_type_info(&type, TI_GET_COUNT, &res) < 0) return -1;
-
-    *length = res;
-    return 0;
+    switch (tag) {
+    case SymTagArrayType:
+        if (get_type_info(&type, TI_GET_COUNT, &res) < 0) return -1;
+        *length = res;
+        return 0;
+    }
+    errno = ERR_INV_CONTEXT;
+    return -1;
 }
 
 int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
@@ -625,11 +648,11 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
     DWORD tag = 0;
 
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base) {
+    if (sym->base && sym->length) {
         *value = 0;
         return 0;
     }
-    if (sym->info) {
+    if (sym->base || sym->info) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -840,14 +863,20 @@ int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, Registe
 }
 
 int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
+    DWORD tag = 0;
     DWORD dword = 0;
     SYMBOL_INFO * info = NULL;
 
     *flags = 0;
     assert(sym->magic == SYMBOL_MAGIC);
     if (sym->address || sym->base || sym->info) return 0;
+    if (get_type_info(sym, TI_GET_SYMTAG, &tag) < 0) return -1;
     if (get_sym_info(sym, sym->index, &info) == 0 && (info->Flags & SYMFLAG_PARAMETER) != 0) *flags |= SYM_FLAG_PARAMETER;
     if (get_type_info(sym, TI_GET_IS_REFERENCE, &dword) == 0 && dword) *flags |= SYM_FLAG_REFERENCE;
+    if (tag == SymTagFunctionArgType) *flags |= SYM_FLAG_PARAMETER;
+    if (tag == SymTagPublicSymbol) *flags |= SYM_FLAG_EXTERNAL;
+    if (tag == SymTagTypedef) *flags |= SYM_FLAG_TYPEDEF;
+    if (tag == SymTagEnum) *flags |= SYM_FLAG_ENUM_TYPE;
 
     return 0;
 }
@@ -1213,6 +1242,38 @@ int get_stack_tracing_info(Context * ctx, ContextAddress addr, StackTracingInfo 
 }
 
 int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
+    return 0;
+}
+
+int get_funccall_info(const Symbol * func,
+        const Symbol ** args, unsigned args_cnt, FunctionCallInfo ** res) {
+    FunctionCallInfo * info = (FunctionCallInfo *)tmp_alloc_zero(sizeof(FunctionCallInfo));
+    Symbol * type = (Symbol *)func;
+    DWORD tag = 0;
+    DWORD cc = 0;
+
+    assert(func->magic == SYMBOL_MAGIC);
+    if (func->base || func->info) {
+        errno = ERR_INV_CONTEXT;
+        return -1;
+    }
+    if (get_type_info(func, TI_GET_SYMTAG, &tag) < 0) return -1;
+    if (tag == SymTagFunction && get_symbol_type(func, &type) < 0) return -1;
+    if (get_type_info(type, TI_GET_CALLING_CONVENTION, &cc) < 0) return -1;
+#if defined(__x86_64__)
+    info->scope.machine = 62; /* EM_X86_64 */
+    info->scope.elf64 = 1;
+#else
+    info->scope.machine = 3; /* EM_386 */
+#endif
+    info->scope.os_abi = (uint8_t)cc;
+    info->scope.id_type = REGNUM_DWARF;
+    info->ctx = func->ctx;
+    info->func = func;
+    info->args_cnt = args_cnt;
+    info->args = args;
+    if (get_function_call_location_expression(info) < 0) return -1;
+    *res = info;
     return 0;
 }
 

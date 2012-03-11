@@ -1221,6 +1221,9 @@ static void command_copy(char * token, Channel * c) {
     if (err == 0 && copy_perms && chmod(dst, st.st_mode) < 0) err = errno;
 #if !defined(_WIN32) && !defined(_WRS_KERNEL)
     if (err == 0 && copy_uidgid && chown(dst, st.st_uid, st.st_gid) < 0) err = errno;
+#else
+    /* disable "set but not used" warning */
+    (void)copy_uidgid;
 #endif
 
     write_stringz(&c->out, "R");

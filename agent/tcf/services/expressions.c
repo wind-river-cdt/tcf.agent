@@ -38,12 +38,16 @@
 #include <tcf/framework/exceptions.h>
 #include <tcf/framework/json.h>
 #include <tcf/framework/cache.h>
+#include <tcf/framework/trace.h>
 #include <tcf/framework/context.h>
+#include <tcf/services/runctrl.h>
 #include <tcf/services/symbols.h>
+#include <tcf/services/funccall.h>
 #include <tcf/services/stacktrace.h>
-#include <tcf/services/expressions.h>
 #include <tcf/services/memoryservice.h>
+#include <tcf/services/breakpoints.h>
 #include <tcf/services/registers.h>
+#include <tcf/services/expressions.h>
 #include <tcf/main/test.h>
 
 #define SY_LEQ   256
@@ -93,6 +97,49 @@ static int big_endian = 0;
 static Context * expression_context = NULL;
 static int expression_frame = STACK_NO_FRAME;
 static ContextAddress expression_addr = 0;
+
+#ifndef ENABLE_FuncCallInjection
+#  define ENABLE_FuncCallInjection (ENABLE_Symbols && SERVICE_RunControl && SERVICE_Breakpoints && ENABLE_DebugContext)
+#endif
+
+#if ENABLE_FuncCallInjection
+typedef struct FuncCallState {
+    struct FuncCallState * next;
+    unsigned id;            /* ACPM transaction ID */
+    int pos;                /* Text position in the expression */
+    int started;            /* Target has started to execute the function call */
+    int intercepted;        /* Intercepted during or after the function call */
+    int committed;          /* ACPM transaction finished */
+    int finished;           /* Target has finished the function call */
+    Context * ctx;
+    ContextAddress func_addr;
+    AbstractCache cache;
+    BreakpointInfo * bp;
+    RunControlEventListener rc_listener;
+    ErrorReport * error;
+
+    /* Actual arguments */
+    Value * args;
+    unsigned args_cnt;
+    unsigned args_max;
+
+    /* Returned value */
+    void * ret_value;
+    size_t ret_size;
+    int ret_big_endian;
+
+    /* After call commands */
+    LocationExpressionCommand * cmds;
+    unsigned cmds_cnt;
+
+    /* Saved registers */
+    RegisterDefinition ** regs;
+    unsigned regs_cnt;
+    uint8_t * regs_data;
+} FuncCallState;
+
+static FuncCallState * func_call_state = NULL;
+#endif /* ENABLE_FuncCallInjection */
 
 #define MAX_ID_CALLBACKS 8
 static ExpressionIdentifierCallBack * id_callbacks[MAX_ID_CALLBACKS];
@@ -670,13 +717,14 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
     case SYM_CLASS_FUNCTION:
         {
             ContextAddress word = 0;
-            v->type_class = TYPE_CLASS_CARDINAL;
+            v->type_class = TYPE_CLASS_POINTER;
             if (v->type != NULL) get_array_symbol(v->type, 0, &v->type);
             if (mode == MODE_NORMAL && get_symbol_address(sym, &word) < 0) {
                 error(errno, "Cannot retrieve symbol address");
             }
             set_ctx_word_value(v, word);
             v->function = 1;
+            v->sym = sym;
         }
         break;
     default:
@@ -1297,17 +1345,17 @@ static void evaluate_symbol_address(Symbol * sym, ContextAddress obj_addr, Conte
     else {
         LocationExpressionState * state = NULL;
         LocationInfo * loc_info = NULL;
-        StackFrame * stk_info = NULL;
+        StackFrame * frame_info = NULL;
         uint64_t args[2];
         args[0] = obj_addr;
         args[1] = index;
         if (get_location_info(sym, &loc_info) < 0) {
             error(errno, "Cannot get symbol location expression");
         }
-        if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &stk_info) < 0) {
+        if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &frame_info) < 0) {
             error(errno, "Cannot get stack frame info");
         }
-        state = evaluate_location_expression(expression_context, stk_info, loc_info->cmds, loc_info->cmds_cnt, args, 2);
+        state = evaluate_location_expression(expression_context, frame_info, loc_info->cmds, loc_info->cmds_cnt, args, 2);
         if (state->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
         *addr = (ContextAddress)state->stk[0];
     }
@@ -1371,11 +1419,12 @@ static void op_field(int mode, Value * v) {
             error(errno, "Cannot retrieve symbol class");
         }
         if (sym_class == SYM_CLASS_FUNCTION) {
-            v->type_class = TYPE_CLASS_CARDINAL;
             get_symbol_type(sym, &v->type);
+            v->type_class = TYPE_CLASS_POINTER;
             if (v->type != NULL) get_array_symbol(v->type, 0, &v->type);
             set_ctx_word_value(v, addr);
             v->function = 1;
+            v->sym = sym;
         }
         else {
             ContextAddress size = 0;
@@ -1487,8 +1536,7 @@ static void op_index(int mode, Value * v) {
 static void op_addr(int mode, Value * v) {
     if (mode == MODE_SKIP) return;
     if (v->function) {
-        v->type_class = TYPE_CLASS_POINTER;
-        v->function = 0;
+        assert(v->type_class == TYPE_CLASS_POINTER);
     }
     else {
         if (!v->remote) error(ERR_INV_EXPRESSION, "Invalid '&': value has no address");
@@ -1548,6 +1596,281 @@ static void op_sizeof(int mode, Value * v) {
     }
 }
 
+static void funccall_error(const char * msg) {
+    set_errno(ERR_OTHER, msg);
+    set_errno(errno, "Cannot inject a function call");
+    exception(errno);
+}
+
+#if ENABLE_FuncCallInjection
+
+static void free_funccall_state(FuncCallState * state) {
+    assert(!state->started || state->intercepted);
+    assert(state->committed);
+    assert(state->regs_cnt == 0 || state->error);
+    if (state->bp) destroy_eventpoint(state->bp);
+    context_unlock(state->ctx);
+    rem_run_control_event_listener(&state->rc_listener);
+    release_error_report(state->error);
+    loc_free(state->ret_value);
+    loc_free(state->args);
+    loc_free(state->cmds);
+    loc_free(state->regs);
+    loc_free(state);
+}
+
+static void funcccall_breakpoint(Context * ctx, void * args) {
+    Trap trap;
+    FuncCallState * state = (FuncCallState *)args;
+    assert(state->ctx == ctx);
+    assert(state->started);
+    assert(!state->finished);
+    if (set_trap(&trap)) {
+        if (!state->intercepted && state->cmds_cnt > 0) {
+            /* Execute after call commands */
+            StackFrame * frame_info = NULL;
+            LocationExpressionState * vm = NULL;
+            if (get_frame_info(ctx, STACK_TOP_FRAME, &frame_info) < 0) exception(errno);
+            vm = evaluate_location_expression(ctx, frame_info,
+                    state->cmds, state->cmds_cnt, NULL, 0);
+            state->cmds_cnt = 0;
+
+            /* Read function call returned value */
+            if (vm->pieces_cnt > 0) {
+                void * value = NULL;
+                read_location_peices(ctx, frame_info, vm->pieces, vm->pieces_cnt,
+                        state->ret_big_endian, &value, &state->ret_size);
+                state->ret_value = loc_alloc_zero(state->ret_size);
+                memcpy(state->ret_value, value, state->ret_size);
+            }
+            else if (vm->stk_pos > 0) {
+                state->ret_size = sizeof(uint64_t);
+                state->ret_value = loc_alloc_zero(state->ret_size);
+                memcpy(state->ret_value, vm->stk + vm->stk_pos - 1, state->ret_size);
+            }
+        }
+        if (state->regs_cnt > 0) {
+            /* Restore registers */
+            unsigned i;
+            unsigned offs = 0;
+            for (i = 0; i < state->regs_cnt; i++) {
+                RegisterDefinition * r = state->regs[i];
+                if (context_write_reg(ctx, r, 0, r->size, state->regs_data + offs) < 0) exception(errno);
+                send_event_register_changed(register2id(ctx, STACK_TOP_FRAME, r));
+                offs += r->size;
+            }
+            state->regs_cnt = 0;
+        }
+        clear_trap(&trap);
+    }
+    else {
+        release_error_report(state->error);
+        state->error = get_error_report(trap.error);
+    }
+    if (!state->intercepted) {
+        assert(!state->finished);
+        state->finished = 1;
+        suspend_debug_context(ctx);
+    }
+    else if (state->committed) {
+        if (state->error) trace(LOG_ALWAYS, "Cannot restore state",
+            errno_to_str(set_error_report_errno(state->error)));
+        free_funccall_state(state);
+    }
+}
+
+static void funccall_intercepted(Context * ctx, void * args) {
+    FuncCallState * state = (FuncCallState *)args;
+    if (!state->intercepted) {
+        state->intercepted = 1;
+        if (!state->finished && state->error == NULL) {
+            state->error = get_error_report(set_errno(ERR_OTHER,
+                "Intercepted while executing injected function call"));
+        }
+        cache_notify(&state->cache);
+    }
+}
+
+static void funccall_check_recursion(ContextAddress func_addr) {
+    FuncCallState * state = func_call_state;
+    while (state != NULL) {
+        if (state->started && !state->finished &&
+                state->ctx == expression_context && state->func_addr == func_addr) {
+            funccall_error("Recursive invocation");
+        }
+        state = state->next;
+    }
+}
+
+static void op_call(int mode, Value * v) {
+    unsigned id = cache_transaction_id();
+    FuncCallState * state = func_call_state;
+    Symbol * func = NULL;
+    int type_class = 0;
+
+    if (!context_has_state(expression_context)) funccall_error("Context is not a thread");
+    if (!expression_context->stopped) funccall_error("Context is running");
+    if (is_safe_event()) funccall_error("Called from safe event handler");
+
+    while (state != NULL && (state->id != id || state->pos != text_pos)) state = state->next;
+    if (state != NULL && state->started && !state->intercepted) cache_wait(&state->cache);
+    if (state == NULL) {
+        state = (FuncCallState *)loc_alloc_zero(sizeof(FuncCallState));
+        state->next = func_call_state;
+        state->id = id;
+        state->pos = text_pos;
+        context_lock(state->ctx = expression_context);
+        func_call_state = state;
+    }
+    if (v->function) {
+        func = v->sym;
+    }
+    else if (v->type != NULL && v->type_class == TYPE_CLASS_POINTER) {
+        if (get_symbol_base_type(v->type, &func) < 0) {
+            error(errno, "Cannot retrieve symbol base type");
+        }
+    }
+    if (func != NULL && get_symbol_type_class(func, &type_class) < 0) {
+        error(errno, "Cannot retrieve symbol type class");
+    }
+    if (type_class != TYPE_CLASS_FUNCTION) {
+        error(ERR_INV_EXPRESSION, "Invalid '()': not a function");
+    }
+    if (get_symbol_address(func, &state->func_addr) < 0) {
+        error(errno, "Cannot retrieve function address");
+    }
+    state->args_cnt = 0;
+    if (state->args_max) memset(state->args, 0, sizeof(Value) * state->args_max);
+    if (text_sy != ')') {
+        int args_mode = mode;
+        if (state->started) args_mode = MODE_SKIP;
+        for (;;) {
+            if (state->args_cnt >= state->args_max) {
+                state->args_max += 8;
+                state->args = (Value *)loc_realloc(state->args, sizeof(Value) * state->args_max);
+            }
+            expression(args_mode, state->args + state->args_cnt++);
+            if (text_sy != ',') break;
+            next_sy();
+        }
+    }
+    if (get_symbol_base_type(func, &v->type) < 0) {
+        error(errno, "Cannot retrieve function return type");
+    }
+    if (get_symbol_type_class(v->type, &v->type_class) < 0) {
+        error(errno, "Cannot retrieve function return type class");
+    }
+    if (get_symbol_size(v->type, &v->size) < 0) {
+        error(errno, "Cannot retrieve function return value size");
+    }
+    if (mode == MODE_NORMAL) {
+        if (!state->started) {
+            unsigned i;
+            StackFrame * frame_info = NULL;
+            FunctionCallInfo * call_info = NULL;
+            LocationExpressionState * vm = NULL;
+            const Symbol ** arg_types = (const Symbol **)tmp_alloc_zero(sizeof(Symbol *) * state->args_cnt);
+            uint64_t * arg_vals = (uint64_t *)tmp_alloc_zero(sizeof(uint64_t) * state->args_cnt);
+
+            funccall_check_recursion(state->func_addr);
+            for (i = 0; i < state->args_cnt; i++) arg_types[i] = state->args[i].type;
+            if (get_funccall_info(func, arg_types, state->args_cnt, &call_info) < 0) exception(errno);
+            if (get_frame_info(expression_context, STACK_TOP_FRAME, &frame_info) < 0) exception(errno);
+
+            /* Save registers */
+            if (call_info->saveregs_cnt > 0) {
+                unsigned offs = 0;
+                for (i = 0; i < call_info->saveregs_cnt; i++) offs += call_info->saveregs[i]->size;
+                state->regs = (RegisterDefinition **)loc_alloc(sizeof(RegisterDefinition *) * call_info->saveregs_cnt);
+                state->regs_data = (uint8_t *)loc_alloc_zero(offs);
+                state->regs_cnt = call_info->saveregs_cnt;
+                offs = 0;
+                for (i = 0; i < call_info->saveregs_cnt; i++) {
+                    RegisterDefinition * r = call_info->saveregs[i];
+                    state->regs[i] = r;
+                    if (context_read_reg(expression_context, r, 0, r->size, state->regs_data + offs) < 0) exception(errno);
+                    offs += r->size;
+                }
+            }
+
+            /* get values of actual arguments */
+            for (i = 0; i < state->args_cnt; i++) {
+                Value * v = state->args + i;
+                switch (v->type_class) {
+                case TYPE_CLASS_CARDINAL:
+                case TYPE_CLASS_INTEGER:
+                case TYPE_CLASS_POINTER:
+                case TYPE_CLASS_ENUMERATION:
+                    arg_vals[i] = to_uns(MODE_NORMAL, v);
+                    break;
+                case TYPE_CLASS_ARRAY:
+                case TYPE_CLASS_COMPOSITE:
+                    if (!v->remote) funccall_error("Invalid argument type");
+                    arg_vals[i] = v->address;
+                    break;
+                default:
+                    funccall_error("Invalid argument type");
+                    break;
+                }
+            }
+
+            /* Execute call injection commands */
+            state->started = 1;
+            vm = evaluate_location_expression(expression_context, frame_info,
+                    call_info->cmds, call_info->cmds_cnt, arg_vals, state->args_cnt);
+            state->ret_big_endian = call_info->scope.big_endian;
+            if (vm->sft_cmd != NULL) {
+                char ret_addr[64];
+                uint64_t pc = 0;
+                RegisterDefinition * reg_pc = get_PC_definition(expression_context);
+                if (vm->sft_cmd->cmd != SFT_CMD_FCALL || vm->stk_pos != 0) {
+                    funccall_error("Invalid SFT instruction");
+                }
+
+                /* Create breakpoint at current PC - function return address */
+                assert(state->bp == NULL);
+                if (read_reg_value(frame_info, reg_pc, &pc) < 0) exception(errno);
+                snprintf(ret_addr, sizeof(ret_addr), "0x%" PRIX64, pc);
+                state->bp = create_eventpoint(ret_addr, expression_context, funcccall_breakpoint, state);
+
+                /* Set PC to the function address */
+                if (write_reg_value(frame_info, reg_pc, state->func_addr) < 0) exception(errno);
+                expression_context->stopped_by_bp = 0;
+
+                /* Save rest of func call commands to be executed after the function returns */
+                state->cmds_cnt = call_info->cmds_cnt - (vm->sft_cmd - call_info->cmds) - 1;
+                state->cmds = (LocationExpressionCommand *)loc_alloc(sizeof(LocationExpressionCommand) * state->cmds_cnt);
+                memcpy(state->cmds, vm->sft_cmd + 1, sizeof(LocationExpressionCommand) * state->cmds_cnt);
+
+                /* Resume debug context */
+                if (continue_debug_context(expression_context, cache_channel(), RM_RESUME, 1, 0, 0) < 0) exception(errno);
+
+                /* Wait until the function returns */
+                state->rc_listener.context_intercepted = funccall_intercepted;
+                add_run_control_event_listener(&state->rc_listener, state);
+                cache_wait(&state->cache);
+            }
+            else {
+                state->finished = 1;
+            }
+        }
+        assert(state->started);
+        assert(state->intercepted);
+        if (state->error) exception(set_error_report_errno(state->error));
+        set_value(v, state->ret_value, state->ret_size, state->ret_big_endian);
+    }
+    else {
+        set_value(v, NULL, (size_t)v->size, 0);
+    }
+}
+
+#else
+
+static void op_call(int mode, Value * v) {
+    funccall_error("Symbols service not available");
+}
+
+#endif /* ENABLE_FuncCallInjection */
 
 static void postfix_expression(int mode, Value * v) {
     primary_expression(mode, v);
@@ -1568,6 +1891,14 @@ static void postfix_expression(int mode, Value * v) {
             next_sy();
             op_deref(mode, v);
             op_field(mode, v);
+        }
+        else if (text_sy == '(') {
+            next_sy();
+            op_call(mode, v);
+            if (text_sy != ')') {
+                error(ERR_INV_EXPRESSION, "')' expected");
+            }
+            next_sy();
         }
         else {
             break;
@@ -1873,6 +2204,14 @@ static void additive_expression(int mode, Value * v) {
         next_sy();
         multiplicative_expression(mode, &x);
         if (mode != MODE_SKIP) {
+            if (v->function) {
+                v->type_class = TYPE_CLASS_CARDINAL;
+                v->type = NULL;
+            }
+            if (x.function) {
+                x.type_class = TYPE_CLASS_CARDINAL;
+                x.type = NULL;
+            }
             if (sy == '+' && v->type_class == TYPE_CLASS_ARRAY && x.type_class == TYPE_CLASS_ARRAY) {
                 if (mode == MODE_TYPE) {
                     v->remote = 0;
@@ -1897,7 +2236,7 @@ static void additive_expression(int mode, Value * v) {
                 Symbol * base = NULL;
                 ContextAddress size = 0;
                 if (v->type == NULL || get_symbol_base_type(v->type, &base) < 0 ||
-                    base == 0 || get_symbol_size(base, &size) < 0 || size == 0) {
+                    base == NULL || get_symbol_size(base, &size) < 0 || size == 0) {
                     error(ERR_INV_EXPRESSION, "Unknown pointer base type size");
                 }
                 switch (sy) {
@@ -1918,7 +2257,7 @@ static void additive_expression(int mode, Value * v) {
                 Symbol * base = NULL;
                 ContextAddress size = 0;
                 if (x.type == NULL || get_symbol_base_type(x.type, &base) < 0 ||
-                    base == 0 || get_symbol_size(base, &size) < 0 || size == 0) {
+                    base == NULL || get_symbol_size(base, &size) < 0 || size == 0) {
                     error(ERR_INV_EXPRESSION, "Unknown pointer base type size");
                 }
                 value = to_uns(mode, &x) + to_uns(mode, v) * size;
@@ -2234,42 +2573,64 @@ static void expression(int mode, Value * v) {
     conditional_expression(mode, v);
 }
 
-static int evaluate_type(Context * ctx, int frame, ContextAddress addr, char * s, Value * v) {
+static int evaluate_script(int mode, char * s, int load, Value * v) {
     Trap trap;
 
-    expression_context = ctx;
-    expression_frame = frame;
-    expression_addr = addr;
-    if (!set_trap(&trap)) return -1;
-    text = s;
-    text_pos = 0;
-    text_len = strlen(s) + 1;
-    next_ch();
-    next_sy();
-    expression(MODE_TYPE, v);
-    if (text_sy != 0) error(ERR_INV_EXPRESSION, "Illegal characters at the end of expression");
-    clear_trap(&trap);
+    if (set_trap(&trap)) {
+        if (s == NULL || *s == 0) str_exception(ERR_INV_EXPRESSION, "Empty expression");
+        text = s;
+        text_pos = 0;
+        text_len = strlen(s) + 1;
+        next_ch();
+        next_sy();
+        expression(mode, v);
+        if (text_sy != 0) error(ERR_INV_EXPRESSION, "Illegal characters at the end of expression");
+        if (load) load_value(v);
+        clear_trap(&trap);
+    }
+
+#if ENABLE_FuncCallInjection
+    if (get_error_code(trap.error) != ERR_CACHE_MISS) {
+        unsigned id = cache_transaction_id();
+        FuncCallState * n = func_call_state;
+        FuncCallState * p = NULL;
+        while (n != NULL) {
+            if (n->id == id) {
+                FuncCallState * x = n;
+                n = n->next;
+                if (p != NULL) p->next = n;
+                else func_call_state = n;
+                x->committed = 1;
+                if (x->regs_cnt == 0) free_funccall_state(x);
+            }
+            else {
+                p = n;
+                n = p->next;
+            }
+        }
+    }
+#endif /* ENABLE_FuncCallInjection */
+
+    if (trap.error) {
+        errno = trap.error;
+        return -1;
+    }
+
     return 0;
 }
 
-int evaluate_expression(Context * ctx, int frame, ContextAddress addr, char * s, int load, Value * v) {
-    Trap trap;
-
+static int evaluate_type(Context * ctx, int frame, ContextAddress addr, char * s, Value * v) {
     expression_context = ctx;
     expression_frame = frame;
     expression_addr = addr;
-    if (!set_trap(&trap)) return -1;
-    if (s == NULL || *s == 0) str_exception(ERR_INV_EXPRESSION, "Empty expression");
-    text = s;
-    text_pos = 0;
-    text_len = strlen(s) + 1;
-    next_ch();
-    next_sy();
-    expression(MODE_NORMAL, v);
-    if (text_sy != 0) error(ERR_INV_EXPRESSION, "Illegal characters at the end of expression");
-    if (load) load_value(v);
-    clear_trap(&trap);
-    return 0;
+    return evaluate_script(MODE_TYPE, s, 0, v);
+}
+
+int evaluate_expression(Context * ctx, int frame, ContextAddress addr, char * s, int load, Value * v) {
+    expression_context = ctx;
+    expression_frame = frame;
+    expression_addr = addr;
+    return evaluate_script(MODE_NORMAL, s, load, v);
 }
 
 int value_to_boolean(Value * v, int * res) {

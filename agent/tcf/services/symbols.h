@@ -30,6 +30,7 @@
  */
 
 typedef struct Symbol Symbol;
+typedef struct FunctionCallInfo FunctionCallInfo;
 
 #define SYM_CLASS_UNKNOWN       0
 #define SYM_CLASS_VALUE         1   /* Symbol represents a constant value */
@@ -251,6 +252,10 @@ extern ContextAddress is_plt_section(Context * ctx, ContextAddress addr);
 
 /* Get object location expression */
 extern int get_location_info(const Symbol * sym, LocationInfo ** info);
+
+/* Get information about function call injection */
+extern int get_funccall_info(const Symbol * func,
+        const Symbol ** args, unsigned args_cnt, FunctionCallInfo ** info);
 
 /*
  * For given context and its registers in a stack frame,

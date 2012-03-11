@@ -464,16 +464,16 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
             break;
         case OP_deref:
             {
-                LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
-                cmd->args.deref.size = rules.address_size;
-                cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
+                LocationExpressionCommand * cmd = add_command(SFT_CMD_RD_MEM);
+                cmd->args.mem.size = rules.address_size;
+                cmd->args.mem.big_endian = rules.reg_id_scope.big_endian;
             }
             break;
         case OP_deref_size:
             {
-                LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
-                cmd->args.deref.size = dio_ReadU1();
-                cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
+                LocationExpressionCommand * cmd = add_command(SFT_CMD_RD_MEM);
+                cmd->args.mem.size = dio_ReadU1();
+                cmd->args.mem.big_endian = rules.reg_id_scope.big_endian;
             }
             break;
         case OP_const1u:
@@ -607,7 +607,7 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
                 I8_T offs = dio_ReadS8LEB128();
                 RegisterDefinition * def = get_reg_by_id(rules.ctx, op - OP_breg0, &rules.reg_id_scope);
                 if (def == NULL) str_exception(errno, "Cannot read DWARF frame info");
-                add_command(SFT_CMD_REGISTER)->args.reg = def;
+                add_command(SFT_CMD_RD_REG)->args.reg = def;
                 if (offs != 0) {
                     add_command(SFT_CMD_NUMBER)->args.num = offs;
                     add_command(SFT_CMD_ADD);
@@ -635,20 +635,20 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
             add_command(SFT_CMD_ADD);
         }
         if (reg->rule == RULE_OFFSET) {
-            LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
-            cmd->args.deref.size = dst_reg_def->size;
-            if (cmd->args.deref.size > rules.address_size) cmd->args.deref.size = rules.address_size;
-            cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
+            LocationExpressionCommand * cmd = add_command(SFT_CMD_RD_MEM);
+            cmd->args.mem.size = dst_reg_def->size;
+            if (cmd->args.mem.size > rules.address_size) cmd->args.mem.size = rules.address_size;
+            cmd->args.mem.big_endian = rules.reg_id_scope.big_endian;
         }
         break;
     case RULE_SAME_VALUE:
         if (src_reg_def == NULL) return;
-        add_command(SFT_CMD_REGISTER)->args.reg = src_reg_def;
+        add_command(SFT_CMD_RD_REG)->args.reg = src_reg_def;
         break;
     case RULE_REGISTER:
         {
             RegisterDefinition * src_sef = get_reg_by_id(rules.ctx, reg->offset, &rules.reg_id_scope);
-            if (src_sef != NULL) add_command(SFT_CMD_REGISTER)->args.reg = src_sef;
+            if (src_sef != NULL) add_command(SFT_CMD_RD_REG)->args.reg = src_sef;
         }
         break;
     case RULE_EXPRESSION:
@@ -656,10 +656,10 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
         add_command(SFT_CMD_FP);
         add_dwarf_expression_commands(reg->expression, reg->offset);
         if (reg->rule == RULE_EXPRESSION) {
-            LocationExpressionCommand * cmd = add_command(SFT_CMD_DEREF);
-            cmd->args.deref.size = dst_reg_def->size;
-            if (cmd->args.deref.size > rules.address_size) cmd->args.deref.size = rules.address_size;
-            cmd->args.deref.big_endian = rules.reg_id_scope.big_endian;
+            LocationExpressionCommand * cmd = add_command(SFT_CMD_RD_MEM);
+            cmd->args.mem.size = dst_reg_def->size;
+            if (cmd->args.mem.size > rules.address_size) cmd->args.mem.size = rules.address_size;
+            cmd->args.mem.big_endian = rules.reg_id_scope.big_endian;
         }
         break;
     default:
@@ -699,7 +699,7 @@ static void generate_commands(void) {
     case RULE_OFFSET:
         reg_def = get_reg_by_id(rules.ctx, rules.cfa_register, &rules.reg_id_scope);
         if (reg_def != NULL) {
-            add_command(SFT_CMD_REGISTER)->args.reg = reg_def;
+            add_command(SFT_CMD_RD_REG)->args.reg = reg_def;
             if (rules.cfa_offset != 0) {
                 add_command(SFT_CMD_NUMBER)->args.num = rules.cfa_offset;
                 add_command(SFT_CMD_ADD);

@@ -103,6 +103,9 @@ typedef struct test_struct {
 
 typedef int test_array[10001];
 
+extern int tcf_test_func_int(int x, int y);
+extern long tcf_test_func_long(long x, long y);
+extern double tcf_test_func_double(double x, double y);
 extern void tcf_test_func3(void);
 extern int tcf_test_func2(void);
 extern void tcf_test_func1(void);
@@ -112,6 +115,18 @@ extern void tcf_test_func0(enum test_enum);
 char tcf_test_char = 0;
 short tcf_test_short = 0;
 long tcf_test_long = 0;
+
+int tcf_test_func_int(int x, int y) {
+    return x + y;
+}
+
+long tcf_test_func_long(long x, long y) {
+    return x + y;
+}
+
+double tcf_test_func_double(double x, double y) {
+    return x + y;
+}
 
 void tcf_test_func3(void) {
     tcf_test_char++;

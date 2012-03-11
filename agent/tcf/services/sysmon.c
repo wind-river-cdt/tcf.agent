@@ -386,7 +386,8 @@ static void command_get_command_line(char * token, Channel * c) {
 
     if (err != 0) {
         write_stringz(&c->out, "null");
-    } else {
+    }
+    else {
         write_stringz(&c->out, p->kp_proc.p_comm);
     }
 

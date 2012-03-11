@@ -41,6 +41,7 @@
 #include <tcf/services/dwarfecomp.h>
 #include <tcf/services/dwarfframe.h>
 #include <tcf/services/stacktrace.h>
+#include <tcf/services/funccall.h>
 #include <tcf/services/symbols.h>
 #include <tcf/services/vm.h>
 #if ENABLE_RCBP_TEST
@@ -1609,55 +1610,9 @@ static int get_object_size(ObjectInfo * obj, unsigned dimension, U8_T * byte_siz
 
 static void read_object_value(PropertyValue * v, void ** value, size_t * size, int * big_endian) {
     if (v->mPieces != NULL) {
-        U4_T n = 0;
-        U1_T * bf = NULL;
-        size_t bf_size = 0;
-        U4_T bf_offs = 0;
-        while (n < v->mPieceCnt) {
-            U4_T i;
-            LocationPiece * piece = v->mPieces + n++;
-            U4_T piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
-            U4_T piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
-            U1_T * pbf = NULL;
-            if (bf_size < bf_offs / 8 + piece_size + 1) {
-                bf_size = bf_offs / 8 + piece_size + 1;
-                bf = (U1_T *)tmp_realloc(bf, bf_size);
-            }
-            if (piece->reg) {
-                StackFrame * frame = NULL;
-                if (get_frame_info(v->mContext, v->mFrame, &frame) < 0) exception(errno);
-                if (piece->reg->size < piece_size) {
-                    pbf = (U1_T *)tmp_alloc_zero(piece_size);
-                }
-                else {
-                    pbf = (U1_T *)tmp_alloc(piece->reg->size);
-                }
-                if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
-                if (!piece->reg->big_endian != !v->mBigEndian) swap_bytes(pbf, piece->reg->size);
-            }
-            else if (piece->value) {
-                pbf = (U1_T *)piece->value;
-            }
-            else {
-                pbf = (U1_T *)tmp_alloc(piece_size);
-                if (context_read_mem(v->mContext, piece->addr, pbf, piece_size) < 0) exception(errno);
-            }
-            for (i = piece->bit_offs; i < piece->bit_offs + piece_bits;  i++) {
-                if (pbf[i / 8] & (1u << (i % 8))) {
-                    bf[bf_offs / 8] |=  (1u << (bf_offs % 8));
-                }
-                else {
-                    bf[bf_offs / 8] &= ~(1u << (bf_offs % 8));
-                }
-                bf_offs++;
-            }
-        }
-        while (bf_offs % 8) {
-            bf[bf_offs / 8] &= ~(1u << (bf_offs % 8));
-            bf_offs++;
-        }
-        *value = bf;
-        *size = bf_offs / 8;
+        StackFrame * frame = NULL;
+        if (get_frame_info(v->mContext, v->mFrame, &frame) < 0) exception(errno);
+        read_location_peices(v->mContext, frame, v->mPieces, v->mPieceCnt, v->mBigEndian, value, size);
         *big_endian = v->mBigEndian;
     }
     else if (v->mAddr != NULL) {
@@ -1938,9 +1893,20 @@ int get_symbol_name(const Symbol * sym, char ** name) {
         *name = (char *)sym->obj->mName;
     }
     else if (sym->tbl != NULL) {
+        size_t i;
         ELF_SymbolInfo info;
         unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        *name = info.name;
+        for (i = 0;; i++) {
+            if (info.name[i] == 0) {
+                *name = info.name;
+                break;
+            }
+            if (info.name[i] == '@' && info.name[i + 1] == '@') {
+                *name = (char *)tmp_alloc_zero(i + 1);
+                memcpy(*name, info.name, i);
+                break;
+            }
+        }
     }
     else {
         *name = NULL;
@@ -2794,6 +2760,23 @@ int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
     (*ptr)->base = (Symbol *)sym;
     (*ptr)->length = length;
     return 0;
+}
+
+int get_funccall_info(const Symbol * func,
+        const Symbol ** args, unsigned args_cnt, FunctionCallInfo ** res) {
+    if (func->obj != NULL) {
+        FunctionCallInfo * info = (FunctionCallInfo *)tmp_alloc_zero(sizeof(FunctionCallInfo));
+        info->ctx = func->ctx;
+        info->func = func;
+        info->scope = func->obj->mCompUnit->mRegIdScope;
+        info->args_cnt = args_cnt;
+        info->args = args;
+        if (get_function_call_location_expression(info) < 0) return -1;
+        *res = info;
+        return 0;
+    }
+    set_errno(ERR_OTHER, "Func call injection info not available");
+    return -1;
 }
 
 #endif /* SERVICE_Symbols && ENABLE_ELF */

@@ -304,6 +304,7 @@ extern int context_continue(Context * ctx);
  * Perform single instruction step on the context.
  * Return -1 and set errno if the context cannot be single stepped.
  * Return 0 on success.
+ * Deprecated: use context_resume(ctx, RM_STEP_INTO, 0, 0).
  */
 extern int context_single_step(Context * ctx);
 

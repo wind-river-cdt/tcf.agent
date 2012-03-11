@@ -230,7 +230,7 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
     state->stack_frame = frame;
     state->args = args;
     state->args_cnt = args_cnt;
-    for (i = 0; i < cmd_cnt; i++) {
+    for (i = 0; i < cmd_cnt && state->sft_cmd == NULL; i++) {
         LocationExpressionCommand * cmd = cmds + i;
         if (stk_pos >= stk_max) {
             stk_max += 4;
@@ -240,27 +240,48 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
         case SFT_CMD_NUMBER:
             stk[stk_pos++] = cmd->args.num;
             break;
-        case SFT_CMD_REGISTER:
+        case SFT_CMD_RD_REG:
             if (read_reg_value(frame, cmd->args.reg, stk + stk_pos) < 0) exception(errno);
             stk_pos++;
+            break;
+        case SFT_CMD_WR_REG:
+            if (stk_pos < 1) location_expression_error();
+            if (write_reg_value(frame, cmd->args.reg, *(stk + stk_pos - 1)) < 0) exception(errno);
+            stk_pos--;
             break;
         case SFT_CMD_FP:
             if (frame == NULL) str_exception(ERR_INV_CONTEXT, "Invalid stack frame");
             stk[stk_pos++] = frame->fp;
             break;
-        case SFT_CMD_DEREF:
+        case SFT_CMD_RD_MEM:
             if (stk_pos < 1) location_expression_error();
             {
                 size_t j;
-                size_t size = cmd->args.deref.size;
+                size_t size = cmd->args.mem.size;
                 uint64_t n = 0;
                 uint8_t buf[8];
 
                 if (context_read_mem(ctx, (ContextAddress)stk[stk_pos - 1], buf, size) < 0) exception(errno);
                 for (j = 0; j < size; j++) {
-                    n = (n << 8) | buf[cmd->args.deref.big_endian ? j : size - j - 1];
+                    n = (n << 8) | buf[cmd->args.mem.big_endian ? j : size - j - 1];
                 }
                 stk[stk_pos - 1] = n;
+            }
+            break;
+        case SFT_CMD_WR_MEM:
+            if (stk_pos < 2) location_expression_error();
+            {
+                size_t j;
+                size_t size = cmd->args.mem.size;
+                uint64_t n = stk[stk_pos - 1];
+                uint8_t buf[8];
+
+                for (j = 0; j < size; j++) {
+                    buf[cmd->args.mem.big_endian ? size - j - 1 : j] = n & 0xFFu;
+                    n >>= 8;
+                }
+                if (context_write_mem(ctx, (ContextAddress)stk[stk_pos - 2], buf, size) < 0) exception(errno);
+                stk_pos -= 2;
             }
             break;
         case SFT_CMD_ADD:
@@ -353,6 +374,9 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
             stk_pos = state->stk_pos;
             stk = state->stk;
             break;
+        case SFT_CMD_FCALL:
+            state->sft_cmd = cmd;
+            break;
         default:
             location_expression_error();
             break;
@@ -362,6 +386,69 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
     state->stk_pos = stk_pos;
     state->stk_max = stk_max;
     return state;
+}
+
+static void swap_bytes(void * buf, size_t size) {
+    size_t i, j, n;
+    char * p = (char *)buf;
+    n = size >> 1;
+    for (i = 0, j = size - 1; i < n; i++, j--) {
+        char x = p[i];
+        p[i] = p[j];
+        p[j] = x;
+    }
+}
+
+void read_location_peices(Context * ctx, StackFrame * frame,
+            LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
+            void ** value, size_t * size) {
+    unsigned n = 0;
+    uint8_t * bf = NULL;
+    size_t bf_size = 0;
+    unsigned bf_offs = 0;
+    while (n < pieces_cnt) {
+        unsigned i;
+        LocationPiece * piece = pieces + n++;
+        unsigned piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
+        unsigned piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
+        uint8_t * pbf = NULL;
+        if (bf_size < bf_offs / 8 + piece_size + 1) {
+            bf_size = bf_offs / 8 + piece_size + 1;
+            bf = (uint8_t *)tmp_realloc(bf, bf_size);
+        }
+        if (piece->reg) {
+            if (piece->reg->size < piece_size) {
+                pbf = (uint8_t *)tmp_alloc_zero(piece_size);
+            }
+            else {
+                pbf = (uint8_t *)tmp_alloc(piece->reg->size);
+            }
+            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
+            if (!piece->reg->big_endian != !big_endian) swap_bytes(pbf, piece->reg->size);
+        }
+        else if (piece->value) {
+            pbf = (uint8_t *)piece->value;
+        }
+        else {
+            pbf = (uint8_t *)tmp_alloc(piece_size);
+            if (context_read_mem(ctx, piece->addr, pbf, piece_size) < 0) exception(errno);
+        }
+        for (i = piece->bit_offs; i < piece->bit_offs + piece_bits;  i++) {
+            if (pbf[i / 8] & (1u << (i % 8))) {
+                bf[bf_offs / 8] |=  (1u << (bf_offs % 8));
+            }
+            else {
+                bf[bf_offs / 8] &= ~(1u << (bf_offs % 8));
+            }
+            bf_offs++;
+        }
+    }
+    while (bf_offs % 8) {
+        bf[bf_offs / 8] &= ~(1u << (bf_offs % 8));
+        bf_offs++;
+    }
+    *value = bf;
+    *size = bf_offs / 8;
 }
 
 #if !defined(ENABLE_HardwareBreakpoints) || !ENABLE_HardwareBreakpoints

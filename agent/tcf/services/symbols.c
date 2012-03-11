@@ -644,15 +644,17 @@ static void write_commands(OutputStream * out, Context * ctx, StackFrameRegister
                 write_stream(out, ',');
                 json_write_int64(out, cmd->args.num);
                 break;
-            case SFT_CMD_REGISTER:
+            case SFT_CMD_RD_REG:
+            case SFT_CMD_WR_REG:
                 write_stream(out, ',');
                 json_write_string(out, register2id(ctx, STACK_NO_FRAME, cmd->args.reg));
                 break;
-            case SFT_CMD_DEREF:
+            case SFT_CMD_RD_MEM:
+            case SFT_CMD_WR_MEM:
                 write_stream(out, ',');
-                json_write_ulong(out, cmd->args.deref.size);
+                json_write_ulong(out, cmd->args.mem.size);
                 write_stream(out, ',');
-                json_write_boolean(out, cmd->args.deref.big_endian);
+                json_write_boolean(out, cmd->args.mem.big_endian);
                 break;
             case SFT_CMD_LOCATION:
                 write_stream(out, ',');

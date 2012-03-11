@@ -83,9 +83,9 @@ typedef struct RegisterIdScope {
 
 /* Location expression command codes */
 #define SFT_CMD_NUMBER          1
-#define SFT_CMD_REGISTER        2
+#define SFT_CMD_RD_REG          2
 #define SFT_CMD_FP              3
-#define SFT_CMD_DEREF           4
+#define SFT_CMD_RD_MEM          4
 #define SFT_CMD_ADD             5
 #define SFT_CMD_SUB             6
 #define SFT_CMD_MUL             7
@@ -102,6 +102,14 @@ typedef struct RegisterIdScope {
 #define SFT_CMD_SHR            18
 #define SFT_CMD_ARG            19
 #define SFT_CMD_LOCATION       20 /* A DWARF location expression */
+#define SFT_CMD_FCALL          21
+#define SFT_CMD_WR_REG         22
+#define SFT_CMD_WR_MEM         23
+
+#define SFT_CMD_REGISTER        2 /* Deprecated, use SFT_CMD_RD_REG */
+#define SFT_CMD_DEREF           4 /* Deprecated, use SFT_CMD_RD_MEM */
+
+typedef struct LocationExpressionCommand LocationExpressionCommand;
 
 typedef struct LocationPiece {
     ContextAddress addr;
@@ -130,6 +138,7 @@ typedef struct LocationExpressionState {
     void (*client_op)(uint8_t op);
 
     /* Result */
+    LocationExpressionCommand * sft_cmd;
     LocationPiece * pieces;
     unsigned pieces_cnt;
     unsigned pieces_max;
@@ -140,7 +149,6 @@ typedef struct LocationExpressionState {
     uint64_t * stk;
 } LocationExpressionState;
 
-typedef struct LocationExpressionCommand LocationExpressionCommand;
 typedef int LocationExpressionCallback(LocationExpressionState *);
 
 /* Location expression command */
@@ -152,7 +160,11 @@ struct LocationExpressionCommand {
         struct {
             size_t size;
             int big_endian;
-        } deref;
+        } deref; /* Deprecated, use .mem */
+        struct {
+            size_t size;
+            int big_endian;
+        } mem;
         struct {
             LocationExpressionCallback * func;
             RegisterIdScope reg_id_scope;
@@ -232,11 +244,16 @@ extern uint8_t * get_break_instruction(Context * ctx, size_t * size);
  */
 extern int crawl_stack_frame(StackFrame * frame, StackFrame * down);
 
-/* Execute location expression */
-extern LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame * frame,
-                                             LocationExpressionCommand * cmds, unsigned cmds_cnt,
-                                             uint64_t * args, unsigned args_cnt);
+/* Execute location expression. Throw an exception if error. */
+extern LocationExpressionState * evaluate_location_expression(
+            Context * ctx, StackFrame * frame,
+            LocationExpressionCommand * cmds, unsigned cmds_cnt,
+            uint64_t * args, unsigned args_cnt);
 
+extern void read_location_peices(
+            Context * ctx, StackFrame * frame,
+            LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
+            void ** value, size_t * size);
 
 /*** CPU hardware breakpoints API ***/
 

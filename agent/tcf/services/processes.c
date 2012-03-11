@@ -646,7 +646,23 @@ static void command_signal(char * token, Channel * c) {
     write_stringz(&c->out, token);
 
 #if defined(_WIN32)
-    err = ENOSYS;
+    if (parent != 0) {
+        err = ERR_INV_CONTEXT;
+    }
+    else if (signal_code(signal) == 0x40010005) {
+        /* Control-C */
+        HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+        if (h == NULL) {
+            err = set_win32_errno(GetLastError());
+        }
+        else {
+            if (!TerminateProcess(h, 1)) err = set_win32_errno(GetLastError());
+            if (!CloseHandle(h) && !err) err = set_win32_errno(GetLastError());
+        }
+    }
+    else {
+        err = ENOSYS;
+    }
 #elif defined(_WRS_KERNEL)
     if (kill(pid, signal) < 0) err = errno;
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__APPLE__)

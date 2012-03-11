@@ -189,6 +189,8 @@ extern BreakpointInfo * create_eventpoint(const char * location, Context * ctx, 
 /* Unplant and destroy eventpoint */
 extern void destroy_eventpoint(BreakpointInfo * eventpoint);
 
+extern void ini_breakpoints_service(Protocol *, TCFBroadcastGroup *);
+
 #else /* SERVICE_Breakpoints */
 
 #define skip_breakpoint(ctx, single_step) 0
@@ -200,7 +202,5 @@ extern void destroy_eventpoint(BreakpointInfo * eventpoint);
 #define create_eventpoint(location, ctx, callback, callback_args) 0
 
 #endif /* SERVICE_Breakpoints */
-
-extern void ini_breakpoints_service(Protocol *, TCFBroadcastGroup *);
 
 #endif /* D_breakpoints */

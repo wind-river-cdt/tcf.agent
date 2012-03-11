@@ -1220,16 +1220,18 @@ static void read_location_command(InputStream * inp, void * args) {
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         cmd->args.num = json_read_int64(inp);
         break;
-    case SFT_CMD_REGISTER:
+    case SFT_CMD_RD_REG:
+    case SFT_CMD_WR_REG:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         json_read_string(inp, id, sizeof(id));
         if (id2register(id, &ctx, &frame, &cmd->args.reg) < 0) trace_error = errno;
         break;
-    case SFT_CMD_DEREF:
+    case SFT_CMD_RD_MEM:
+    case SFT_CMD_WR_MEM:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
-        cmd->args.deref.size = json_read_ulong(inp);
+        cmd->args.mem.size = json_read_ulong(inp);
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
-        cmd->args.deref.big_endian = json_read_boolean(inp);
+        cmd->args.mem.big_endian = json_read_boolean(inp);
         break;
     case SFT_CMD_LOCATION:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
@@ -1407,6 +1409,13 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
 
     clear_trap(&trap);
     return 0;
+}
+
+int get_funccall_info(const Symbol * func,
+        const Symbol ** args, unsigned args_cnt, FunctionCallInfo ** info) {
+    /* TODO: get_funccall_info() in symbols proxy */
+    set_errno(ERR_OTHER, "get_funccall_info() is not supported yet by TCF server");
+    return -1;
 }
 
 const char * get_symbol_file_name(MemoryRegion * module) {

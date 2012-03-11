@@ -451,6 +451,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\agent\tcf\services\funccall.c"
+				>
+			</File>
+			<File
+				RelativePath="..\agent\tcf\services\funccall.h"
+				>
+			</File>
+			<File
 				RelativePath="..\agent\tcf\services\linenumbers.c"
 				>
 			</File>

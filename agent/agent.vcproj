@@ -736,6 +736,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\funccall.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\funccall.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\linenumbers.c"
 				>
 			</File>

@@ -51,6 +51,8 @@
 #include <tcf/framework/context.h>
 #include <tcf/framework/protocol.h>
 
+#if SERVICE_RunControl
+
 /*
  * Lock run control: don't resume any thread while run control is locked.
  * Each call to run_ctrl_lock() increments lock counter.
@@ -72,6 +74,11 @@ extern void run_ctrl_unlock(void);
  * post_safe_event() uses run_ctrl_lock()/run_ctrl_unlock() to suspend/resume debuggee.
  */
 extern void post_safe_event(Context * ctx, EventCallBack * done, void * arg);
+
+/*
+ * Return 1 if called from safe event handler.
+ */
+extern int is_safe_event(void);
 
 /*
  * Single step a context during handling of safe event.
@@ -139,13 +146,22 @@ typedef struct RunControlEventListener {
 } RunControlEventListener;
 
 /*
- * Add a listener for RunControl service events.
+ * Add/remove a listener for RunControl service events.
  */
 extern void add_run_control_event_listener(RunControlEventListener * listener, void * args);
+extern void rem_run_control_event_listener(RunControlEventListener * listener);
 
 /*
  * Initialize run control service.
  */
 extern void ini_run_ctrl_service(Protocol * proto, TCFBroadcastGroup * bcg);
+
+#else
+
+#define is_intercepted(x) 0
+#define is_safe_event() 0
+#define post_safe_event(ctx, done, arg) ((void)ctx, post_event(done, arg))
+
+#endif /* SERVICE_RunControl */
 
 #endif /* D_runctrl */

@@ -31,6 +31,7 @@
 #include <tcf/framework/json.h>
 #include <tcf/framework/cache.h>
 #include <tcf/framework/exceptions.h>
+#include <tcf/services/runctrl.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/registers.h>
 
@@ -329,14 +330,16 @@ void send_event_register_changed(const char * id) {
         l->func->register_changed(ctx, frame, def, l->args);
     }
 
-    write_stringz(out, "E");
-    write_stringz(out, REGISTERS);
-    write_stringz(out, "registerChanged");
+    if (is_intercepted(ctx)) {
+        write_stringz(out, "E");
+        write_stringz(out, REGISTERS);
+        write_stringz(out, "registerChanged");
 
-    json_write_string(out, id);
-    write_stream(out, 0);
+        json_write_string(out, id);
+        write_stream(out, 0);
 
-    write_stream(out, MARKER_EOM);
+        write_stream(out, MARKER_EOM);
+    }
 }
 
 typedef struct GetArgs {
