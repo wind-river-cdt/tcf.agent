@@ -39,6 +39,7 @@
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/waitpid.h>
 #include <tcf/framework/signames.h>
+#include <tcf/services/contextquery.h>
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/expressions.h>
 #include <tcf/services/memorymap.h>
@@ -1345,6 +1346,15 @@ static void eventpoint_at_main(Context * ctx, void * args) {
     suspend_debug_context(ctx);
 }
 
+static int cmp_linux_pid(Context * ctx, const char * v) {
+    ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+    return ctx != NULL && EXT(ctx)->pid == atoi(v);
+}
+
+static int cmp_linux_tid(Context * ctx, const char * v) {
+    return ctx->parent != NULL && EXT(ctx)->pid == atoi(v);
+}
+
 void init_contexts_sys_dep(void) {
     context_extension_offset = context_extension(sizeof(ContextExtensionLinux));
     add_waitpid_listener(waitpid_listener, NULL);
@@ -1354,6 +1364,8 @@ void init_contexts_sys_dep(void) {
     create_eventpoint("$loader_brk", NULL, eventpoint_at_loader, NULL);
 #endif /* SERVICE_Expressions && ENABLE_ELF */
     create_eventpoint("main", NULL, eventpoint_at_main, NULL);
+    add_context_query_comparator("pid", cmp_linux_pid);
+    add_context_query_comparator("tid", cmp_linux_tid);
 }
 
 #endif  /* if ENABLE_DebugContext */
