@@ -473,11 +473,12 @@ static ELF_File * create_elf_cache(const char * file_name) {
                         sec->info = shdr.sh_info;
                         sec->entsize = shdr.sh_entsize;
                         if (sec->type == SHT_SYMTAB) {
-                            sec->sym_count = (unsigned int)(sec->size / sizeof(Elf32_Sym));
+                            sec->sym_count = (unsigned)(sec->size / sizeof(Elf32_Sym));
                             symtab_found = 1;
-                        } else if (sec->type == SHT_DYNSYM) {
+                        }
+                        else if (sec->type == SHT_DYNSYM) {
                             assert(dynsym_section == NULL);
-                            sec->sym_count = (unsigned int)(sec->size / sizeof(Elf32_Sym));
+                            sec->sym_count = (unsigned)(sec->size / sizeof(Elf32_Sym));
                             dynsym_section = sec;
                         }
                         cnt++;
@@ -596,9 +597,10 @@ static ELF_File * create_elf_cache(const char * file_name) {
                         if (sec->type == SHT_SYMTAB) {
                             sec->sym_count = (unsigned)(sec->size / sizeof(Elf64_Sym));
                             symtab_found = 1;
-                        } else if (sec->type == SHT_DYNSYM) {
+                        }
+                        else if (sec->type == SHT_DYNSYM) {
                             assert(dynsym_section == NULL);
-                            sec->sym_count = (unsigned int)(sec->size / sizeof(Elf64_Sym));
+                            sec->sym_count = (unsigned)(sec->size / sizeof(Elf64_Sym));
                             dynsym_section = sec;
                         }
 
@@ -664,8 +666,7 @@ static ELF_File * create_elf_cache(const char * file_name) {
             }
         }
 
-        if ((dynsym_section != NULL) && (symtab_found == 1))
-            dynsym_section->sym_count = 0;
+        if (dynsym_section != NULL && symtab_found) dynsym_section->sym_count = 0;
     }
     file->debug_info_file = is_debug_info_file(file);
     if (error == 0 && !file->debug_info_file) {
