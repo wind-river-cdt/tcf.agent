@@ -937,6 +937,25 @@ static void next_pc(void) {
             }
         }
 
+        if (func_object != NULL) {
+            Symbol * func_type = NULL;
+            Symbol * ret_type1 = NULL;
+            Symbol * ret_type2 = NULL;
+            if (get_symbol_type(sym, &func_type) < 0) {
+                error_sym("get_symbol_type", sym);
+            }
+            if (get_symbol_base_type(sym, &ret_type1) < 0) {
+                error_sym("get_symbol_base_type", sym);
+            }
+            if (get_symbol_base_type(func_type, &ret_type2) < 0) {
+                error_sym("get_symbol_base_type", func_type);
+            }
+            if (symcmp(ret_type1, ret_type2) != 0) {
+                errno = ERR_OTHER;
+                error_sym("symcmp(ret_type, ret_type2)", sym);
+            }
+        }
+
         if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, "@ non existing name @", &sym) < 0) {
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
                 error("find_symbol_by_name");

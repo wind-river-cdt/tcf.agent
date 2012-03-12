@@ -2009,6 +2009,8 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
                 object2symbol(sym->base->obj->mType, base_type);
                 return 0;
             }
+            errno = ERR_UNSUPPORTED;
+            return -1;
         }
         *base_type = sym->base;
         return 0;
@@ -2018,6 +2020,14 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
         return -1;
     }
     if (unpack(sym) < 0) return -1;
+    if (sym->sym_class == SYM_CLASS_FUNCTION) {
+        if (sym->obj != NULL && sym->obj->mType != NULL) {
+            object2symbol(sym->obj->mType, base_type);
+            return 0;
+        }
+        errno = ERR_UNSUPPORTED;
+        return -1;
+    }
     obj = get_original_type(obj);
     if (obj != NULL) {
         if (obj->mTag == TAG_array_type) {
@@ -2054,7 +2064,9 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
         alloc_cardinal_type_pseudo_symbol(sym->ctx, context_word_size(sym->ctx), index_type);
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) ||
+            is_constant_pseudo_symbol(sym) ||
+            sym->sym_class == SYM_CLASS_FUNCTION) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -2121,7 +2133,9 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
         *length = sym->length == 0 ? 1 : sym->length;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) ||
+            is_constant_pseudo_symbol(sym) ||
+            sym->sym_class == SYM_CLASS_FUNCTION) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
@@ -2166,7 +2180,9 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
         *value = 0;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
+    if (is_cardinal_type_pseudo_symbol(sym) ||
+            is_constant_pseudo_symbol(sym) ||
+            sym->sym_class == SYM_CLASS_FUNCTION) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }
