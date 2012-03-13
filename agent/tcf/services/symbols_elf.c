@@ -2213,8 +2213,6 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
 }
 
 int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
-    static Symbol ** buf = NULL;
-    static int buf_len = 0;
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
@@ -2228,6 +2226,8 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
             }
             else {
                 int n = 0;
+                int buf_len = 0;
+                Symbol ** buf = NULL;
                 ObjectInfo * i = get_dwarf_children(obj);
                 if (unpack(sym->base) < 0) return -1;
                 while (i != NULL) {
@@ -2238,7 +2238,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
                         if (get_symbol_type(x, &y) < 0) return -1;
                         if (buf_len <= n) {
                             buf_len += 16;
-                            buf = (Symbol **)loc_realloc(buf, sizeof(Symbol *) * buf_len);
+                            buf = (Symbol **)tmp_realloc(buf, sizeof(Symbol *) * buf_len);
                         }
                         buf[n++] = y;
                     }
@@ -2262,13 +2262,15 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     obj = get_original_type(obj);
     if (obj != NULL) {
         int n = 0;
+        int buf_len = 0;
+        Symbol ** buf = NULL;
         ObjectInfo * i = get_dwarf_children(obj);
         while (i != NULL) {
             Symbol * x = NULL;
             object2symbol(find_definition(i), &x);
             if (buf_len <= n) {
                 buf_len += 16;
-                buf = (Symbol **)loc_realloc(buf, sizeof(Symbol *) * buf_len);
+                buf = (Symbol **)tmp_realloc(buf, sizeof(Symbol *) * buf_len);
             }
             buf[n++] = x;
             i = i->mSibling;

@@ -217,8 +217,7 @@ extern int get_symbol_length(const Symbol * sym, ContextAddress * length);
 extern int get_symbol_lower_bound(const Symbol * sym, int64_t * value);
 
 /* Get children IDs of a type (struct, union, class, function and enum).
- * The array returned shall not be modified by the client,
- * and it may be overwritten by a subsequent calls to symbol functions */
+ * The array returned is allocated by tmp_alloc() */
 extern int get_symbol_children(const Symbol * sym, Symbol *** children, int * count);
 
 /* Get offset in parent type (fields) */

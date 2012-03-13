@@ -197,10 +197,8 @@ static void tag2symclass(Symbol * sym, int tag) {
     case SymTagBaseClass:
     case SymTagCustomType:
     case SymTagManagedType:
-        sym->sym_class = SYM_CLASS_TYPE;
-        break;
     case SymTagFunctionArgType:
-        sym->sym_class = SYM_CLASS_REFERENCE;
+        sym->sym_class = SYM_CLASS_TYPE;
         break;
     }
 }
@@ -671,8 +669,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
 
     static const DWORD FINDCHILDREN_BUF_SIZE = 64;
     static TI_FINDCHILDREN_PARAMS * params = NULL;
-    static Symbol ** buf = NULL;
-    static unsigned buf_len = 0;
+    Symbol ** buf = NULL;
 
     DWORD cnt = 0;
     Symbol type = *sym;
@@ -689,10 +686,8 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     if (params == NULL) params = (TI_FINDCHILDREN_PARAMS *)loc_alloc(
         sizeof(TI_FINDCHILDREN_PARAMS) + (FINDCHILDREN_BUF_SIZE - 1) * sizeof(ULONG));
 
-    if (buf_len < cnt) {
-        buf = (Symbol **)loc_realloc(buf, sizeof(Symbol *) * cnt);
-        buf_len = cnt;
-    }
+    buf = (Symbol **)tmp_alloc(sizeof(Symbol *) * cnt);
+
     params->Start = 0;
     while (params->Start < cnt) {
         DWORD i = cnt - (DWORD)params->Start;

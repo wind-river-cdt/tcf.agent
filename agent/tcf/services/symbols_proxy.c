@@ -1061,12 +1061,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     }
     else if (s->children_count > 0) {
         int i, cnt = s->children_count;
-        static Symbol ** buf = NULL;
-        static int buf_len = 0;
-        if (buf_len < cnt) {
-            buf_len = cnt;
-            buf = (Symbol **)loc_realloc(buf, cnt * sizeof(Symbol *));
-        }
+        Symbol ** buf = (Symbol **)tmp_alloc(cnt * sizeof(Symbol *));
         for (i = 0; i < cnt; i++) {
             if (id2symbol(s->children_ids[i], buf + i) < 0) exception(errno);
         }
