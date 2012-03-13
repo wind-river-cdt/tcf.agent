@@ -97,6 +97,7 @@ static int big_endian = 0;
 static Context * expression_context = NULL;
 static int expression_frame = STACK_NO_FRAME;
 static ContextAddress expression_addr = 0;
+static int expression_has_func_call = 0;
 
 #ifndef ENABLE_FuncCallInjection
 #  define ENABLE_FuncCallInjection (ENABLE_Symbols && SERVICE_RunControl && SERVICE_Breakpoints && ENABLE_DebugContext)
@@ -1763,6 +1764,7 @@ static void op_call(int mode, Value * v) {
     if (get_symbol_size(v->type, &v->size) < 0) {
         error(errno, "Cannot retrieve function return value size");
     }
+    expression_has_func_call = 1;
     if (mode == MODE_NORMAL) {
         if (!state->started) {
             unsigned i;
@@ -2576,6 +2578,7 @@ static void expression(int mode, Value * v) {
 static int evaluate_script(int mode, char * s, int load, Value * v) {
     Trap trap;
 
+    expression_has_func_call = 0;
     if (set_trap(&trap)) {
         if (s == NULL || *s == 0) str_exception(ERR_INV_EXPRESSION, "Empty expression");
         text = s;
@@ -2704,6 +2707,7 @@ typedef struct Expression {
     Channel * channel;
     char * script;
     int can_assign;
+    int has_func_call;
     ContextAddress size;
     int type_class;
     char type[256];
@@ -2844,11 +2848,21 @@ static void write_context(OutputStream * out, Expression * expr) {
     write_stream(out, ':');
     json_write_string(out, expr->script);
 
-    write_stream(out, ',');
+    if (expr->can_assign) {
+        write_stream(out, ',');
 
-    json_write_string(out, "CanAssign");
-    write_stream(out, ':');
-    json_write_boolean(out, expr->can_assign);
+        json_write_string(out, "CanAssign");
+        write_stream(out, ':');
+        json_write_boolean(out, expr->can_assign);
+    }
+
+    if (expr->has_func_call) {
+        write_stream(out, ',');
+
+        json_write_string(out, "HasFuncCall");
+        write_stream(out, ':');
+        json_write_boolean(out, expr->has_func_call);
+    }
 
     if (expr->type_class != TYPE_CLASS_UNKNOWN) {
         write_stream(out, ',');
@@ -3034,6 +3048,7 @@ static void command_create_cache_client(void * x) {
         if (!err && evaluate_type(ctx, frame, 0, e->script, &value) < 0) err = errno;
         if (!err) {
             e->can_assign = value.remote;
+            e->has_func_call = expression_has_func_call;
             e->type_class = value.type_class;
             e->size = value.size;
 #if ENABLE_Symbols

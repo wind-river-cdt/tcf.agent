@@ -30,11 +30,26 @@
 #include <system/Windows/tcf/windbgcache.h>
 #endif
 
+#define EM_386          3 /* Intel Architecture */
+#define EM_X86_64      62 /* AMD x86-64 architecture */
+
 static FunctionCallInfo * info = NULL;
 
 static unsigned trace_cmds_max = 0;
 static unsigned trace_cmds_cnt = 0;
 static LocationExpressionCommand * trace_cmds = NULL;
+
+static Symbol * func_type = NULL;
+static Symbol * func_return_type = NULL;
+static Symbol ** func_args = NULL;
+static int func_args_cnt = 0;
+static ContextAddress func_return_size = 0;
+static int func_return_type_class = 0;
+static ContextAddress * arg_size_formal = NULL;
+static int * arg_class_formal = NULL;
+static int * arg_class_actual = NULL;
+
+static int reg_arg_ids[] = { 5, 4, 1, 2, 8, 9 };
 
 static LocationExpressionCommand * add_command(int op) {
     LocationExpressionCommand * cmd = NULL;
@@ -65,20 +80,16 @@ static LocationExpressionCommand * add_command_location(uint8_t * code, size_t c
 
 static int get_stack_pointer_register_id(void) {
     switch (info->scope.machine) {
-    case 3: /* EM_386 */
-        return 4;
-    case 62: /* EM_X86_64 */
-        return 7;
+    case EM_386: return 4;
+    case EM_X86_64: return 7;
     }
     return -1;
 }
 
 static int get_return_value_register_id(void) {
     switch (info->scope.machine) {
-    case 3: /* EM_386 */
-        return 0;
-    case 62: /* EM_X86_64 */
-        return 0;
+    case EM_386: return 0;
+    case EM_X86_64: return 0;
     }
     return -1;
 }
@@ -91,10 +102,7 @@ static RegisterDefinition * find_register(int id) {
 static int c_call_cmds(void) {
     unsigned i;
     unsigned sp_offs = 0;
-    unsigned word_size = info->scope.elf64 ? 8 : 4;
-    Symbol * res_type = NULL;
-    ContextAddress res_size = 0;
-    int res_type_class = 0;
+    int * reg_arg = (int *)tmp_alloc_zero(sizeof(int) * info->args_cnt);
 
     RegisterDefinition * reg_rv = find_register(get_return_value_register_id());
     RegisterDefinition * reg_sp = find_register(get_stack_pointer_register_id());
@@ -108,30 +116,74 @@ static int c_call_cmds(void) {
         set_errno(ERR_OTHER, "Don't know instruction pointer register");
         return -1;
     }
+    if (reg_rv == NULL) {
+        set_errno(ERR_OTHER, "Don't know function return value register");
+        return -1;
+    }
 
+    if (info->scope.machine == EM_X86_64) {
+        unsigned reg_args_cnt = 0;
+
+        /* The 128-byte area beyond the location pointed to by rsp is
+         * considered to be reserved. This area is known as the red zone. */
+        sp_offs = 128;
+
+        /* Assign arguments to registers */
+        for (i = 0; i < info->args_cnt; i++) {
+            unsigned arg_no = i;
+            switch (arg_class_actual[arg_no]) {
+            case TYPE_CLASS_CARDINAL:
+            case TYPE_CLASS_INTEGER:
+            case TYPE_CLASS_POINTER:
+            case TYPE_CLASS_ENUMERATION:
+            case TYPE_CLASS_ARRAY:
+                switch (arg_class_formal[arg_no]) {
+                case TYPE_CLASS_CARDINAL:
+                case TYPE_CLASS_INTEGER:
+                case TYPE_CLASS_POINTER:
+                case TYPE_CLASS_ENUMERATION:
+                case TYPE_CLASS_ARRAY:
+                    if (reg_args_cnt < sizeof(reg_arg_ids) / sizeof(int)) {
+                        add_command(SFT_CMD_ARG)->args.arg_no = arg_no;
+                        add_command(SFT_CMD_WR_REG)->args.reg = find_register(reg_arg_ids[reg_args_cnt++]);
+                        reg_arg[i] = 1;
+                    }
+                    break;
+                }
+                break;
+            }
+        }
+    }
+
+    /* Push arguments to call stack */
     for (i = 0; i < info->args_cnt; i++) {
-        const Symbol * s = info->args[info->args_cnt - i - 1];
-        int type_class = TYPE_CLASS_INTEGER;
-        /* If argument type is not given, assume 'int' */
-        if (s != NULL && get_symbol_type_class(s, &type_class) < 0) return -1;
-        switch (type_class) {
+        unsigned arg_no = info->args_cnt - i - 1;
+        if (reg_arg[arg_no]) continue;
+        switch (arg_class_actual[arg_no]) {
         case TYPE_CLASS_CARDINAL:
         case TYPE_CLASS_INTEGER:
         case TYPE_CLASS_POINTER:
         case TYPE_CLASS_ENUMERATION:
         case TYPE_CLASS_ARRAY:
-        case TYPE_CLASS_COMPOSITE:
-        case TYPE_CLASS_FUNCTION:
-            /* Argument is one word, push it to the stack */
-            sp_offs += word_size;
-            add_command(SFT_CMD_RD_REG)->args.reg = reg_sp;
-            add_command(SFT_CMD_NUMBER)->args.num = sp_offs;
-            add_command(SFT_CMD_SUB);
-            add_command(SFT_CMD_ARG)->args.arg_no = info->args_cnt - i - 1;
-            add_command(SFT_CMD_WR_MEM)->args.mem.size = word_size;
+            switch (arg_class_formal[arg_no]) {
+            case TYPE_CLASS_CARDINAL:
+            case TYPE_CLASS_INTEGER:
+            case TYPE_CLASS_POINTER:
+            case TYPE_CLASS_ENUMERATION:
+            case TYPE_CLASS_ARRAY:
+                sp_offs += (unsigned)arg_size_formal[arg_no];
+                while (sp_offs % (info->scope.elf64 ? 8 : 4) != 0) sp_offs++;
+                add_command(SFT_CMD_RD_REG)->args.reg = reg_sp;
+                add_command(SFT_CMD_NUMBER)->args.num = sp_offs;
+                add_command(SFT_CMD_SUB);
+                add_command(SFT_CMD_ARG)->args.arg_no = arg_no;
+                add_command(SFT_CMD_WR_MEM)->args.mem.size = (size_t)arg_size_formal[arg_no];
+                break;
+            default:
+                set_errno(ERR_OTHER, "Unsupported argument type");
+                return -1;
+            }
             break;
-        case TYPE_CLASS_REAL:
-        case TYPE_CLASS_MEMBER_PTR:
         default:
             set_errno(ERR_OTHER, "Unsupported argument type");
             return -1;
@@ -156,22 +208,15 @@ static int c_call_cmds(void) {
     add_command(SFT_CMD_FCALL);
 
     /* Get function return value */
-    if (get_symbol_base_type(info->func, &res_type) < 0) return -1;
-    if (get_symbol_size(res_type, &res_size) < 0) return -1;
-    if (res_size == 0) return 0;
-    if (get_symbol_type_class(res_type, &res_type_class) < 0) return -1;
-    switch (res_type_class) {
+    if (func_return_size == 0) return 0;
+    switch (func_return_type_class) {
     case TYPE_CLASS_CARDINAL:
     case TYPE_CLASS_INTEGER:
     case TYPE_CLASS_POINTER:
     case TYPE_CLASS_ENUMERATION:
     case TYPE_CLASS_ARRAY:
-    case TYPE_CLASS_COMPOSITE:
-    case TYPE_CLASS_FUNCTION:
         add_command(SFT_CMD_RD_REG)->args.reg = reg_rv;
         break;
-    case TYPE_CLASS_REAL:
-    case TYPE_CLASS_MEMBER_PTR:
     default:
         set_errno(ERR_OTHER, "Unsupported return type");
         return -1;
@@ -198,24 +243,55 @@ static void save_registers(void) {
 }
 
 int get_function_call_location_expression(FunctionCallInfo * arg_info) {
+    unsigned i;
+    int sym_class = SYM_CLASS_UNKNOWN;
+
     info = arg_info;
     trace_cmds_cnt = 0;
     trace_cmds_max = 0;
     trace_cmds = NULL;
-#if !defined(_WIN32) || ENABLE_ELF
-    if (c_call_cmds() < 0) return -1;
-#else
+
+    if (get_symbol_class(info->func, &sym_class) < 0) return -1;
+    if (sym_class == SYM_CLASS_FUNCTION) {
+        if (get_symbol_type(info->func, &func_type) < 0) return -1;
+    }
+    else if (sym_class == SYM_CLASS_TYPE) {
+        func_type = (Symbol *)info->func;
+    }
+    else {
+        set_errno(ERR_OTHER, "Invalid function symbol");
+        return -1;
+    }
+    if (get_symbol_children(func_type, &func_args, &func_args_cnt) < 0) return -1;
+    if (get_symbol_base_type(func_type, &func_return_type) < 0) return -1;
+    if (get_symbol_size(func_return_type, &func_return_size) < 0) return -1;
+    if (get_symbol_type_class(func_return_type, &func_return_type_class) < 0) return -1;
+
+    arg_class_formal = (int *)tmp_alloc(sizeof(int) * info->args_cnt);
+    arg_class_actual = (int *)tmp_alloc(sizeof(int) * info->args_cnt);
+    arg_size_formal = (ContextAddress *)tmp_alloc(sizeof(ContextAddress) * info->args_cnt);
+    for (i = 0; i < info->args_cnt; i++) {
+        const Symbol * s = info->args[i];
+        arg_class_formal[i] = TYPE_CLASS_INTEGER;
+        arg_class_actual[i] = TYPE_CLASS_INTEGER;
+        arg_size_formal[i] = info->scope.elf64 ? 8 : 4;
+        /* If argument type is not given, assume 'int' */
+        if (s != NULL && get_symbol_type_class(s, arg_class_actual + i) < 0) return -1;
+        if (i < (unsigned)func_args_cnt) {
+            if (get_symbol_type_class(func_args[i], arg_class_formal + i) < 0) return -1;
+            if (get_symbol_size(func_args[i], arg_size_formal + i) < 0) return -1;
+        }
+    }
+
     switch (info->scope.os_abi) {
-    case CV_CALL_NEAR_C:
-        /* Specifies a function-calling convention using a near right-to-left push.
-         * The calling function clears the stack */
+    case 0:
         if (c_call_cmds() < 0) return -1;
         break;
     default:
-        set_errno(ERR_OTHER, "Unsupported calling convension code");
+        set_errno(ERR_OTHER, "Unsupported ABI code");
         return -1;
     }
-#endif
+
     if (trace_cmds_cnt > 0) {
         save_registers();
         info->cmds = trace_cmds;
