@@ -107,7 +107,7 @@ static int peek_byte_array_input_stream(InputStream * inp) {
     return ((unsigned char *)buf->buf)[buf->pos];
 }
 
-InputStream * create_byte_array_input_stream(ByteArrayInputStream * buf, char * data, size_t size) {
+InputStream * create_byte_array_input_stream(ByteArrayInputStream * buf, const char * data, size_t size) {
     memset(buf, 0, sizeof(ByteArrayInputStream));
     buf->inp.read = read_byte_array_input_stream;
     buf->inp.peek = peek_byte_array_input_stream;

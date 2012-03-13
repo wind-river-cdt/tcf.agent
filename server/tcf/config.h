@@ -128,6 +128,7 @@
 
 #define ENABLE_RCBP_TEST        0
 
+#define ENABLE_ContextExtraProperties           0
 #define ENABLE_ContextStateProperties           0
 #define ENABLE_ExtendedMemoryErrorReports       0
 #define ENABLE_ContextBreakpointCapabilities    0

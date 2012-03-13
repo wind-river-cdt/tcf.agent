@@ -2265,10 +2265,12 @@ static void command_get_capabilities(char * token, Channel * c) {
             while (cnt > 0) {
                 if (*values != NULL) {
                     write_stream(out, ',');
-                    json_write_string(out, *names++);
+                    json_write_string(out, *names);
                     write_stream(out, ':');
-                    write_string(out, *values++);
+                    write_string(out, *values);
                 }
+                names++;
+                values++;
                 cnt--;
             }
         }

@@ -253,6 +253,28 @@ static void write_context(OutputStream * out, Context * ctx) {
         json_write_string(out, ss_grp->id);
     }
 
+#if ENABLE_ContextExtraProperties
+    {
+        /* Back-end context properties */
+        int cnt = 0;
+        const char ** names = NULL;
+        const char ** values = NULL;
+        if (context_get_extra_properties(ctx, &names, &values, &cnt) == 0) {
+            while (cnt > 0) {
+                if (*values != NULL) {
+                    write_stream(out, ',');
+                    json_write_string(out, *names);
+                    write_stream(out, ':');
+                    write_string(out, *values);
+                }
+                names++;
+                values++;
+                cnt--;
+            }
+        }
+    }
+#endif
+
     write_stream(out, '}');
 }
 
@@ -274,6 +296,20 @@ static int get_current_pc(Context * ctx, ContextAddress * res) {
     *res = pc;
     return 0;
 }
+
+#if ENABLE_ContextStateProperties
+static int is_json(const char * s) {
+    Trap trap;
+    if (set_trap(&trap)) {
+        ByteArrayInputStream buf;
+        InputStream * inp = create_byte_array_input_stream(&buf, s, strlen(s));
+        json_skip_object(inp);
+        if (read_stream(inp) != MARKER_EOS) exception(ERR_JSON_SYNTAX);
+        clear_trap(&trap);
+    }
+    return trap.error == 0;
+}
+#endif
 
 static void write_context_state(OutputStream * out, Context * ctx) {
     int fst = 1;
@@ -359,11 +395,17 @@ static void write_context_state(OutputStream * out, Context * ctx) {
             while (cnt > 0) {
                 if (*values != NULL) {
                     if (!fst) write_stream(out, ',');
-                    json_write_string(out, *names++);
+                    json_write_string(out, *names);
                     write_stream(out, ':');
-                    json_write_string(out, *values++);
+                    /* In older versions of the API, value was a simple string.
+                     * Latest version requires it to be in JSON.
+                     * For backward compatibility, check if the value is in JSON. */
+                    if (is_json(*values)) write_string(out, *values);
+                    else json_write_string(out, *values);
                     fst = 0;
                 }
+                names++;
+                values++;
                 cnt--;
             }
         }
