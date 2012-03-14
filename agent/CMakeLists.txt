@@ -1,99 +1,41 @@
+# -*- cmake -*-
+
 cmake_minimum_required(VERSION 2.8)
 
 set(CMAKE_COLOR_MAKEFILE OFF)
 
-if (WIN32)
-include_directories(system/Windows)
-include_directories(machine/x86_64)
-set(PLAT_SOURCES
-    system/Windows/context-win32.c
-    system/Windows/pthreads-win32.c
-    system/Windows/windbgcache.c)
-endif (WIN32)
+set(TCF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
+set(TCF_LIB_NAME tcf-agent)
 
-include_directories(.)
+if (NOT WIN32)
+  if(NOT TCF_OPSYS)
+    set(TCF_OPSYS "GNU/Linux")
+  endif()
+  if(NOT TCF_MACHINE)
+    set(TCF_MACHINE "x86_64")
+  endif()
+endif()
 
-add_library(tcf STATIC
-    framework/asyncreq.c
-    framework/base64.c
-    framework/cache.c
-    framework/channel.c
-    framework/channel_pipe.c
-    framework/channel_tcp.c
-    framework/context.c
-    framework/cpudefs.c
-    framework/errors.c
-    framework/events.c
-    framework/exceptions.c
-    framework/inputbuf.c
-    framework/ip_ifc.c
-    framework/json.c
-    framework/mdep.c
-    framework/myalloc.c
-    framework/outputbuf.c
-    framework/peer.c
-    framework/plugins.c
-    framework/protocol.c
-    framework/proxy.c
-    framework/signames.c
-    framework/streams.c
-    framework/trace.c
-    framework/waitpid.c
-    services/breakpoints.c
-    services/diagnostics.c
-    services/discovery.c
-    services/discovery_udp.c
-    services/dwarfcache.c
-    services/dwarfexpr.c
-    services/dwarfframe.c
-    services/dwarfio.c
-    services/dwarfreloc.c
-    services/expressions.c
-    services/filesystem.c
-    services/linenumbers.c
-    services/linenumbers_elf.c
-    services/linenumbers_proxy.c
-    services/linenumbers_win32.c
-    services/memorymap.c
-    services/memoryservice.c
-    services/pathmap.c
-    services/processes.c
-    services/registers.c
-    services/runctrl.c
-    services/stacktrace.c
-    services/streamsservice.c
-    services/symbols.c
-    services/symbols_elf.c
-    services/symbols_proxy.c
-    services/symbols_win32.c
-    services/sysmon.c
-    services/tcf_elf.c
-    services/terminals.c
-    main/cmdline.c
-    main/server.c
-    main/services.c
-    main/test.c
-    ${PLAT_SOURCES}
-    )
+if(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
+  set(MULTI_THREADED_COMPILE_FLAGS "-pthreads")
+  set(MULTI_THREADED_LINK_LIBS pthread rt)
+elseif(APPLE)
+  set(MULTI_THREADED_COMPILE_FLAGS "-pthread -D_REENTRANT")
+  set(MULTI_THREADED_LINK_FLAGS "")
+  set(MULTI_THREADED_LINK_LIBS pthread)
+elseif(UNIX)
+  set(MULTI_THREADED_COMPILE_FLAGS "-pthread -D_REENTRANT")
+  set(MULTI_THREADED_LINK_FLAGS "")
+  set(MULTI_THREADED_LINK_LIBS pthread rt)
+  set(UUID_LIB_NAME uuid)
+elseif(WIN32)
+  set(SOCKET_LINK_LIBS ws2_32 iphlpapi)
+endif()
 
-add_executable(agent main/main.c)
+include(../cmake-tcf-lib.txt)
 
-target_link_libraries(agent tcf)
+message(STATUS "operating system:" ${TCF_OPSYS})
+message(STATUS "machine:" ${TCF_MACHINE})
 
-if(WIN32)
-if(MSVC)
-target_link_libraries(agent shell32.lib advapi32.lib Iphlpapi.lib WS2_32.lib version.lib)
-else(MSVC) # MinGW
-target_link_libraries(agent WS2_32 Iphlpapi)
-endif(MSVC)
-endif(WIN32)
-
-#./main/main_client.c
-#./main/main_log.c
-#./main/main_lua.c
-#./main/main_reg.c
-#./main/main_va.c
-#system/Darwin/context-darwin.c
-#system/FreeBSD/context-freebsd.c
-#system/GNU/Linux/context-linux.c
-#system/VxWorks/context-vxworks.c
+add_executable(agent tcf/main/main.c)
+target_link_libraries(agent ${TCF_LIB_NAME})

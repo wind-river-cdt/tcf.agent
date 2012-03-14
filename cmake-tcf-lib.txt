@@ -1,0 +1,73 @@
+# -*- cmake -*-
+
+if (WIN32)
+if(NOT TCF_OPSYS)
+  set(TCF_OPSYS "Windows")
+endif()
+if(NOT TCF_MACHINE)
+  set(TCF_MACHINE "x86_64")
+endif()
+endif (WIN32)
+
+set(TCF_BASE_DIR ${TCF_DIR}/agent)
+
+# sources to build
+set(TCF_SRCS)
+
+# get all regular source files
+file(GLOB TCF_SRCS_REL RELATIVE ${TCF_BASE_DIR}
+	${TCF_BASE_DIR}/system/${TCF_OPSYS}/tcf/*.c
+	${TCF_BASE_DIR}/machine/${TCF_MACHINE}/tcf/*.c
+	${TCF_BASE_DIR}/tcf/framework/*.c
+	${TCF_BASE_DIR}/tcf/services/*.c
+	${TCF_BASE_DIR}/tcf/main/*.c)
+
+# remove non-library files
+file(GLOB TCF_MAIN_REL RELATIVE ${TCF_BASE_DIR}
+	${TCF_BASE_DIR}/tcf/main/main*.c)
+list(REMOVE_ITEM TCF_SRCS_REL ${TCF_MAIN_REL})
+
+if(DEFINED TCF_EXTRA_DIR)
+  # get extra all source files
+  file(GLOB TCF_EXTRA_SRCS_REL RELATIVE ${TCF_EXTRA_DIR}
+	${TCF_EXTRA_DIR}/system/${TCF_OPSYS}/tcf/*.c
+	${TCF_EXTRA_DIR}/machine/${TCF_MACHINE}/tcf/*.c
+	${TCF_EXTRA_DIR}/tcf/framework/*.c
+	${TCF_EXTRA_DIR}/tcf/services/*.c
+	${TCF_EXTRA_DIR}/tcf/main/*.c)
+
+  # Override regular files with extra files
+  list(REMOVE_ITEM TCF_SRCS_REL ${TCF_EXTRA_SRCS_REL})
+
+  foreach(file ${TCF_EXTRA_SRCS_REL})
+    list(APPEND TCF_SRCS ${TCF_EXTRA_DIR}/${file})
+  endforeach(file)
+endif()
+
+foreach(file ${TCF_SRCS_REL})
+  list(APPEND TCF_SRCS ${TCF_BASE_DIR}/${file})
+endforeach(file)
+
+if(DEFINED TCF_EXTRA_DIR)
+  include_directories(${TCF_EXTRA_DIR} ${TCF_EXTRA_DIR}/system/${TCF_OPSYS} ${TCF_EXTRA_DIR}/machine/${TCF_MACHINE})
+endif()
+include_directories(${TCF_BASE_DIR} ${TCF_BASE_DIR}/system/${TCF_OPSYS} ${TCF_BASE_DIR}/machine/${TCF_MACHINE})
+
+set_source_files_properties(${TCF_SRCS} PROPERTIES
+  COMPILE_FLAGS "${MULTI_THREADED_COMPILE_FLAGS}")
+add_library(${TCF_LIB_NAME} ${TCF_LIB_TYPE} ${TCF_SRCS})
+target_link_libraries(${TCF_LIB_NAME}
+  ${UUID_LIB_NAME} ${MULTI_THREADED_LINK_LIBS} ${SOCKET_LINK_LIBS})
+
+if(SSL_LIB_NAME)
+  target_link_libraries(${TCF_LIB_NAME} ${SSL_LIB_NAME})
+else()
+  add_definitions("-DENABLE_SSL=0")
+endif()
+
+if(DEFINED TCF_PLUGIN_PATH)
+  add_definitions(-DPATH_Plugins=${TCF_PLUGIN_PATH})
+  if (UNIX)
+    target_link_libraries(${TCF_LIB_NAME} dl)
+  endif()
+endif()
