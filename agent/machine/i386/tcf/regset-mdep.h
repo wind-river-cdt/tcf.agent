@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -13,21 +13,5 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
-/*
- * This header file provides definition of REG_SET - a structure that can
- * hold values of target CPU registers.
- */
-
-#if defined(__linux__)
-#  include <sys/user.h>
-#  include <tcf/regset-mdep.h>
-typedef struct REG_SET {
-    struct user user;
-    struct user_fpregs_struct fp;
-#if defined(__i386__)
-    struct user_fpxregs_struct fpx;
-#else
-    ContextAddress fpx;
-#endif
-} REG_SET;
-#endif
+/* offset to be applied to the PC after a software trap */
+#define TRAP_OFFSET -1

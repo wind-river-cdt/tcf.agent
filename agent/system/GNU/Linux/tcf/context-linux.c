@@ -50,6 +50,17 @@
 #include <tcf/services/tcf_elf.h>
 #include <system/GNU/Linux/tcf/regset.h>
 
+#if !defined(TRAP_OFFSET)
+#define TRAP_OFFSET -1
+#endif
+
+#if !defined(PTRACE_GETFPXREGS) && !defined(PT_GETFPXREGS)
+#define PTRACE_GETFPXREGS 18
+#endif
+#if !defined(PTRACE_SETFPXREGS) && !defined(PT_SETFPXREGS)
+#define PTRACE_SETFPXREGS 19
+#endif
+
 #if !defined(PTRACE_SETOPTIONS)
 #define PTRACE_SETOPTIONS       0x4200
 #define PTRACE_GETEVENTMSG      0x4201
@@ -1214,6 +1225,11 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             pc0 = get_regs_PC(ctx);
         }
 
+#if defined(__powerpc__) || defined(__powerpc64__)
+    /* Don't retrieve registers from an exiting process,
+        causes kernel critical messages */
+    if (event != PTRACE_EVENT_EXIT)
+#endif
         memset(ext->regs_valid, 0, sizeof(REG_SET));
         pc1 = get_regs_PC(ctx);
 
@@ -1262,9 +1278,9 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         if (signal == SIGTRAP && event == 0 && !syscall) {
             size_t break_size = 0;
             get_break_instruction(ctx, &break_size);
-            ctx->stopped_by_bp = !ext->regs_error && is_breakpoint_address(ctx, pc1 - break_size);
+            ctx->stopped_by_bp = !ext->regs_error && is_breakpoint_address(ctx, pc1 + TRAP_OFFSET);
             ext->end_of_step = !ctx->stopped_by_cb && !ctx->stopped_by_bp && ext->pending_step;
-            if (ctx->stopped_by_bp) set_regs_PC(ctx, pc1 - break_size);
+            if (ctx->stopped_by_bp) set_regs_PC(ctx, pc1 + TRAP_OFFSET);
         }
         ext->pending_step = 0;
         send_context_stopped_event(ctx);
