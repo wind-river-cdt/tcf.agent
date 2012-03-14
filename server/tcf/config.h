@@ -47,7 +47,9 @@
 #define SERVICE_Registers       0
 #define SERVICE_SysMonitor      0
 #define SERVICE_Expressions     0
+#if !defined(SERVICE_Streams)
 #define SERVICE_Streams         0
+#endif
 
 #if !defined(ENABLE_ZeroCopy)
 #define ENABLE_ZeroCopy         1
