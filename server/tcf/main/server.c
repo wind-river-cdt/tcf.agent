@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -40,8 +40,12 @@ static void channel_new_connection(ChannelServer * serv, Channel * c) {
 
 static void channel_redirection_listener(Channel * host, Channel * target) {
     if (target->state == ChannelStateStarted) {
+#if defined(SERVICE_LineNumbers) && SERVICE_LineNumbers
         ini_line_numbers_service(target->protocol);
+#endif
+#if defined(ENABLE_Symbols) && ENABLE_Symbols
         ini_symbols_service(target->protocol);
+#endif
     }
     if (target->state == ChannelStateConnected) {
         int i;
@@ -62,9 +66,16 @@ static void channel_redirection_listener(Channel * host, Channel * target) {
             if (service_pm) forward_pm = 1;
         }
         if (service_mm) {
+#if defined(SERVICE_LineNumbers) && SERVICE_LineNumbers
             if (!service_ln) ini_line_numbers_service(host->protocol);
+#endif
+#if defined(ENABLE_Symbols) && ENABLE_Symbols
             if (!service_sm) ini_symbols_service(host->protocol);
+#endif
+#if defined(ENABLE_DebugContext) && ENABLE_DebugContext \
+    && defined(ENABLE_ContextProxy) && ENABLE_ContextProxy
             create_context_proxy(host, target, forward_pm);
+#endif
         }
     }
 }
