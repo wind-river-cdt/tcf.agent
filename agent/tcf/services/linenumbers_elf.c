@@ -105,9 +105,15 @@ static LineNumbersState * get_next_in_text(CompUnit * unit, unsigned index) {
 }
 
 static LineNumbersState * get_next_in_code(CompUnit * unit, LineNumbersState * state) {
-    LineNumbersState * next = state + 1;
-    if (next >= unit->mStates + unit->mStatesCnt) return NULL;
+    LineNumbersState * next = state;
     if (state->mFlags & LINE_EndSequence) return NULL;
+    for (;;) {
+        next++;
+        if (next >= unit->mStates + unit->mStatesCnt) return NULL;
+        if (next->mFile != state->mFile) break;
+        if (next->mLine != state->mLine) break;
+        if (next->mColumn != state->mColumn) break;
+    }
     return next;
 }
 
