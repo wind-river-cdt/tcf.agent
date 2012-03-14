@@ -116,15 +116,20 @@ char tcf_test_char = 0;
 short tcf_test_short = 0;
 long tcf_test_long = 0;
 
+unsigned tcf_test_func_call_cnt = 0;
+
 int tcf_test_func_int(int x, int y) {
+    tcf_test_func_call_cnt++;
     return x + y;
 }
 
 long tcf_test_func_long(long x, long y) {
+    tcf_test_func_call_cnt++;
     return x + y;
 }
 
 double tcf_test_func_double(double x, double y) {
+    tcf_test_func_call_cnt++;
     return x + y;
 }
 

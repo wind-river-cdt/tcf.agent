@@ -385,6 +385,13 @@ static void write_context_state(OutputStream * out, Context * ctx) {
         write_error_object(out, pc_error);
         fst = 0;
     }
+    if (ctx->stopped_by_funccall) {
+        if (!fst) write_stream(out, ',');
+        json_write_string(out, "FuncCall");
+        write_stream(out, ':');
+        json_write_boolean(out, 1);
+        fst = 0;
+    }
 #if ENABLE_ContextStateProperties
     {
         /* Back-end context state properties */

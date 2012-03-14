@@ -103,7 +103,6 @@ static int expression_has_func_call = 0;
 #  define ENABLE_FuncCallInjection (ENABLE_Symbols && SERVICE_RunControl && SERVICE_Breakpoints && ENABLE_DebugContext)
 #endif
 
-#if ENABLE_FuncCallInjection
 typedef struct FuncCallState {
     struct FuncCallState * next;
     unsigned id;            /* ACPM transaction ID */
@@ -113,10 +112,11 @@ typedef struct FuncCallState {
     int committed;          /* ACPM transaction finished */
     int finished;           /* Target has finished the function call */
     Context * ctx;
+    uint64_t ret_addr;
+    ContextAddress stk_addr;
     ContextAddress func_addr;
     AbstractCache cache;
     BreakpointInfo * bp;
-    RunControlEventListener rc_listener;
     ErrorReport * error;
 
     /* Actual arguments */
@@ -140,7 +140,6 @@ typedef struct FuncCallState {
 } FuncCallState;
 
 static FuncCallState * func_call_state = NULL;
-#endif /* ENABLE_FuncCallInjection */
 
 #define MAX_ID_CALLBACKS 8
 static ExpressionIdentifierCallBack * id_callbacks[MAX_ID_CALLBACKS];
@@ -1611,7 +1610,6 @@ static void free_funccall_state(FuncCallState * state) {
     assert(state->regs_cnt == 0 || state->error);
     if (state->bp) destroy_eventpoint(state->bp);
     context_unlock(state->ctx);
-    rem_run_control_event_listener(&state->rc_listener);
     release_error_report(state->error);
     loc_free(state->ret_value);
     loc_free(state->args);
@@ -1626,6 +1624,7 @@ static void funcccall_breakpoint(Context * ctx, void * args) {
     assert(state->ctx == ctx);
     assert(state->started);
     assert(!state->finished);
+    ctx->stopped_by_funccall = 1;
     if (set_trap(&trap)) {
         if (!state->intercepted && state->cmds_cnt > 0) {
             /* Execute after call commands */
@@ -1680,23 +1679,11 @@ static void funcccall_breakpoint(Context * ctx, void * args) {
     }
 }
 
-static void funccall_intercepted(Context * ctx, void * args) {
-    FuncCallState * state = (FuncCallState *)args;
-    if (!state->intercepted) {
-        state->intercepted = 1;
-        if (!state->finished && state->error == NULL) {
-            state->error = get_error_report(set_errno(ERR_OTHER,
-                "Intercepted while executing injected function call"));
-        }
-        cache_notify(&state->cache);
-    }
-}
-
-static void funccall_check_recursion(ContextAddress func_addr) {
+static void funccall_check_recursion(uint64_t ret_addr) {
     FuncCallState * state = func_call_state;
     while (state != NULL) {
         if (state->started && !state->finished &&
-                state->ctx == expression_context && state->func_addr == func_addr) {
+                state->ctx == expression_context && state->ret_addr == ret_addr) {
             funccall_error("Recursive invocation");
         }
         state = state->next;
@@ -1771,13 +1758,15 @@ static void op_call(int mode, Value * v) {
             StackFrame * frame_info = NULL;
             FunctionCallInfo * call_info = NULL;
             LocationExpressionState * vm = NULL;
+            RegisterDefinition * reg_pc = get_PC_definition(expression_context);
             const Symbol ** arg_types = (const Symbol **)tmp_alloc_zero(sizeof(Symbol *) * state->args_cnt);
             uint64_t * arg_vals = (uint64_t *)tmp_alloc_zero(sizeof(uint64_t) * state->args_cnt);
 
-            funccall_check_recursion(state->func_addr);
+            if (get_frame_info(expression_context, STACK_TOP_FRAME, &frame_info) < 0) exception(errno);
+            if (read_reg_value(frame_info, reg_pc, &state->ret_addr) < 0) exception(errno);
+            funccall_check_recursion(state->ret_addr);
             for (i = 0; i < state->args_cnt; i++) arg_types[i] = state->args[i].type;
             if (get_funccall_info(func, arg_types, state->args_cnt, &call_info) < 0) exception(errno);
-            if (get_frame_info(expression_context, STACK_TOP_FRAME, &frame_info) < 0) exception(errno);
 
             /* Save registers */
             if (call_info->saveregs_cnt > 0) {
@@ -1823,16 +1812,13 @@ static void op_call(int mode, Value * v) {
             state->ret_big_endian = call_info->scope.big_endian;
             if (vm->sft_cmd != NULL) {
                 char ret_addr[64];
-                uint64_t pc = 0;
-                RegisterDefinition * reg_pc = get_PC_definition(expression_context);
                 if (vm->sft_cmd->cmd != SFT_CMD_FCALL || vm->stk_pos != 0) {
                     funccall_error("Invalid SFT instruction");
                 }
 
-                /* Create breakpoint at current PC - function return address */
+                /* Create breakpoint at the function return address */
                 assert(state->bp == NULL);
-                if (read_reg_value(frame_info, reg_pc, &pc) < 0) exception(errno);
-                snprintf(ret_addr, sizeof(ret_addr), "0x%" PRIX64, pc);
+                snprintf(ret_addr, sizeof(ret_addr), "0x%" PRIX64, state->ret_addr);
                 state->bp = create_eventpoint(ret_addr, expression_context, funcccall_breakpoint, state);
 
                 /* Set PC to the function address */
@@ -1848,8 +1834,6 @@ static void op_call(int mode, Value * v) {
                 if (continue_debug_context(expression_context, cache_channel(), RM_RESUME, 1, 0, 0) < 0) exception(errno);
 
                 /* Wait until the function returns */
-                state->rc_listener.context_intercepted = funccall_intercepted;
-                add_run_control_event_listener(&state->rc_listener, state);
                 cache_wait(&state->cache);
             }
             else {
@@ -3312,8 +3296,29 @@ void add_identifier_callback(ExpressionIdentifierCallBack * callback) {
     id_callbacks[id_callback_cnt++] = callback;
 }
 
+static void context_intercepted(Context * ctx, void * args) {
+    FuncCallState * state = func_call_state;
+    while (state != NULL) {
+        FuncCallState * next = state->next;
+        if (state->ctx == ctx && !state->intercepted) {
+            state->intercepted = 1;
+            if (!state->finished && state->error == NULL) {
+                state->error = get_error_report(set_errno(ERR_OTHER,
+                    "Intercepted while executing injected function call"));
+            }
+            cache_notify(&state->cache);
+        }
+        state = next;
+    }
+}
+
+static void context_released(Context * ctx, void * args) {
+}
+
 void ini_expressions_service(Protocol * proto) {
     unsigned i;
+    static RunControlEventListener rc_listener = { context_intercepted, context_released };
+    add_run_control_event_listener(&rc_listener, NULL);
     for (i = 0; i < ID2EXP_HASH_SIZE; i++) list_init(id2exp + i);
     add_channel_close_listener(on_channel_close);
     add_command_handler(proto, EXPRESSIONS, "getContext", command_get_context);

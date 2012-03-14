@@ -54,6 +54,7 @@ struct Context {
     int                 stopped_by_bp;      /* stopped by breakpoint instruction */
     ContextBreakpoint** stopped_by_cb;      /* stopped by ContextBreakpoint - NULL terminated list of triggered ContextBreakpoint's */
     int                 stopped_by_exception;/* stopped by runtime exception (like SIGSEGV, etc.) */
+    int                 stopped_by_funccall;/* stopped by return from injected function call */
     char *              exception_description;/* description of exception if stopped by runtime exception */
     int                 exiting;            /* context is about to exit */
     int                 exited;             /* context exited */
