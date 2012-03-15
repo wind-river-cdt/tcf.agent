@@ -103,8 +103,9 @@ static int expression_has_func_call = 0;
 #  define ENABLE_FuncCallInjection (ENABLE_Symbols && SERVICE_RunControl && SERVICE_Breakpoints && ENABLE_DebugContext)
 #endif
 
+#if ENABLE_FuncCallInjection
 typedef struct FuncCallState {
-    struct FuncCallState * next;
+    LINK link_all;
     unsigned id;            /* ACPM transaction ID */
     int pos;                /* Text position in the expression */
     int started;            /* Target has started to execute the function call */
@@ -139,7 +140,11 @@ typedef struct FuncCallState {
     uint8_t * regs_data;
 } FuncCallState;
 
-static FuncCallState * func_call_state = NULL;
+static LINK func_call_state = TCF_LIST_INIT(func_call_state);
+
+#define link_all2fc(A)  ((FuncCallState *)((char *)(A) - offsetof(FuncCallState, link_all)))
+
+#endif /* ENABLE_FuncCallInjection */
 
 #define MAX_ID_CALLBACKS 8
 static ExpressionIdentifierCallBack * id_callbacks[MAX_ID_CALLBACKS];
@@ -1608,6 +1613,7 @@ static void free_funccall_state(FuncCallState * state) {
     assert(!state->started || state->intercepted);
     assert(state->committed);
     assert(state->regs_cnt == 0 || state->error);
+    list_remove(&state->link_all);
     if (state->bp) destroy_eventpoint(state->bp);
     context_unlock(state->ctx);
     release_error_report(state->error);
@@ -1680,35 +1686,42 @@ static void funcccall_breakpoint(Context * ctx, void * args) {
 }
 
 static void funccall_check_recursion(uint64_t ret_addr) {
-    FuncCallState * state = func_call_state;
-    while (state != NULL) {
+    LINK * l = func_call_state.next;
+    while (l != &func_call_state) {
+        FuncCallState * state = link_all2fc(l);
         if (state->started && !state->finished &&
                 state->ctx == expression_context && state->ret_addr == ret_addr) {
             funccall_error("Recursive invocation");
         }
-        state = state->next;
+        l = l->next;
     }
 }
 
 static void op_call(int mode, Value * v) {
     unsigned id = cache_transaction_id();
-    FuncCallState * state = func_call_state;
+    FuncCallState * state = NULL;
     Symbol * func = NULL;
     int type_class = 0;
+    LINK * l;
 
     if (!context_has_state(expression_context)) funccall_error("Context is not a thread");
-    if (!expression_context->stopped) funccall_error("Context is running");
     if (is_safe_event()) funccall_error("Called from safe event handler");
 
-    while (state != NULL && (state->id != id || state->pos != text_pos)) state = state->next;
+    for (l = func_call_state.next; l != &func_call_state; l = l->next) {
+        FuncCallState * s = link_all2fc(l);
+        if (s->id == id || s->pos == text_pos) {
+            state = s;
+            break;
+        }
+    }
+
     if (state != NULL && state->started && !state->intercepted) cache_wait(&state->cache);
     if (state == NULL) {
         state = (FuncCallState *)loc_alloc_zero(sizeof(FuncCallState));
-        state->next = func_call_state;
         state->id = id;
         state->pos = text_pos;
         context_lock(state->ctx = expression_context);
-        func_call_state = state;
+        list_add_first(&state->link_all, &func_call_state);
     }
     if (v->function) {
         func = v->sym;
@@ -1758,11 +1771,12 @@ static void op_call(int mode, Value * v) {
             StackFrame * frame_info = NULL;
             FunctionCallInfo * call_info = NULL;
             LocationExpressionState * vm = NULL;
-            RegisterDefinition * reg_pc = get_PC_definition(expression_context);
+            RegisterDefinition * reg_pc = get_PC_definition(state->ctx);
             const Symbol ** arg_types = (const Symbol **)tmp_alloc_zero(sizeof(Symbol *) * state->args_cnt);
-            uint64_t * arg_vals = (uint64_t *)tmp_alloc_zero(sizeof(uint64_t) * state->args_cnt);
+            uint64_t * arg_vals = (uint64_t *)tmp_alloc_zero(sizeof(uint64_t) * (FUNCCALL_ARG_ARGS + state->args_cnt));
+            uint64_t sp = 0;
 
-            if (get_frame_info(expression_context, STACK_TOP_FRAME, &frame_info) < 0) exception(errno);
+            if (get_frame_info(state->ctx, STACK_TOP_FRAME, &frame_info) < 0) exception(errno);
             if (read_reg_value(frame_info, reg_pc, &state->ret_addr) < 0) exception(errno);
             funccall_check_recursion(state->ret_addr);
             for (i = 0; i < state->args_cnt; i++) arg_types[i] = state->args[i].type;
@@ -1779,12 +1793,16 @@ static void op_call(int mode, Value * v) {
                 for (i = 0; i < call_info->saveregs_cnt; i++) {
                     RegisterDefinition * r = call_info->saveregs[i];
                     state->regs[i] = r;
-                    if (context_read_reg(expression_context, r, 0, r->size, state->regs_data + offs) < 0) exception(errno);
+                    if (context_read_reg(state->ctx, r, 0, r->size, state->regs_data + offs) < 0) exception(errno);
                     offs += r->size;
                 }
             }
 
             /* get values of actual arguments */
+            arg_vals[FUNCCALL_ARG_ADDR] = state->func_addr;
+            arg_vals[FUNCCALL_ARG_RET] = state->ret_addr;
+            if (read_reg_value(frame_info, call_info->stak_pointer, &sp) < 0) exception(errno);
+            sp -= call_info->red_zone_size;
             for (i = 0; i < state->args_cnt; i++) {
                 Value * v = state->args + i;
                 switch (v->type_class) {
@@ -1792,23 +1810,27 @@ static void op_call(int mode, Value * v) {
                 case TYPE_CLASS_INTEGER:
                 case TYPE_CLASS_POINTER:
                 case TYPE_CLASS_ENUMERATION:
-                    arg_vals[i] = to_uns(MODE_NORMAL, v);
-                    break;
-                case TYPE_CLASS_ARRAY:
-                case TYPE_CLASS_COMPOSITE:
-                    if (!v->remote) funccall_error("Invalid argument type");
-                    arg_vals[i] = v->address;
+                    arg_vals[FUNCCALL_ARG_ARGS + i] = to_uns(MODE_NORMAL, v);
                     break;
                 default:
-                    funccall_error("Invalid argument type");
+                    if (v->remote) {
+                        arg_vals[FUNCCALL_ARG_ARGS + i] = v->address;
+                    }
+                    else {
+                        sp -= v->size;
+                        while (sp % 8) sp--;
+                        if (context_write_mem(state->ctx, (ContextAddress)sp, v->value, v->size) < 0) exception(errno);
+                        arg_vals[FUNCCALL_ARG_ARGS + i] = sp;
+                    }
                     break;
                 }
             }
+            if (write_reg_value(frame_info, call_info->stak_pointer, sp) < 0) exception(errno);
 
             /* Execute call injection commands */
             state->started = 1;
-            vm = evaluate_location_expression(expression_context, frame_info,
-                    call_info->cmds, call_info->cmds_cnt, arg_vals, state->args_cnt);
+            vm = evaluate_location_expression(state->ctx, frame_info,
+                    call_info->cmds, call_info->cmds_cnt, arg_vals, FUNCCALL_ARG_ARGS + state->args_cnt);
             state->ret_big_endian = call_info->scope.big_endian;
             if (vm->sft_cmd != NULL) {
                 char ret_addr[64];
@@ -1819,11 +1841,11 @@ static void op_call(int mode, Value * v) {
                 /* Create breakpoint at the function return address */
                 assert(state->bp == NULL);
                 snprintf(ret_addr, sizeof(ret_addr), "0x%" PRIX64, state->ret_addr);
-                state->bp = create_eventpoint(ret_addr, expression_context, funcccall_breakpoint, state);
+                state->bp = create_eventpoint(ret_addr, state->ctx, funcccall_breakpoint, state);
 
                 /* Set PC to the function address */
                 if (write_reg_value(frame_info, reg_pc, state->func_addr) < 0) exception(errno);
-                expression_context->stopped_by_bp = 0;
+                state->ctx->stopped_by_bp = 0;
 
                 /* Save rest of func call commands to be executed after the function returns */
                 state->cmds_cnt = call_info->cmds_cnt - (vm->sft_cmd - call_info->cmds) - 1;
@@ -1831,7 +1853,7 @@ static void op_call(int mode, Value * v) {
                 memcpy(state->cmds, vm->sft_cmd + 1, sizeof(LocationExpressionCommand) * state->cmds_cnt);
 
                 /* Resume debug context */
-                if (continue_debug_context(expression_context, cache_channel(), RM_RESUME, 1, 0, 0) < 0) exception(errno);
+                if (continue_debug_context(state->ctx, cache_channel(), RM_RESUME, 1, 0, 0) < 0) exception(errno);
 
                 /* Wait until the function returns */
                 cache_wait(&state->cache);
@@ -2579,20 +2601,13 @@ static int evaluate_script(int mode, char * s, int load, Value * v) {
 #if ENABLE_FuncCallInjection
     if (get_error_code(trap.error) != ERR_CACHE_MISS) {
         unsigned id = cache_transaction_id();
-        FuncCallState * n = func_call_state;
-        FuncCallState * p = NULL;
-        while (n != NULL) {
-            if (n->id == id) {
-                FuncCallState * x = n;
-                n = n->next;
-                if (p != NULL) p->next = n;
-                else func_call_state = n;
-                x->committed = 1;
-                if (x->regs_cnt == 0) free_funccall_state(x);
-            }
-            else {
-                p = n;
-                n = p->next;
+        LINK * l = func_call_state.next;
+        while (l != &func_call_state) {
+            FuncCallState * state = link_all2fc(l);
+            l = l->next;
+            if (state->id == id) {
+                state->committed = 1;
+                if (state->regs_cnt == 0) free_funccall_state(state);
             }
         }
     }
@@ -3296,10 +3311,12 @@ void add_identifier_callback(ExpressionIdentifierCallBack * callback) {
     id_callbacks[id_callback_cnt++] = callback;
 }
 
+#if ENABLE_FuncCallInjection
 static void context_intercepted(Context * ctx, void * args) {
-    FuncCallState * state = func_call_state;
-    while (state != NULL) {
-        FuncCallState * next = state->next;
+    LINK * l = func_call_state.next;
+    while (l != &func_call_state) {
+        FuncCallState * state = link_all2fc(l);
+        l = l->next;
         if (state->ctx == ctx && !state->intercepted) {
             state->intercepted = 1;
             if (!state->finished && state->error == NULL) {
@@ -3308,17 +3325,16 @@ static void context_intercepted(Context * ctx, void * args) {
             }
             cache_notify(&state->cache);
         }
-        state = next;
     }
 }
-
-static void context_released(Context * ctx, void * args) {
-}
+#endif
 
 void ini_expressions_service(Protocol * proto) {
     unsigned i;
-    static RunControlEventListener rc_listener = { context_intercepted, context_released };
+#if ENABLE_FuncCallInjection
+    static RunControlEventListener rc_listener = { context_intercepted, NULL };
     add_run_control_event_listener(&rc_listener, NULL);
+#endif
     for (i = 0; i < ID2EXP_HASH_SIZE; i++) list_init(id2exp + i);
     add_channel_close_listener(on_channel_close);
     add_command_handler(proto, EXPRESSIONS, "getContext", command_get_context);

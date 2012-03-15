@@ -42,6 +42,11 @@ struct FunctionCallInfo {
     RegisterDefinition ** saveregs;     /* List of registers to save before calling the function */
     unsigned saveregs_cnt;              /* Number of registers to save */
 
+    RegisterDefinition * stak_pointer;  /* Stack pointer register definition */
+    unsigned stack_alignment;           /* Stack pointer alignment */
+    unsigned red_zone_size;             /* Size in bytes of area beyond the top of the call stack
+                                         * that is considered to be reserved. This area is known as the red zone. */
+
     unsigned update_policy;             /* Cache update policy, see UPDATE_ON_* in symbols.h */
 };
 

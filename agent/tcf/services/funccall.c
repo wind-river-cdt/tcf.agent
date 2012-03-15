@@ -121,12 +121,16 @@ static int c_call_cmds(void) {
         return -1;
     }
 
-    if (info->scope.machine == EM_X86_64) {
+    info->stak_pointer = reg_sp;
+
+    if (info->scope.machine == EM_386) {
+        info->stack_alignment = 8;
+    }
+    else if (info->scope.machine == EM_X86_64) {
         unsigned reg_args_cnt = 0;
 
-        /* The 128-byte area beyond the location pointed to by rsp is
-         * considered to be reserved. This area is known as the red zone. */
-        sp_offs = 128;
+        info->stack_alignment = 16;
+        info->red_zone_size = 128;
 
         /* Assign arguments to registers */
         for (i = 0; i < info->args_cnt; i++) {
@@ -144,7 +148,7 @@ static int c_call_cmds(void) {
                 case TYPE_CLASS_ENUMERATION:
                 case TYPE_CLASS_ARRAY:
                     if (reg_args_cnt < sizeof(reg_arg_ids) / sizeof(int)) {
-                        add_command(SFT_CMD_ARG)->args.arg_no = arg_no;
+                        add_command(SFT_CMD_ARG)->args.arg_no = FUNCCALL_ARG_ARGS + arg_no;
                         add_command(SFT_CMD_WR_REG)->args.reg = find_register(reg_arg_ids[reg_args_cnt++]);
                         reg_arg[i] = 1;
                     }
@@ -176,7 +180,7 @@ static int c_call_cmds(void) {
                 add_command(SFT_CMD_RD_REG)->args.reg = reg_sp;
                 add_command(SFT_CMD_NUMBER)->args.num = sp_offs;
                 add_command(SFT_CMD_SUB);
-                add_command(SFT_CMD_ARG)->args.arg_no = arg_no;
+                add_command(SFT_CMD_ARG)->args.arg_no = FUNCCALL_ARG_ARGS + arg_no;
                 add_command(SFT_CMD_WR_MEM)->args.mem.size = (size_t)arg_size_formal[arg_no];
                 break;
             default:
