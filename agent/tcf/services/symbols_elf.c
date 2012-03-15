@@ -17,6 +17,10 @@
  * Symbols service - ELF version.
  */
 
+#if defined(__GNUC__) && !defined(_GNU_SOURCE)
+#  define _GNU_SOURCE
+#endif
+
 #include <tcf/config.h>
 
 #if SERVICE_Symbols && !ENABLE_SymbolsProxy && ENABLE_ELF
@@ -25,7 +29,6 @@
 #  include <symLib.h>
 #  include <sysSymTbl.h>
 #endif
-
 #include <errno.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -161,32 +164,34 @@ static int get_sym_context(Context * ctx, int frame, ContextAddress addr) {
 
 /* Map ELF symbol table entry value to run-time address in given context address space */
 static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress * address) {
+    ELF_File * file = info->sym_section->file;
+    ELF_Section * sec = NULL;
+    U8_T value = info->value;
+
     switch (info->type) {
     case STT_OBJECT:
     case STT_FUNC:
-        {
-            U8_T value = info->value;
-            ELF_File * file = info->sym_section->file;
-            ELF_Section * sec = NULL;
-            if (info->section_index == SHN_UNDEF) {
-                set_errno(ERR_OTHER, "Cannot get address of ELF symbol: the symbol is undefined");
-                return -1;
-            }
-            if (info->section_index == SHN_ABS) {
-                *address = (ContextAddress)value;
-                return 0;
-            }
-            if (info->section_index == SHN_COMMON) {
-                set_errno(ERR_OTHER, "Cannot get address of ELF symbol: the symbol is a common block");
-                return -1;
-            }
-            if (file->type == ET_REL && info->section != NULL) {
-                sec = info->section;
-                value += sec->addr;
-            }
-            *address = elf_map_to_run_time_address(ctx, file, sec, (ContextAddress)value);
-            return errno ? -1 : 0;
+        if (info->section_index == SHN_UNDEF) {
+            set_errno(ERR_OTHER, "Cannot get address of ELF symbol: the symbol is undefined");
+            return -1;
         }
+        if (info->section_index == SHN_ABS) {
+            *address = (ContextAddress)value;
+            return 0;
+        }
+        if (info->section_index == SHN_COMMON) {
+            set_errno(ERR_OTHER, "Cannot get address of ELF symbol: the symbol is a common block");
+            return -1;
+        }
+        if (file->type == ET_REL && info->section != NULL) {
+            sec = info->section;
+            value += sec->addr;
+        }
+        *address = elf_map_to_run_time_address(ctx, file, sec, (ContextAddress)value);
+        return errno ? -1 : 0;
+    case STT_GNU_IFUNC:
+        set_errno(ERR_OTHER, "Cannot get address of ELF symbol: indirect symbol");
+        return -1;
     }
     set_errno(ERR_OTHER, "Cannot get address of ELF symbol: wrong symbol type");
     return -1;
@@ -710,14 +715,14 @@ static void create_symbol_names_hash(ELF_Section * tbl) {
     }
 }
 
-static int find_by_name_in_sym_table(DWARFCache * cache, const char * name, Symbol ** res) {
+static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol ** res) {
     unsigned m = 0;
     unsigned h = calc_symbol_name_hash(name);
     unsigned cnt = 0;
     Context * prs = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
-    for (m = 1; m < cache->mFile->section_cnt; m++) {
+    for (m = 1; m < file->section_cnt; m++) {
         unsigned n;
-        ELF_Section * tbl = cache->mFile->sections + m;
+        ELF_Section * tbl = file->sections + m;
         if (tbl->sym_count == 0) continue;
         if (tbl->sym_names_hash == NULL) create_symbol_names_hash(tbl);
         n = tbl->sym_names_hash[h % tbl->sym_names_hash_size];
@@ -757,6 +762,7 @@ static int find_by_name_in_sym_table(DWARFCache * cache, const char * name, Symb
                     sym->index = n;
                     switch (sym_info.type) {
                     case STT_FUNC:
+                    case STT_GNU_IFUNC:
                         sym->sym_class = SYM_CLASS_FUNCTION;
                         break;
                     case STT_OBJECT:
@@ -840,7 +846,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                     found = find_by_name_in_pub_names(cache, name, res);
-                    if (!found) found = find_by_name_in_sym_table(cache, name, res);
+                    if (!found) found = find_by_name_in_sym_table(file, name, res);
                     clear_trap(&trap);
                 }
                 else {
@@ -921,7 +927,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                     found = find_by_name_in_pub_names(cache, name, res);
-                    if (!found) found = find_by_name_in_sym_table(cache, name, res);
+                    if (!found) found = find_by_name_in_sym_table(file, name, res);
                     clear_trap(&trap);
                 }
                 else {
@@ -973,7 +979,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
                     }
                 }
                 if (!found) {
-                    found = find_by_name_in_sym_table(cache, name, res);
+                    found = find_by_name_in_sym_table(file, name, res);
                 }
                 clear_trap(&trap);
             }
@@ -1076,6 +1082,7 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
         assert(sym_info.section == section);
         switch (sym_info.type) {
         case STT_FUNC:
+        case STT_GNU_IFUNC:
             sym_class = SYM_CLASS_FUNCTION;
             break;
         case STT_OBJECT:
@@ -1510,21 +1517,33 @@ static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
     int found = 0;
     if (obj->mFlags & DOIF_external) {
         Trap trap;
-        DWARFCache * cache = get_dwarf_cache(obj->mCompUnit->mFile);
-        if (set_trap(&trap)) {
-            PropertyValue p;
-            read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
-            if (p.mAddr != NULL) found = find_by_name_in_sym_table(cache, (char *)p.mAddr, sym);
-            clear_trap(&trap);
+        ELF_File * file = obj->mCompUnit->mFile;
+        if (file->debug_info_file) {
+            size_t n = strlen(file->name);
+            if (strcmp(file->name + n - 6, ".debug") == 0) {
+                char * fnm = (char *)tmp_alloc_zero(n);
+                memcpy(fnm, file->name, n - 6);
+                fnm = canonicalize_file_name(fnm);
+                file = elf_open(fnm);
+                free(fnm);
+            }
         }
-        else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && set_trap(&trap)) {
-            PropertyValue p;
-            read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
-            if (p.mAddr != NULL) found = find_by_name_in_sym_table(cache, (char *)p.mAddr, sym);
-            clear_trap(&trap);
-        }
-        else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
-            found = find_by_name_in_sym_table(cache, obj->mName, sym);
+        if (file != NULL) {
+            if (set_trap(&trap)) {
+                PropertyValue p;
+                read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
+                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, sym);
+                clear_trap(&trap);
+            }
+            else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && set_trap(&trap)) {
+                PropertyValue p;
+                read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
+                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, sym);
+                clear_trap(&trap);
+            }
+            else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
+                found = find_by_name_in_sym_table(file, obj->mName, sym);
+            }
         }
     }
     return found;
@@ -1865,7 +1884,7 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
     if (sym->tbl != NULL) {
         ELF_SymbolInfo info;
         unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        if (info.type == STT_FUNC) {
+        if (info.type == STT_FUNC || info.type == STT_GNU_IFUNC) {
             *type_class = TYPE_CLASS_FUNCTION;
             return 0;
         }
@@ -1912,6 +1931,16 @@ int get_symbol_name(const Symbol * sym, char ** name) {
         *name = NULL;
     }
     return 0;
+}
+
+static int err_no_info(void) {
+    set_errno(ERR_OTHER, "Debug info not available");
+    return -1;
+}
+
+static int err_wrong_obj(void) {
+    set_errno(ERR_OTHER, "Wrong object kind");
+    return -1;
 }
 
 int get_symbol_size(const Symbol * sym, ContextAddress * size) {
@@ -1987,14 +2016,16 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
         case STT_FUNC:
             *size = (ContextAddress)info.size;
             break;
+        case STT_GNU_IFUNC:
+            set_errno(ERR_OTHER, "Size not available: indirect symbol");
+            return -1;
         default:
             *size = info.sym_section->file->elf64 ? 8 : 4;
             break;
         }
     }
     else {
-        set_errno(ERR_OTHER, "Debug info not available");
-        return -1;
+        return err_no_info();
     }
     return 0;
 }
@@ -2009,15 +2040,13 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
                 object2symbol(sym->base->obj->mType, base_type);
                 return 0;
             }
-            errno = ERR_UNSUPPORTED;
-            return -1;
+            return err_no_info();
         }
         *base_type = sym->base;
         return 0;
     }
     if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
     if (sym->sym_class == SYM_CLASS_FUNCTION) {
@@ -2025,8 +2054,7 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
             object2symbol(sym->obj->mType, base_type);
             return 0;
         }
-        errno = ERR_UNSUPPORTED;
-        return -1;
+        return err_no_info();
     }
     obj = get_original_type(obj);
     if (obj != NULL) {
@@ -2048,9 +2076,9 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
             object2symbol(obj, base_type);
             return 0;
         }
+        return err_wrong_obj();
     }
-    errno = ERR_UNSUPPORTED;
-    return -1;
+    return err_no_info();
 }
 
 int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
@@ -2058,8 +2086,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
-            errno = ERR_INV_CONTEXT;
-            return -1;
+            return err_wrong_obj();
         }
         alloc_cardinal_type_pseudo_symbol(sym->ctx, context_word_size(sym->ctx), index_type);
         return 0;
@@ -2067,29 +2094,30 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
     if (is_cardinal_type_pseudo_symbol(sym) ||
             is_constant_pseudo_symbol(sym) ||
             sym->sym_class == SYM_CLASS_FUNCTION) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
     obj = get_original_type(obj);
-    if (obj != NULL && obj->mTag == TAG_array_type) {
-        int i = sym->dimension;
-        ObjectInfo * idx = get_dwarf_children(obj);
-        while (i > 0 && idx != NULL) {
-            idx = idx->mSibling;
-            i--;
+    if (obj != NULL) {
+        if (obj->mTag == TAG_array_type) {
+            int i = sym->dimension;
+            ObjectInfo * idx = get_dwarf_children(obj);
+            while (i > 0 && idx != NULL) {
+                idx = idx->mSibling;
+                i--;
+            }
+            if (idx != NULL) {
+                object2symbol(idx, index_type);
+                return 0;
+            }
         }
-        if (idx != NULL) {
-            object2symbol(idx, index_type);
+        if (obj->mTag == TAG_string_type) {
+            alloc_cardinal_type_pseudo_symbol(sym->ctx, obj->mCompUnit->mDesc.mAddressSize, index_type);
             return 0;
         }
+        return err_wrong_obj();
     }
-    if (obj != NULL && obj->mTag == TAG_string_type) {
-        alloc_cardinal_type_pseudo_symbol(sym->ctx, obj->mCompUnit->mDesc.mAddressSize, index_type);
-        return 0;
-    }
-    errno = ERR_UNSUPPORTED;
-    return -1;
+    return err_no_info();
 }
 
 int get_symbol_container(const Symbol * sym, Symbol ** container) {
@@ -2117,9 +2145,9 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
             object2symbol(parent, container);
             return 0;
         }
+        return err_wrong_obj();
     }
-    errno = ERR_SYM_NOT_FOUND;
-    return -1;
+    return err_no_info();
 }
 
 int get_symbol_length(const Symbol * sym, ContextAddress * length) {
@@ -2127,8 +2155,7 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
-            errno = ERR_INV_CONTEXT;
-            return -1;
+            return err_wrong_obj();
         }
         *length = sym->length == 0 ? 1 : sym->length;
         return 0;
@@ -2136,8 +2163,7 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
     if (is_cardinal_type_pseudo_symbol(sym) ||
             is_constant_pseudo_symbol(sym) ||
             sym->sym_class == SYM_CLASS_FUNCTION) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
     obj = get_original_type(obj);
@@ -2164,9 +2190,9 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
             clear_trap(&trap);
             return 0;
         }
+        return err_wrong_obj();
     }
-    errno = ERR_UNSUPPORTED;
-    return -1;
+    return err_no_info();
 }
 
 int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
@@ -2174,8 +2200,7 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
-            errno = ERR_INV_CONTEXT;
-            return -1;
+            return err_wrong_obj();
         }
         *value = 0;
         return 0;
@@ -2183,8 +2208,7 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
     if (is_cardinal_type_pseudo_symbol(sym) ||
             is_constant_pseudo_symbol(sym) ||
             sym->sym_class == SYM_CLASS_FUNCTION) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
     obj = get_original_type(obj);
@@ -2207,9 +2231,9 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
             *value = 0;
             return 0;
         }
+        return err_wrong_obj();
     }
-    errno = ERR_UNSUPPORTED;
-    return -1;
+    return err_no_info();
 }
 
 int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
@@ -2290,8 +2314,7 @@ int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
     if (is_array_type_pseudo_symbol(sym) ||
         is_cardinal_type_pseudo_symbol(sym) ||
         is_constant_pseudo_symbol(sym)) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
     if (obj != NULL && (obj->mTag == TAG_member || obj->mTag == TAG_inheritance)) {
@@ -2329,8 +2352,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         return 0;
     }
     if (is_array_type_pseudo_symbol(sym) || is_cardinal_type_pseudo_symbol(sym) || sym->var) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
     if (obj != NULL) {
@@ -2403,6 +2425,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         switch (info.type) {
         case STT_OBJECT:
         case STT_FUNC:
+        case STT_GNU_IFUNC:
             set_errno(ERR_OTHER, "Symbol represents an address");
             return -1;
         }
@@ -2421,8 +2444,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         *big_endian = big_endian_host();
         return 0;
     }
-    set_errno(ERR_OTHER, "Symbol does not have a value");
-    return -1;
+    return err_no_info();
 }
 
 static int calc_member_offset(ObjectInfo * type, ObjectInfo * member, ContextAddress * offs) {
@@ -2445,6 +2467,40 @@ static int calc_member_offset(ObjectInfo * type, ObjectInfo * member, ContextAdd
         obj = obj->mSibling;
     }
     return 0;
+}
+
+static int get_elf_symbol_address(const Symbol * sym, ContextAddress * address) {
+    ELF_SymbolInfo info;
+    assert(sym_ctx == sym->ctx);
+    unpack_elf_symbol_info(sym->tbl, sym->index, &info);
+    if (info.type == STT_GNU_IFUNC && info.name != NULL) {
+        int error = 0;
+        int found = 0;
+        ELF_File * file = elf_list_first(sym_ctx, 0, ~(ContextAddress)0);
+        if (file == NULL) error = errno;
+        while (error == 0 && file != NULL) {
+            ContextAddress got_addr = 0;
+            if (find_elf_got_entry(file, info.name, &got_addr) < 0) {
+                error = errno;
+            }
+            else if (got_addr != 0) {
+                got_addr = elf_map_to_run_time_address(sym_ctx, file, NULL, got_addr);
+                if (got_addr != 0 && elf_read_memory_word(sym_ctx, file, got_addr, address) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+            file = elf_list_next(sym_ctx);
+            if (file == NULL) error = errno;
+        }
+        elf_list_done(sym_ctx);
+        if (found) return 0;
+        if (error) {
+            errno = error;
+            return -1;
+        }
+    }
+    return syminfo2address(sym_ctx, &info, address);
 }
 
 static LocationInfo * location_info = NULL;
@@ -2503,8 +2559,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
     if (is_array_type_pseudo_symbol(sym) ||
         is_cardinal_type_pseudo_symbol(sym) ||
         is_constant_pseudo_symbol(sym)) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
 
     if (unpack(sym) < 0) return -1;
@@ -2582,10 +2637,8 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
     }
 
     if (sym->tbl != NULL) {
-        ELF_SymbolInfo info;
         ContextAddress addr = 0;
-        unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        if (syminfo2address(sym_ctx, &info, &addr) < 0) return -1;
+        if (get_elf_symbol_address(sym, &addr) < 0) return -1;
         add_location_command(SFT_CMD_NUMBER)->args.num = addr;
         return 0;
     }
@@ -2605,8 +2658,7 @@ int get_symbol_address(const Symbol * sym, ContextAddress * address) {
     if (is_array_type_pseudo_symbol(sym) ||
         is_cardinal_type_pseudo_symbol(sym) ||
         is_constant_pseudo_symbol(sym)) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
+        return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
     if (obj != NULL && (obj->mFlags & DOIF_external) == 0 && sym->var != NULL) {
@@ -2647,11 +2699,7 @@ int get_symbol_address(const Symbol * sym, ContextAddress * address) {
         set_errno(ERR_OTHER, "No object location info found in DWARF data");
         return -1;
     }
-    if (sym->tbl != NULL) {
-        ELF_SymbolInfo info;
-        unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        return syminfo2address(sym_ctx, &info, address);
-    }
+    if (sym->tbl != NULL) return get_elf_symbol_address(sym, address);
 
     set_errno(ERR_OTHER, "Symbol does not have a memory address");
     return -1;

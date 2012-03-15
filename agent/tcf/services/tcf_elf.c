@@ -603,7 +603,6 @@ static ELF_File * create_elf_cache(const char * file_name) {
                             sec->sym_count = (unsigned)(sec->size / sizeof(Elf64_Sym));
                             dynsym_section = sec;
                         }
-
                         cnt++;
                     }
                 }
@@ -1269,7 +1268,7 @@ void unpack_elf_symbol_info(ELF_Section * sym_sec, U4_T index, ELF_SymbolInfo * 
     char * str_pool = NULL;
     size_t str_pool_size = 0;
     memset(info, 0, sizeof(ELF_SymbolInfo));
-    if (index >= sym_sec->sym_count) str_exception(ERR_INV_FORMAT, "Invalid ELF symbol index");
+    if (index >= sym_sec->size / sym_sec->entsize) str_exception(ERR_INV_FORMAT, "Invalid ELF symbol index");
     if (sym_sec->link == 0 || sym_sec->link >= file->section_cnt) str_exception(ERR_INV_FORMAT, "Invalid symbol section");
     str_sec = file->sections + sym_sec->link;
     if (elf_load(sym_sec) < 0) exception(errno);
@@ -1279,7 +1278,7 @@ void unpack_elf_symbol_info(ELF_Section * sym_sec, U4_T index, ELF_SymbolInfo * 
     info->sym_section = sym_sec;
     info->sym_index = index;
     if (file->elf64) {
-        Elf64_Sym s = ((Elf64_Sym *)sym_sec->data)[index];
+        Elf64_Sym s = *(Elf64_Sym *)((U1_T *)sym_sec->data + sym_sec->entsize * index);
         if (file->byte_swap) {
             SWAP(s.st_name);
             SWAP(s.st_shndx);
@@ -1300,7 +1299,7 @@ void unpack_elf_symbol_info(ELF_Section * sym_sec, U4_T index, ELF_SymbolInfo * 
         info->size = s.st_size;
     }
     else {
-        Elf32_Sym s = ((Elf32_Sym *)sym_sec->data)[index];
+        Elf32_Sym s = *(Elf32_Sym *)((U1_T *)sym_sec->data + sym_sec->entsize * index);
         if (file->byte_swap) {
             SWAP(s.st_name);
             SWAP(s.st_shndx);
@@ -1438,6 +1437,55 @@ void elf_next_symbol_by_address(ELF_SymbolInfo * sym_info) {
     else {
         memset(sym_info, 0, sizeof(ELF_SymbolInfo));
     }
+}
+
+int find_elf_got_entry(ELF_File * file, const char * name, ContextAddress * addr) {
+    Trap trap;
+    unsigned idx;
+    if (!set_trap(&trap)) return -1;
+    for (idx = 1; idx < file->section_cnt; idx++) {
+        U4_T i = 0;
+        U4_T n = 0;
+        ELF_Section * sec = file->sections + idx;
+        if (sec->type != SHT_RELA) continue;
+        if (sec->link == 0 || sec->link >= file->section_cnt) continue;
+        if ((file->sections + sec->link)->type != SHT_DYNSYM) continue;
+        if (elf_load(sec) < 0) exception(errno);
+        n = (U4_T)(sec->size / sec->entsize);
+        while (i < n) {
+            U4_T sym_index = 0;
+            U8_T got_addr = 0;
+            ELF_SymbolInfo sym_info;
+            if (!file->elf64) {
+                Elf32_Rela bf = *(Elf32_Rela *)((U1_T *)sec->data + i * sec->entsize);
+                if (file->byte_swap) {
+                    SWAP(bf.r_offset);
+                    SWAP(bf.r_info);
+                }
+                sym_index = ELF32_R_SYM(bf.r_info);
+                got_addr = bf.r_offset;
+            }
+            else {
+                Elf64_Rela bf = *(Elf64_Rela *)((U1_T *)sec->data + i * sec->entsize);
+                if (file->byte_swap) {
+                    SWAP(bf.r_offset);
+                    SWAP(bf.r_info);
+                }
+                sym_index = ELF64_R_SYM(bf.r_info);
+                got_addr = bf.r_offset;
+            }
+            unpack_elf_symbol_info(file->sections + sec->link, sym_index, &sym_info);
+            if (sym_info.name != NULL && strcmp(sym_info.name, name) == 0) {
+                *addr = (ContextAddress)got_addr;
+                clear_trap(&trap);
+                return 0;
+            }
+            i++;
+        }
+    }
+    clear_trap(&trap);
+    *addr = 0;
+    return 0;
 }
 
 void ini_elf(void) {

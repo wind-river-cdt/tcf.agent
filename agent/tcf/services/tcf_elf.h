@@ -116,6 +116,7 @@
 #define STT_FUNC        2
 #define STT_SECTION     3
 #define STT_FILE        4
+#define STT_GNU_IFUNC  10
 
 #define PT_NULL         0
 #define PT_LOAD         1
@@ -590,6 +591,12 @@ extern void elf_find_symbol_by_address(ELF_Section * section, ContextAddress add
  */
 extern void elf_prev_symbol_by_address(ELF_SymbolInfo * info);
 extern void elf_next_symbol_by_address(ELF_SymbolInfo * info);
+
+/*
+ * Find link-time address of GOT entry for given symbol name and assign it to *addr.
+ * Returns zero on success. If error, returns -1 and sets errno.
+ */
+extern int find_elf_got_entry(ELF_File * file, const char * name, ContextAddress * addr);
 
 /*
  * Initialize ELF support module.
