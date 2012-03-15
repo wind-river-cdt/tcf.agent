@@ -980,7 +980,7 @@ static void notify_breakpoints_status(void) {
         bp->attrs_changed = 0;
         if (bp->client_cnt == 0) {
             if (bp->instruction_cnt == 0) {
-                send_event_context_removed(bp);
+                if (*bp->id) send_event_context_removed(bp);
                 free_bp(bp);
             }
         }
