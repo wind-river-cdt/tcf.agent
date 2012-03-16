@@ -1439,7 +1439,7 @@ void elf_next_symbol_by_address(ELF_SymbolInfo * sym_info) {
     }
 }
 
-int find_elf_got_entry(ELF_File * file, const char * name, ContextAddress * addr) {
+int elf_find_got_entry(ELF_File * file, const char * name, ContextAddress * addr) {
     Trap trap;
     unsigned idx;
     if (!set_trap(&trap)) return -1;

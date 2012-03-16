@@ -597,9 +597,11 @@ extern void elf_next_symbol_by_address(ELF_SymbolInfo * info);
 
 /*
  * Find link-time address of GOT entry for given symbol name and assign it to *addr.
- * Returns zero on success. If error, returns -1 and sets errno.
+ * Returns 0 on success.
+ * If entry not found, sets *addr = 0 and returns 0.
+ * If error, sets errno and returns -1.
  */
-extern int find_elf_got_entry(ELF_File * file, const char * name, ContextAddress * addr);
+extern int elf_find_got_entry(ELF_File * file, const char * name, ContextAddress * addr);
 
 /*
  * Initialize ELF support module.

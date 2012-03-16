@@ -2480,7 +2480,7 @@ static int get_elf_symbol_address(const Symbol * sym, ContextAddress * address) 
         if (file == NULL) error = errno;
         while (error == 0 && file != NULL) {
             ContextAddress got_addr = 0;
-            if (find_elf_got_entry(file, info.name, &got_addr) < 0) {
+            if (elf_find_got_entry(file, info.name, &got_addr) < 0) {
                 error = errno;
             }
             else if (got_addr != 0) {
