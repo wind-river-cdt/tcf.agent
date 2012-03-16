@@ -411,8 +411,33 @@ static ContextAddress trace_jump(Context * ctx, ContextAddress addr) {
         }
         else if (instr == MOVE_rm) {
             unsigned char modrm = 0;
+            unsigned char mod = 0;
+            unsigned char reg = 0;
+            unsigned char rm = 0;
             if (context_read_mem(ctx, addr + 1, &modrm, 1) < 0) break;
-            if (modrm == 0xff) {
+            mod = modrm >> 6;
+            reg = (modrm >> 3) & 7u;
+            rm = modrm & 7u;
+            if (reg == 4 || reg == 5) {
+                /* move to SP or BP */
+                break;
+            }
+            if (mod == 0 && (rm == 5 || rm == 6)) {
+                break;
+            }
+            if (mod == 0) {
+                dest = addr + 2;
+                if (rm == 4) dest++;
+            }
+            else if (mod == 1) {
+                dest = addr + 3;
+                if (rm == 4) dest++;
+            }
+            else if (mod == 2) {
+                dest = addr + 6;
+                if (rm == 4) dest++;
+            }
+            else if (mod == 3) {
                 dest = addr + 2;
             }
             else {
@@ -429,7 +454,7 @@ static ContextAddress trace_jump(Context * ctx, ContextAddress addr) {
     return addr;
 }
 
-static int func_entry(unsigned char * code) {
+static int is_func_entry(unsigned char * code) {
     if (*code != PUSH_EBP) return 0;
     code++;
     if (*code == REXW) code++;
@@ -504,11 +529,11 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
 
             if (context_read_mem(ctx, addr - 1, code, sizeof(code)) < 0) return -1;
 
-            if (func_entry(code + 1) || code[1] == ENTER || code[1] == RET || code[1] == RETADD) {
+            if (is_func_entry(code + 1) || code[1] == ENTER || code[1] == RET || code[1] == RETADD) {
                 dwn_sp = reg_sp + sizeof(ContextAddress);
                 dwn_bp = reg_bp;
             }
-            else if (func_entry(code)) {
+            else if (is_func_entry(code)) {
                 dwn_sp = reg_sp + sizeof(ContextAddress) * 2;
                 dwn_bp = reg_bp;
             }
