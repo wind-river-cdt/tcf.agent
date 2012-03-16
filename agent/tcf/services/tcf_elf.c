@@ -1112,15 +1112,15 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
                 errno = 0;
                 return (ContextAddress)(offs - r->file_offs + r->addr);
             }
-            if (file->type == ET_EXEC) {
-                errno = 0;
-                return addr;
-            }
         }
         else if (sec != NULL && strcmp(sec->name, r->sect_name) == 0) {
             errno = 0;
             return (ContextAddress)(addr - sec->addr + r->addr);
         }
+    }
+    if (file->type == ET_EXEC) {
+        errno = 0;
+        return addr;
     }
     errno = ERR_INV_ADDRESS;
     return 0;
