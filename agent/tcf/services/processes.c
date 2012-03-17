@@ -1404,7 +1404,9 @@ int get_process_exit_code(ChildProcess * prs) {
 static void read_start_params(InputStream * inp, const char * nm, void * arg) {
     ProcessStartParams * params = (ProcessStartParams *)arg;
     if (strcmp(nm, "Attach") == 0) params->attach = json_read_boolean(inp);
-    else if (strcmp(nm, "AttachChildren") == 0) params->attach_children = json_read_boolean(inp);
+    else if (strcmp(nm, "AttachChildren") == 0) params->attach_mode |= json_read_boolean(inp) ? CONTEXT_ATTACH_CHILDREN : 0;
+    else if (strcmp(nm, "StopAtEntry") == 0) params->attach_mode |= json_read_boolean(inp) ? 0 : CONTEXT_ATTACH_NO_STOP;
+    else if (strcmp(nm, "StopAtMain") == 0) params->attach_mode |= json_read_boolean(inp) ? 0 : CONTEXT_ATTACH_NO_MAIN;
     else if (strcmp(nm, "UseTerminal") == 0) params->use_terminal = json_read_boolean(inp);
     else json_skip_object(inp);
 }
@@ -1447,12 +1449,11 @@ static void command_start(char * token, Channel * c, void * x) {
         params.service = PROCESSES[version];
         if (err == 0 && start_process(c, &params, &selfattach, &prs) < 0) err = errno;
         if (!err && params.attach) {
-            int mode = 0;
+            int mode = params.attach_mode;
             AttachDoneArgs * data = (AttachDoneArgs *)loc_alloc_zero(sizeof *data);
             data->c = c;
             strcpy(data->token, token);
             if (selfattach) mode |= CONTEXT_ATTACH_SELF;
-            if (params.attach_children) mode |= CONTEXT_ATTACH_CHILDREN;
             pending = context_attach(prs->pid, start_done, data, mode) == 0;
             if (pending) {
                 channel_lock(c);

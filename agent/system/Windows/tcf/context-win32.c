@@ -101,6 +101,7 @@ typedef struct DebugState {
     DWORD64             module_address;
     ContextAttachCallBack * attach_callback;
     void *              attach_data;
+    int                 attach_mode;
     int                 detach;
     /* NtContinue() changes Dr6 and Dr7, so HW breakpoints should be disabled until NtContinue() is done */
     int                 ok_to_use_hw_bp;
@@ -653,7 +654,9 @@ static void debug_event_handler(DebugEvent * debug_event) {
             list_add_last(&ctx->cldl, &prs->children);
             link_context(ctx);
             send_context_created_event(ctx);
-            ctx->pending_intercept = 1;
+            if ((debug_state->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
+                ctx->pending_intercept = 1;
+            }
             debug_event->continue_status = event_win32_context_stopped(ctx);
             ext->debug_event = *win32_event;
         }
@@ -921,6 +924,7 @@ int context_attach(pid_t pid, ContextAttachCallBack * done, void * data, int mod
     debug_state->process_id = pid;
     debug_state->attach_callback = done;
     debug_state->attach_data = data;
+    debug_state->attach_mode = mode;
 
     debug_state->debug_event_inp = CreateEvent(NULL, 0, 0, NULL);
     if (debug_state->debug_event_inp == NULL) error = log_error("CreateEvent", 0);
@@ -1328,7 +1332,10 @@ void add_context_exception_handler(ContextExceptionHandler * h) {
 }
 
 static void eventpoint_at_main(Context * ctx, void * args) {
-    suspend_debug_context(ctx);
+    DebugState * debug_state = EXT(ctx->mem)->debug_state;
+    if ((debug_state->attach_mode & CONTEXT_ATTACH_NO_MAIN) == 0) {
+        suspend_debug_context(ctx);
+    }
 }
 
 static void waitpid_listener(int pid, int exited, int exit_code, int signal, int event_code, int syscall, void * args) {

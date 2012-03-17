@@ -87,7 +87,7 @@ typedef struct ContextExtensionLinux {
     pid_t                   pid;
     ContextAttachCallBack * attach_callback;
     void *                  attach_data;
-    int                     attach_children;
+    int                     attach_mode;
     int                     ptrace_flags;
     int                     ptrace_event;
     int                     syscall_enter;
@@ -183,7 +183,7 @@ int context_attach(pid_t pid, ContextAttachCallBack * done, void * data, int mod
     ext->pid = pid;
     ext->attach_callback = done;
     ext->attach_data = data;
-    ext->attach_children = (mode & CONTEXT_ATTACH_CHILDREN) != 0;
+    ext->attach_mode = mode;
     list_add_first(&ctx->ctxl, &pending_list);
     /* TODO: context_attach works only for main task in a process */
     return 0;
@@ -293,6 +293,7 @@ static int flush_regs(Context * ctx) {
 
     for (i = 0; i < sizeof(REG_SET); i += sizeof(ContextAddress)) {
         if (*(ContextAddress *)(ext->regs_dirty + i) != 0) {
+            assert(*(ContextAddress *)(ext->regs_valid + i) == ~(ContextAddress)0);
             if (i >= offsetof(REG_SET, fp) && i < offsetof(REG_SET, fp) + sizeof(ext->regs->fp)) {
                 fp_dirty = 1;
             }
@@ -685,8 +686,8 @@ int context_write_reg(Context * ctx, RegisterDefinition * def, unsigned offs, un
     for (i = def->offset + offs; i < def->offset + offs + size; i++) {
         if (ext->regs_valid[i] == 0) valid = 0;
     }
-    if (!valid) memset(ext->regs_valid + def->offset + offs, 0xff, size);
-    else if (memcmp((uint8_t *)ext->regs + def->offset + offs, buf, size) == 0) return 0;
+    if (!valid && context_read_reg(ctx, def, offs, size, NULL) < 0) return -1;
+    if (memcmp((uint8_t *)ext->regs + def->offset + offs, buf, size) == 0) return 0;
     memcpy((uint8_t *)ext->regs + def->offset + offs, buf, size);
     memset(ext->regs_dirty + def->offset + offs, 0xff, size);
     return 0;
@@ -749,7 +750,7 @@ int context_read_reg(Context * ctx, RegisterDefinition * def, unsigned offs, uns
         }
     }
 
-    memcpy(buf, (uint8_t *)ext->regs + def->offset + offs, size);
+    if (buf != NULL) memcpy(buf, (uint8_t *)ext->regs + def->offset + offs, size);
     return 0;
 }
 
@@ -976,6 +977,27 @@ static unsigned long get_child_pid(pid_t parent_pid) {
     return child_pid;
 }
 
+static pid_t get_thread_group_id(pid_t pid) {
+    pid_t res = pid;
+    FILE * file = NULL;
+    char file_name[FILE_PATH_SIZE];
+    snprintf(file_name, sizeof(file_name), "/proc/%d/status", pid);
+    if ((file = fopen(file_name, "r")) != NULL) {
+        for (;;) {
+            char s[256];
+            if (fgets(s, sizeof(s), file) == NULL) break;
+            if (strncmp(s, "Tgid:", 5) == 0) {
+                char * p = s + 5;
+                while (isspace(*p)) p++;
+                res = atoi(p);
+                break;
+            }
+        }
+        fclose(file);
+    }
+    return res;
+}
+
 static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     int stopped_by_exception = 0;
     unsigned long msg = 0;
@@ -994,10 +1016,12 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             ctx = create_context(pid2id(pid, pid));
             EXT(ctx)->pid = pid;
             alloc_regs(ctx);
-            ctx->pending_intercept = 1;
+            if ((EXT(prs)->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
+                ctx->pending_intercept = 1;
+            }
             ctx->mem = prs;
             ctx->big_endian = prs->big_endian;
-            EXT(ctx)->attach_children = EXT(prs)->attach_children;
+            EXT(ctx)->attach_mode = EXT(prs)->attach_mode;
             (ctx->parent = prs)->ref_count++;
             list_add_last(&ctx->cldl, &prs->children);
             link_context(prs);
@@ -1077,15 +1101,13 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             }
             assert(msg != 0);
             add_waitpid_process(msg);
-            if (event == PTRACE_EVENT_CLONE) {
-                /* TODO: using the PTRACE_EVENT_CLONE to determine if the new context is a thread is not correct.
-                 * The only way I know of is to look at the Tgid field of /proc/<pid>/status */
+            if (get_thread_group_id(msg) != msg) {
                 prs2 = ctx->parent;
             }
             else {
                 prs2 = create_context(pid2id(msg, 0));
                 EXT(prs2)->pid = msg;
-                EXT(prs2)->attach_children = ext->attach_children;
+                EXT(prs2)->attach_mode = ext->attach_mode;
                 prs2->mem = prs2;
                 prs2->mem_access |= MEM_ACCESS_INSTRUCTION;
                 prs2->mem_access |= MEM_ACCESS_DATA;
@@ -1096,7 +1118,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 prs2->sig_dont_pass = ctx->sig_dont_pass;
                 link_context(prs2);
                 clone_breakpoints_on_process_fork(ctx, prs2);
-                if (!ext->attach_children) {
+                if ((ext->attach_mode & CONTEXT_ATTACH_CHILDREN) == 0) {
                     list_remove(&prs2->ctxl);
                     list_add_first(&prs2->ctxl, &detach_list);
                     break;
@@ -1106,7 +1128,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
 
             ctx2 = create_context(pid2id(msg, EXT(prs2)->pid));
             EXT(ctx2)->pid = msg;
-            EXT(ctx2)->attach_children = EXT(prs2)->attach_children;
+            EXT(ctx2)->attach_mode = EXT(prs2)->attach_mode;
             alloc_regs(ctx2);
             ctx2->mem = prs2;
             ctx2->big_endian = prs2->big_endian;
@@ -1114,6 +1136,9 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             ctx2->sig_dont_pass = ctx->sig_dont_pass;
             (ctx2->creator = ctx)->ref_count++;
             (ctx2->parent = prs2)->ref_count++;
+            if (prs2 != ctx->parent && (EXT(prs2)->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
+                ctx2->pending_intercept = 1;
+            }
             list_add_last(&ctx2->cldl, &prs2->children);
             link_context(ctx2);
             trace(LOG_EVENTS, "event: new context 0x%x, id %s", ctx2, ctx2->id);
@@ -1132,7 +1157,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 Context * prs = ctx->parent;
                 Context * ctx2 = create_context(pid2id(child_pid, EXT(prs)->pid));
                 EXT(ctx2)->pid = child_pid;
-                EXT(ctx2)->attach_children = EXT(prs)->attach_children;
+                EXT(ctx2)->attach_mode = EXT(prs)->attach_mode;
                 alloc_regs(ctx2);
                 ctx2->mem = prs;
                 ctx2->big_endian = prs->big_endian;
@@ -1343,7 +1368,9 @@ static void eventpoint_at_loader(Context * ctx, void * args) {
 static void eventpoint_at_main(Context * ctx, void * args) {
     send_context_changed_event(ctx->mem);
     memory_map_event_mapping_changed(ctx->mem);
-    suspend_debug_context(ctx);
+    if ((EXT(ctx)->attach_mode & CONTEXT_ATTACH_NO_MAIN) == 0) {
+        suspend_debug_context(ctx);
+    }
 }
 
 static int cmp_linux_pid(Context * ctx, const char * v) {
