@@ -29,6 +29,7 @@
 #include <signal.h>
 #include <sched.h>
 #include <dirent.h>
+#include <ctype.h>
 #include <asm/unistd.h>
 #include <sys/ptrace.h>
 #include <linux/kdev_t.h>
