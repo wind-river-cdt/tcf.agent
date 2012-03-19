@@ -1102,7 +1102,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             }
             assert(msg != 0);
             add_waitpid_process(msg);
-            if (get_thread_group_id(msg) != msg) {
+            if (get_thread_group_id(msg) != (pid_t)msg) {
                 prs2 = ctx->parent;
             }
             else {
