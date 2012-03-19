@@ -1819,7 +1819,8 @@ static void op_call(int mode, Value * v) {
                     else {
                         sp -= v->size;
                         while (sp % 8) sp--;
-                        if (context_write_mem(state->ctx, (ContextAddress)sp, v->value, v->size) < 0) exception(errno);
+                        if (context_write_mem(state->ctx, (ContextAddress)sp,
+                                v->value, (size_t)v->size) < 0) exception(errno);
                         arg_vals[FUNCCALL_ARG_ARGS + i] = sp;
                     }
                     break;
