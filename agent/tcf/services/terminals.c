@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2008, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -296,71 +296,49 @@ static void terminal_exited(void * args) {
  * Set the environment variable "name" to the value "value". If the variable
  * exists already, override it or just skip.
  */
-static void envp_add(char *** envp, int * env_len, const char * name, const char * value, int env_override) {
-    char **env;
-    size_t len;
+static void envp_add(char *** envp, const char * name, const char * value, int env_override) {
     int i;
+    size_t len = strlen(name);
+    char ** env = *envp;
 
-    assert(*envp || *env_len == 0);
     assert(name);
     assert(value);
 
-    if (*envp == NULL && *env_len == 0) {
-        *envp = (char **)loc_alloc(sizeof(char *));
-        *envp[0] = NULL;
-        *env_len = 1;
-    }
-
-    for (env = *envp, i = 0, len = strlen(name); env[i]; i++)
+    for (i = 0; env[i]; i++) {
         if (strncmp(env[i], name, len) == 0 && env[i][len] == '=') break;
+    }
     if (env[i]) {
         /* override */
-        if (env_override) loc_free(env[i]);
-        else return;
+        if (!env_override) return;
     }
     else {
         /* new variable */
-        if (i >= *env_len - 1) {
-            *env_len += 10;
-            env = *envp = (char **)loc_realloc(env, *env_len * sizeof(char *));
-        }
+        env = *envp = (char **)tmp_realloc(env, sizeof(char *) * (i + 2));
         env[i + 1] = NULL;
     }
-    env[i] = (char *)loc_alloc_zero(len + 1 + strlen(value) + 1);
-    snprintf(env[i], len + 1 + strlen(value) + 1, "%s=%s", name, value);
+    len += strlen(value) + 2;
+    env[i] = (char *)tmp_alloc(len);
+    snprintf(env[i], len, "%s=%s", name, value);
 }
 
-static void set_terminal_env(char *** envp, int * env_len, const char * pty_type,
+static void set_terminal_env(char *** envp, const char * pty_type,
         const char * encoding, const char * exe) {
 #if TERMINALS_NO_LOGIN
+    int i;
     char * value;
-    const char *env_array[] = { "USER", "LOGNAME", "HOME", "PATH", NULL };
+    const char * env_array[] = { "USER", "LOGNAME", "HOME", "PATH", NULL };
 #endif
-    int i = 0;
-    char ** new_envp = NULL;
 
-    /* convert the envp memory layout */
-    new_envp = (char **)loc_alloc((*env_len + 1) * sizeof(char *));
-    for (i = 0; i < *env_len; i++) {
-        new_envp[i] = (char *)loc_alloc(strlen((*envp)[i]) + 1);
-        memcpy(new_envp[i], (*envp)[i], strlen((*envp)[i]) + 1);
-    }
-    new_envp[i] = NULL;
-    loc_free(*envp);
-
-    *envp = new_envp;
-    *env_len = i + 1;
-
-    if (*pty_type) envp_add(envp, env_len, "TERM", pty_type, 1);
-    if (*encoding) envp_add(envp, env_len, "LANG", encoding, 1);
-    envp_add(envp, env_len, "SHELL", exe, 1);
+    if (*pty_type) envp_add(envp, "TERM", pty_type, 1);
+    if (*encoding) envp_add(envp, "LANG", encoding, 1);
+    envp_add(envp, "SHELL", exe, 1);
 
 #if TERMINALS_NO_LOGIN
     i = 0;
     while (env_array[i]) {
         value = getenv(env_array[i]);
-        if (value) envp_add(envp, env_len, env_array[i], value, 0);
-        ++i;
+        if (value) envp_add(envp, env_array[i], value, 0);
+        i++;
     }
 #endif
 }
@@ -396,6 +374,20 @@ static void command_get_context(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
+static char ** read_env(InputStream * inp) {
+    int i = 0;
+    int len = 0;
+    char ** env = json_read_alloc_string_array(inp, &len);
+    char ** tmp = (char **)tmp_alloc_zero((len + 1) * sizeof(char *));
+
+    if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
+    /* convert the env memory layout */
+    for (i = 0; i < len; i++) tmp[i] = tmp_strdup(env[i]);
+    loc_free(env);
+
+    return tmp;
+}
+
 static void command_launch(char * token, Channel * c) {
     int err = 0;
     char encoding[TERM_PROP_DEF_SIZE];
@@ -403,105 +395,94 @@ static void command_launch(char * token, Channel * c) {
     const char * args[] = TERM_LAUNCH_ARGS;
     const char * exec = TERM_LAUNCH_EXEC;
 
-    int envp_len = 0;
-
     int selfattach = 0;
     ProcessStartParams prms;
     Terminal * term = (Terminal *)loc_alloc_zero(sizeof(Terminal));
-    Trap trap;
 
-    if (set_trap(&trap)) {
-        memset(&prms, 0, sizeof(prms));
-        json_read_string(&c->inp, pty_type, sizeof(pty_type));
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-        json_read_string(&c->inp, encoding, sizeof(encoding));
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-        prms.envp = json_read_alloc_string_array(&c->inp, &envp_len);
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-        if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    memset(&prms, 0, sizeof(prms));
+    json_read_string(&c->inp, pty_type, sizeof(pty_type));
+    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_read_string(&c->inp, encoding, sizeof(encoding));
+    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    prms.envp = read_env(&c->inp);
+    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
 #if !defined(_WIN32)
-        {
-            struct stat st;
-            if (err == 0 && stat(exec, &st) != 0) {
-                int n = errno;
-                static char fnm[FILE_PATH_SIZE];
-                /* On some systems (e.g. Free DSB) bash is installed under /usr/local */
-                assert(exec[0] == '/');
-                snprintf(fnm, sizeof(fnm), "/usr/local%s", exec);
-                if (stat(fnm, &st) == 0) {
-                    args[0] = exec = fnm;
-                }
-                else {
-                    err = n;
-                }
+    {
+        struct stat st;
+        if (err == 0 && stat(exec, &st) != 0) {
+            int n = errno;
+            static char fnm[FILE_PATH_SIZE];
+            /* On some systems (e.g. Free DSB) bash is installed under /usr/local */
+            assert(exec[0] == '/');
+            snprintf(fnm, sizeof(fnm), "/usr/local%s", exec);
+            if (stat(fnm, &st) == 0) {
+                args[0] = exec = fnm;
+            }
+            else {
+                err = n;
             }
         }
-        set_terminal_env(&prms.envp, &envp_len, pty_type, encoding, exec);
-        prms.dir = getenv("HOME");
+    }
+    set_terminal_env(&prms.envp, pty_type, encoding, exec);
+    prms.dir = getenv("HOME");
 #else
-        {
-            const char * home_drv = getenv("HOMEDRIVE");
-            const char * home_dir = getenv("HOMEPATH");
-            if (home_drv && home_dir) {
-                static char fnm[FILE_PATH_SIZE];
-                snprintf(fnm, sizeof(fnm), "%s%s", home_drv, home_dir);
-                prms.dir = fnm;
-            }
+    {
+        const char * home_drv = getenv("HOMEDRIVE");
+        const char * home_dir = getenv("HOMEPATH");
+        if (home_drv && home_dir) {
+            static char fnm[FILE_PATH_SIZE];
+            snprintf(fnm, sizeof(fnm), "%s%s", home_drv, home_dir);
+            prms.dir = fnm;
         }
+    }
 #endif
 
-        prms.exe = exec;
-        prms.args = (char **)args;
-        prms.service = TERMINALS;
-        prms.use_terminal = 1;
-        prms.exit_cb = terminal_exited;
-        prms.exit_args = term;
+    prms.exe = exec;
+    prms.args = (char **)args;
+    prms.service = TERMINALS;
+    prms.use_terminal = 1;
+    prms.exit_cb = terminal_exited;
+    prms.exit_args = term;
 
-        if (err == 0 && start_process(c, &prms, &selfattach, &term->prs) < 0) err = errno;
+    if (err == 0 && start_process(c, &prms, &selfattach, &term->prs) < 0) err = errno;
 
-        if (!err) {
+    if (!err) {
 #if !defined(_WIN32)
-            struct winsize size;
-            int tty = get_process_tty(term->prs);
-            memset(&size, 0, sizeof(struct winsize));
-            if (tty < 0 || ioctl(tty, TIOCGWINSZ, &size) < 0 || size.ws_col <= 0 || size.ws_row <= 0) {
-                size.ws_col = 80;
-                size.ws_row = 24;
-            }
-            term->width = size.ws_row;
-            term->height = size.ws_col;
+        struct winsize size;
+        int tty = get_process_tty(term->prs);
+        memset(&size, 0, sizeof(struct winsize));
+        if (tty < 0 || ioctl(tty, TIOCGWINSZ, &size) < 0 || size.ws_col <= 0 || size.ws_row <= 0) {
+            size.ws_col = 80;
+            size.ws_row = 24;
+        }
+        term->width = size.ws_row;
+        term->height = size.ws_col;
 #endif
-            term->bcg = c->bcg;
-            channel_lock(term->channel = c);
-            strlcpy(term->pty_type, pty_type, sizeof(term->pty_type));
-            strlcpy(term->encoding, encoding, sizeof(term->encoding));
-            list_add_first(&term->link, &terms_list);
-            assert(find_terminal(get_process_pid(term->prs)) == term);
-        }
-        else {
-            assert(term->prs == NULL);
-            loc_free(term);
-        }
-
-        /* write result back */
-        write_stringz(&c->out, "R");
-        write_stringz(&c->out, token);
-        write_errno(&c->out, err);
-        if (err) {
-            write_stringz(&c->out, "null");
-        }
-        else {
-            write_context(&c->out, get_process_pid(term->prs));
-            write_stream(&c->out, 0);
-        }
-        write_stream(&c->out, MARKER_EOM);
-        clear_trap(&trap);
+        term->bcg = c->bcg;
+        channel_lock(term->channel = c);
+        strlcpy(term->pty_type, pty_type, sizeof(term->pty_type));
+        strlcpy(term->encoding, encoding, sizeof(term->encoding));
+        list_add_first(&term->link, &terms_list);
+        assert(find_terminal(get_process_pid(term->prs)) == term);
+    }
+    else {
+        assert(term->prs == NULL);
+        loc_free(term);
     }
 
-    loc_free(prms.envp);
-
-    if (trap.error) exception(trap.error);
+    /* write result back */
+    write_stringz(&c->out, "R");
+    write_stringz(&c->out, token);
+    write_errno(&c->out, err);
+    if (err) {
+        write_stringz(&c->out, "null");
+    }
+    else {
+        write_context(&c->out, get_process_pid(term->prs));
+        write_stream(&c->out, 0);
+    }
+    write_stream(&c->out, MARKER_EOM);
 }
 
 static void command_set_win_size(char * token, Channel * c) {
