@@ -32,6 +32,7 @@
 #include <ctype.h>
 #include <asm/unistd.h>
 #include <sys/ptrace.h>
+#include <sys/utsname.h>
 #include <linux/kdev_t.h>
 #include <tcf/framework/context.h>
 #include <tcf/framework/events.h>
@@ -1383,6 +1384,14 @@ static int cmp_linux_tid(Context * ctx, const char * v) {
     return ctx->parent != NULL && EXT(ctx)->pid == atoi(v);
 }
 
+static int cmp_linux_kernel_name(Context * ctx, const char * v) {
+    struct utsname un;
+    if (uname(&un) != 0) {
+        return 0;
+    }
+    return (strcmp(un.sysname, v)== 0);
+}
+
 void init_contexts_sys_dep(void) {
     context_extension_offset = context_extension(sizeof(ContextExtensionLinux));
     add_waitpid_listener(waitpid_listener, NULL);
@@ -1394,6 +1403,7 @@ void init_contexts_sys_dep(void) {
     create_eventpoint("main", NULL, eventpoint_at_main, NULL);
     add_context_query_comparator("pid", cmp_linux_pid);
     add_context_query_comparator("tid", cmp_linux_tid);
+    add_context_query_comparator("KernelName", cmp_linux_kernel_name);
 }
 
 #endif  /* if ENABLE_DebugContext */
