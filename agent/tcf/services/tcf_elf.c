@@ -51,7 +51,7 @@
 #endif
 
 #define MIN_FILE_AGE 3
-#define MAX_FILE_AGE 60
+#define MAX_FILE_AGE 600
 
 typedef struct FileINode {
     struct FileINode * next;
@@ -81,6 +81,8 @@ static ElfListState * elf_list_state = NULL;
 static MemoryMap elf_map;
 
 #endif
+
+static ELF_File * find_open_file_by_name(const char * name);
 
 void elf_add_close_listener(ELFCloseListener listener) {
     if (listeners_cnt >= listeners_max) {
@@ -129,6 +131,36 @@ static void free_elf_list_state(ElfListState * state) {
     loc_free(state);
 }
 
+#if SERVICE_MemoryMap
+static int is_file_mapped_by_mem_map(ELF_File * file, MemoryMap * map) {
+    unsigned i;
+    for (i = 0; i < map->region_cnt; i++) {
+        MemoryRegion * r = map->regions + i;
+        if (r->file_name == NULL) continue;
+        if (r->dev != 0 && r->dev != file->dev) continue;
+        if (r->ino != 0 && r->ino != file->ino) continue;
+        if (strcmp(file->name, r->file_name) == 0) return 1;
+    }
+    return 0;
+}
+
+static int is_file_mapped(ELF_File * file) {
+    int res = 0;
+    LINK * l = context_root.next;
+    while (!res && l != &context_root) {
+        MemoryMap * client_map = NULL;
+        MemoryMap * target_map = NULL;
+        Context * c = ctxl2ctxp(l);
+        l = l->next;
+        if (c->mem_access == 0 || c->exited) continue;
+        if (c != context_get_group(c, CONTEXT_GROUP_PROCESS)) continue;
+        if (memory_map_get(c, &client_map, &target_map) < 0) continue;
+        res = is_file_mapped_by_mem_map(file, client_map) || is_file_mapped_by_mem_map(file, target_map);
+    }
+    return res;
+}
+#endif /* SERVICE_MemoryMap */
+
 static void elf_cleanup_event(void * arg) {
     ELF_File * prev = NULL;
     ELF_File * file = files;
@@ -137,6 +169,15 @@ static void elf_cleanup_event(void * arg) {
     elf_cleanup_posted = 0;
     while (file != NULL) {
         file->age++;
+#if SERVICE_MemoryMap
+        if (!file->debug_info_file && file->age % MAX_FILE_AGE / 2 == 0 && is_file_mapped(file)) {
+            file->age = 0;
+            if (file->debug_info_file_name) {
+                ELF_File * dbg = find_open_file_by_name(file->debug_info_file_name);
+                if (dbg != NULL) dbg->age = 0;
+            }
+        }
+#endif
         if (file->age > MAX_FILE_AGE || (file->age > MIN_FILE_AGE && list_is_empty(&context_root))) {
             ELF_File * next = file->next;
             elf_dispose(file);
@@ -339,7 +380,8 @@ static char * get_debug_info_file_name(ELF_File * file, int * error) {
 
 static int is_debug_info_file(ELF_File * file) {
     unsigned i = 0;
-    if (strcmp(file->name + strlen(file->name) - 6, ".debug") == 0) return 1;
+    size_t l = strlen(file->name);
+    if (l > 6 && strcmp(file->name + l - 6, ".debug") == 0) return 1;
     if (file->section_cnt == 0) return 0;
     for (i = 1; i < file->section_cnt - 1; i++) {
         ELF_Section * sec = file->sections + i;
