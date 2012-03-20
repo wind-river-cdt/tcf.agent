@@ -571,6 +571,52 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
         case OP_lit31:
             add_command(SFT_CMD_NUMBER)->args.num = op - OP_lit0;
             break;
+        case OP_reg0:
+        case OP_reg1:
+        case OP_reg2:
+        case OP_reg3:
+        case OP_reg4:
+        case OP_reg5:
+        case OP_reg6:
+        case OP_reg7:
+        case OP_reg8:
+        case OP_reg9:
+        case OP_reg10:
+        case OP_reg11:
+        case OP_reg12:
+        case OP_reg13:
+        case OP_reg14:
+        case OP_reg15:
+        case OP_reg16:
+        case OP_reg17:
+        case OP_reg18:
+        case OP_reg19:
+        case OP_reg20:
+        case OP_reg21:
+        case OP_reg22:
+        case OP_reg23:
+        case OP_reg24:
+        case OP_reg25:
+        case OP_reg26:
+        case OP_reg27:
+        case OP_reg28:
+        case OP_reg29:
+        case OP_reg30:
+        case OP_reg31:
+            {
+                RegisterDefinition * def = get_reg_by_id(rules.ctx, op - OP_reg0, &rules.reg_id_scope);
+                if (def == NULL) str_exception(errno, "Cannot read DWARF frame info");
+                add_command(SFT_CMD_RD_REG)->args.reg = def;
+            }
+            break;
+        case OP_regx:
+            {
+                unsigned n = (unsigned)dio_ReadULEB128();
+                RegisterDefinition * def = get_reg_by_id(rules.ctx, n, &rules.reg_id_scope);
+                if (def == NULL) str_exception(errno, "Cannot read DWARF frame info");
+                add_command(SFT_CMD_RD_REG)->args.reg = def;
+            }
+            break;
         case OP_breg0:
         case OP_breg1:
         case OP_breg2:
@@ -606,6 +652,19 @@ static void add_dwarf_expression_commands(U8_T cmds_offs, U4_T cmds_size) {
             {
                 I8_T offs = dio_ReadS8LEB128();
                 RegisterDefinition * def = get_reg_by_id(rules.ctx, op - OP_breg0, &rules.reg_id_scope);
+                if (def == NULL) str_exception(errno, "Cannot read DWARF frame info");
+                add_command(SFT_CMD_RD_REG)->args.reg = def;
+                if (offs != 0) {
+                    add_command(SFT_CMD_NUMBER)->args.num = offs;
+                    add_command(SFT_CMD_ADD);
+                }
+            }
+            break;
+        case OP_bregx:
+            {
+                unsigned n = (unsigned)dio_ReadULEB128();
+                I8_T offs = dio_ReadS8LEB128();
+                RegisterDefinition * def = get_reg_by_id(rules.ctx, n, &rules.reg_id_scope);
                 if (def == NULL) str_exception(errno, "Cannot read DWARF frame info");
                 add_command(SFT_CMD_RD_REG)->args.reg = def;
                 if (offs != 0) {
