@@ -17,6 +17,10 @@
  * Agent self-testing service.
  */
 
+#if defined(__GNUC__) && !defined(_GNU_SOURCE)
+#  define _GNU_SOURCE
+#endif
+
 #include <tcf/config.h>
 
 #if ENABLE_RCBP_TEST
@@ -284,17 +288,28 @@ int run_test_process(ContextAttachCallBack * done, void * data) {
     assert(taskIsStopped(tid));
     return context_attach(tid, done, data, 0);
 #else
-    /* Create child process to debug */
     int pid = fork();
     if (pid < 0) return -1;
     if (pid == 0) {
-        int fd;
+        int fd = sysconf(_SC_OPEN_MAX);
+        while (fd > 3) close(--fd);
         if (context_attach_self() < 0) exit(1);
-        fd = sysconf(_SC_OPEN_MAX);
-        while (fd-- > 2) close(fd);
-        if (tkill(getpid(), SIGSTOP) < 0) exit(1);
-        test_proc();
-        exit(0);
+#if defined(__linux__)
+        {
+            char buf[32];
+            char * fnm = NULL;
+            snprintf(buf, sizeof(buf), "/proc/%d/exe", getpid());
+            fnm = canonicalize_file_name(buf);
+            if (fnm != NULL) execl(fnm, fnm, "-t", (char *)NULL);
+            exit(1);
+        }
+#else
+        {
+            if (tkill(getpid(), SIGSTOP) < 0) exit(1);
+            test_proc();
+            exit(0);
+        }
+#endif
     }
     return context_attach(pid, done, data, CONTEXT_ATTACH_SELF);
 #endif

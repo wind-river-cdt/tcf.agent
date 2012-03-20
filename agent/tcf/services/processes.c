@@ -1226,16 +1226,11 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                 int fd = -1;
                 int err = 0;
 
-                if (err == 0) {
-                    fd = sysconf(_SC_OPEN_MAX);
-                    if (fd < 0) err = errno;
-                }
+                if (!err && (fd = sysconf(_SC_OPEN_MAX)) < 0) err = errno;
                 if (!err && dup2(p_inp[0], 0) < 0) err = errno;
                 if (!err && dup2(p_out[1], 1) < 0) err = errno;
                 if (!err && dup2(p_err[1], 2) < 0) err = errno;
-                if (!err) {
-                    while (fd > 3) close(--fd);
-                }
+                while (!err && fd > 3) close(--fd);
                 if (!err && params->attach && context_attach_self() < 0) err = errno;
                 if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
                 if (!err) {
