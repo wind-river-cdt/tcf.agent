@@ -478,12 +478,6 @@ static void add_to_find_symbol_buf(ObjectInfo * obj) {
     object2symbol(obj, find_symbol_buf + find_symbol_cnt++);
 }
 
-static int check_obj_name(ObjectInfo * obj, const char * n) {
-    const char * s = obj->mName;
-    if (s == NULL) return 0;
-    return cmp_symbol_names(s, n) == 0;
-}
-
 static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symbol ** sym) {
     PubNamesTable * tbl = &cache->mPubNames;
     if (tbl->mHash != NULL) {
@@ -493,26 +487,26 @@ static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symb
         unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
         while (n != 0) {
             ObjectInfo * obj = tbl->mNext[n].mObject;
-            if (check_obj_name(obj, name)) {
-                if (obj->mFlags & DOIF_external) {
+            if (obj->mFlags & DOIF_external) {
+                if (cmp_symbol_names(obj->mName, name) == 0) {
                     object2symbol(obj, sym);
                     return 1;
                 }
-                else if (obj->mFlags & DOIF_declaration) {
-                    decl = obj;
-                }
-                else {
-                    switch (obj->mTag) {
-                    case TAG_class_type:
-                    case TAG_structure_type:
-                    case TAG_union_type:
-                    case TAG_enumeration_type:
-                        type = obj;
-                        break;
-                    default:
-                        other = obj;
-                        break;
-                    }
+            }
+            else if (obj->mFlags & DOIF_declaration) {
+                if (decl == NULL && cmp_symbol_names(obj->mName, name) == 0) decl = obj;
+            }
+            else {
+                switch (obj->mTag) {
+                case TAG_class_type:
+                case TAG_structure_type:
+                case TAG_union_type:
+                case TAG_enumeration_type:
+                    if (type == NULL && cmp_symbol_names(obj->mName, name) == 0) type = obj;
+                    break;
+                default:
+                    if (other == NULL && cmp_symbol_names(obj->mName, name) == 0) other = obj;
+                    break;
                 }
             }
             n = tbl->mNext[n].mNext;
@@ -591,7 +585,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
     /* Search current scope */
     obj = children;
     while (obj != NULL) {
-        if ((obj->mFlags & DOIF_specification) == 0 && check_obj_name(obj, name)) {
+        if ((obj->mFlags & DOIF_specification) == 0 && obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
             add_to_find_symbol_buf(find_definition(obj));
         }
         if (parent->mTag == TAG_subprogram && ip != 0) {
@@ -643,13 +637,13 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
             find_in_object_tree(obj->mType, 0, 0, name);
             break;
         case TAG_imported_declaration:
-            if (check_obj_name(obj, name)) {
+            if (obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
                 PropertyValue p;
                 ObjectInfo * decl;
                 read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_import, &p);
                 decl = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
                 if (decl != NULL) {
-                    if (obj->mName != NULL || check_obj_name(decl, name)) {
+                    if (obj->mName != NULL || (decl->mName != NULL && cmp_symbol_names(decl->mName, name) == 0)) {
                         add_to_find_symbol_buf(find_definition(decl));
                     }
                 }
@@ -737,18 +731,20 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol 
                     if (range != NULL) {
                         ObjectInfo * obj = get_dwarf_children(range->mUnit->mObject);
                         while (obj != NULL) {
-                            switch (obj->mTag) {
-                            case TAG_global_subroutine:
-                            case TAG_global_variable:
-                            case TAG_subroutine:
-                            case TAG_subprogram:
-                            case TAG_variable:
-                                if ((obj->mFlags & DOIF_external) != 0 && check_obj_name(obj, name)) {
-                                    object2symbol(obj, res);
-                                    found = 1;
-                                    cnt++;
+                            if (obj->mName != NULL && (obj->mFlags & DOIF_external) != 0) {
+                                switch (obj->mTag) {
+                                case TAG_global_subroutine:
+                                case TAG_global_variable:
+                                case TAG_subroutine:
+                                case TAG_subprogram:
+                                case TAG_variable:
+                                    if (cmp_symbol_names(obj->mName, name) == 0) {
+                                        object2symbol(obj, res);
+                                        found = 1;
+                                        cnt++;
+                                    }
+                                    break;
                                 }
-                                break;
                             }
                             obj = obj->mSibling;
                         }
@@ -2143,6 +2139,11 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
         parent = get_dwarf_parent(obj);
         if (parent != NULL) {
             object2symbol(parent, container);
+            return 0;
+        }
+        if (obj->mTag >= TAG_fund_type && obj->mTag < TAG_fund_type + 0x100) {
+            /* Virtual DWARF object that is created by the DWARF reader. */
+            object2symbol(obj->mCompUnit->mObject, container);
             return 0;
         }
         return err_wrong_obj();

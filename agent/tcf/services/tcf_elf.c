@@ -1270,8 +1270,7 @@ unsigned calc_symbol_name_hash(const char * s) {
         }
         h = (h << 4) + (unsigned char)*s++;
         g = h & 0xf0000000;
-        if (g) h ^= g >> 24;
-        h &= ~g;
+        if (g) h = (h ^ (g >> 24)) & ~g;
     }
     return h;
 }

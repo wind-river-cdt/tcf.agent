@@ -74,8 +74,7 @@ unsigned calc_file_name_hash(const char * s) {
         if (ch == '\\') break;
         h = (h << 4) + ch;
         g = h & 0xf0000000;
-        if (g) h ^= g >> 24;
-        h &= ~g;
+        if (g) h = (h ^ (g >> 24)) & ~g;
     }
     return h;
 }
@@ -996,7 +995,7 @@ static void load_debug_sections(void) {
         if (sec->name == NULL) continue;
         if (sec->type == SHT_NOBITS) continue;
         if (strcmp(sec->name, ".debug") == 0 || strcmp(sec->name, ".debug_info") == 0) {
-            if (strcmp(sec->name, ".debug_info") == 0) debug_info = sec;
+            debug_info = sec;
             sObjRefsCnt = 0;
             sDebugSection = sec;
             sParentObject = NULL;
