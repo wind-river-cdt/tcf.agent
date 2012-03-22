@@ -297,24 +297,29 @@ static void terminal_exited(void * args) {
  * exists already, override it or just skip.
  */
 static void envp_add(char *** envp, const char * name, const char * value, int env_override) {
-    int i;
+    int i = 0;
     size_t len = strlen(name);
     char ** env = *envp;
 
     assert(name);
     assert(value);
 
-    for (i = 0; env[i]; i++) {
-        if (strncmp(env[i], name, len) == 0 && env[i][len] == '=') break;
-    }
-    if (env[i]) {
-        /* override */
-        if (!env_override) return;
+    if (env == NULL) {
+        env = *envp = (char **)tmp_alloc_zero(sizeof(char *) * 2);
     }
     else {
-        /* new variable */
-        env = *envp = (char **)tmp_realloc(env, sizeof(char *) * (i + 2));
-        env[i + 1] = NULL;
+        for (i = 0; env[i]; i++) {
+            if (strncmp(env[i], name, len) == 0 && env[i][len] == '=') break;
+        }
+        if (env[i]) {
+            /* override */
+            if (!env_override) return;
+        }
+        else {
+            /* new variable */
+            env = *envp = (char **)tmp_realloc(env, sizeof(char *) * (i + 2));
+            env[i + 1] = NULL;
+        }
     }
     len += strlen(value) + 2;
     env[i] = (char *)tmp_alloc(len);
@@ -381,6 +386,7 @@ static char ** read_env(InputStream * inp) {
     char ** tmp = (char **)tmp_alloc_zero((len + 1) * sizeof(char *));
 
     if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
+    if (env == NULL) return NULL;
     /* convert the env memory layout */
     for (i = 0; i < len; i++) tmp[i] = tmp_strdup(env[i]);
     loc_free(env);

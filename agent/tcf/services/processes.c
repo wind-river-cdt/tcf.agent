@@ -960,50 +960,16 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
     SYSTEM_HANDLE_INFORMATION * hi = NULL;
     int fpipes[3][2];
     HANDLE hpipes[3][2];
-    char * cmd = NULL;
     struct stat st;
     int err = 0;
     int i;
 
-    if (args != NULL) {
-        int i = 0;
-        int cmd_size = 0;
-        int cmd_pos = 0;
-#           define cmd_append(ch) { \
-            if (!cmd) { \
-                cmd_size = 0x1000; \
-                cmd = (char *)loc_alloc(cmd_size); \
-            } \
-            else if (cmd_pos >= cmd_size) { \
-                char * tmp = (char *)loc_alloc(cmd_size * 2); \
-                memcpy(tmp, cmd, cmd_pos); \
-                loc_free(cmd); \
-                cmd = tmp; \
-                cmd_size *= 2; \
-            }; \
-            cmd[cmd_pos++] = (ch); \
-        }
-        while (args[i] != NULL) {
-            const char * p = args[i++];
-            if (cmd_pos > 0) cmd_append(' ');
-            cmd_append('"');
-            while (*p) {
-                if (*p == '"') cmd_append('\\');
-                cmd_append(*p);
-                p++;
-            }
-            cmd_append('"');
-        }
-        cmd_append(0);
-#       undef cmd_append
-    }
-
     size = sizeof(SYSTEM_HANDLE_INFORMATION) * 16;
-    hi = (SYSTEM_HANDLE_INFORMATION *)loc_alloc(size);
+    hi = (SYSTEM_HANDLE_INFORMATION *)tmp_alloc(size);
     for (;;) {
         status = QuerySystemInformationProc(SystemHandleInformation, hi, size, &size);
         if (status != STATUS_INFO_LENGTH_MISMATCH) break;
-        hi = (SYSTEM_HANDLE_INFORMATION *)loc_realloc(hi, size);
+        hi = (SYSTEM_HANDLE_INFORMATION *)tmp_realloc(hi, size);
     }
     if (status == 0) {
         ULONG i;
@@ -1015,9 +981,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
     }
     else {
         err = set_win32_errno(status);
-        trace(LOG_ALWAYS, "Can't start process '%s': %s", exe, errno_to_str(err));
     }
-    loc_free(hi);
 
     memset(hpipes, 0, sizeof(hpipes));
     for (i = 0; i < 3; i++) fpipes[i][0] = fpipes[i][1] = -1;
@@ -1044,12 +1008,13 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
     }
 
     if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
-    /* If 'exe' is not a full file path, use PATH to search for program file */
-    if (!err && stat(exe, &st) != 0) exe = NULL;
 
     if (!err) {
         STARTUPINFO si;
         PROCESS_INFORMATION prs_info;
+        const char * fnm = exe;
+        char * cmd = NULL;
+        char * env = NULL;
         SetHandleInformation(hpipes[0][0], HANDLE_FLAG_INHERIT, TRUE);
         SetHandleInformation(hpipes[1][1], HANDLE_FLAG_INHERIT, TRUE);
         SetHandleInformation(hpipes[2][1], HANDLE_FLAG_INHERIT, TRUE);
@@ -1060,8 +1025,50 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         si.hStdInput  = hpipes[0][0];
         si.hStdOutput = hpipes[1][1];
         si.hStdError  = hpipes[2][1];
-        if (CreateProcess(exe, cmd, NULL, NULL, TRUE, (params->attach ? CREATE_SUSPENDED : 0),
-                (envp ? (LPVOID)envp[0] : NULL), dir, &si, &prs_info) == 0)
+        if (args != NULL) {
+            int i = 0;
+            int cmd_size = 0;
+            int cmd_pos = 0;
+#           define cmd_append(ch) { \
+                if (cmd_pos >= cmd_size) { \
+                    cmd_size += 0x1000; \
+                    cmd = (char *)tmp_realloc(cmd, cmd_size); \
+                } \
+                cmd[cmd_pos++] = (ch); \
+            }
+            while (args[i] != NULL) {
+                const char * p = args[i++];
+                if (cmd_pos > 0) cmd_append(' ');
+                cmd_append('"');
+                while (*p) {
+                    if (*p == '"') cmd_append('\\');
+                    cmd_append(*p);
+                    p++;
+                }
+                cmd_append('"');
+            }
+            cmd_append(0);
+#           undef cmd_append
+        }
+        if (envp != NULL) {
+            char ** p = envp;
+            size_t env_size = 1;
+            char * s = NULL;
+            while (*p != NULL) env_size += strlen(*p++) + 1;
+            s = env = (char *)tmp_alloc(env_size);
+            for (p = envp; *p != NULL; p++) {
+                size_t l = strlen(*p) + 1;
+                memcpy(s, *p, l);
+                s += l;
+            }
+            *s++ = 0;
+            assert((size_t)(s - env) == env_size);
+        }
+        /* If 'exe' is not a full file path, use PATH to search for program file */
+        if (stat(exe, &st) != 0) fnm = NULL;
+        if (CreateProcess(fnm, cmd, NULL, NULL, TRUE,
+                (params->attach ? CREATE_SUSPENDED : 0),
+                (LPVOID)env, dir, &si, &prs_info) == 0)
         {
             err = set_win32_errno(GetLastError());
         }
@@ -1090,7 +1097,6 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         close(fpipes[1][0]);
         close(fpipes[2][0]);
     }
-    loc_free(cmd);
     if (!err) return 0;
     trace(LOG_ALWAYS, "Can't start process '%s': %s", exe, errno_to_str(err));
     errno = err;
