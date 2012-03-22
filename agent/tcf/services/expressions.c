@@ -744,9 +744,12 @@ static SYM_FLAGS get_all_symbol_flags(Symbol * sym) {
     for (;;) {
         Symbol * nxt = NULL;
         SYM_FLAGS sym_flags = 0;
+        int sym_class = 0;
         if (get_symbol_flags(sym, &sym_flags) < 0) error(errno, "Cannot get symbol flags");
-        if (get_symbol_type(sym, &nxt) < 0) error(errno, "Cannot get symbol type");
         all_flags |= sym_flags;
+        if (get_symbol_class(sym, &sym_class) < 0) error(errno, "Cannot get symbol class");
+        if (sym_class != SYM_CLASS_TYPE) break;
+        if (get_symbol_type(sym, &nxt) < 0) error(errno, "Cannot get symbol type");
         if (nxt == sym) break;
         sym = nxt;
     }
