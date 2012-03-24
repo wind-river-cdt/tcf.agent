@@ -50,7 +50,7 @@ int ini_server(const char * url, Protocol * p, TCFBroadcastGroup * b) {
     proto = p;
     ps = channel_peer_from_url(url);
     if (ps == NULL) str_exception(ERR_OTHER, "Invalid server URL");
-    peer_server_addprop(ps, loc_strdup("ServerManagerID"), loc_strdup(get_service_manager_id(p)));
+    peer_server_addprop(ps, loc_strdup("ServiceManagerID"), loc_strdup(get_service_manager_id(p)));
     serv = channel_server(ps);
     if (serv == NULL) exception(errno);
     serv->new_conn = channel_new_connection;
