@@ -15,3 +15,6 @@
 
 /* offset to be applied to the PC after a software trap */
 #define TRAP_OFFSET -1
+
+/* additional CPU registers */
+#define MDEP_OtherRegisters struct user_fpxregs_struct

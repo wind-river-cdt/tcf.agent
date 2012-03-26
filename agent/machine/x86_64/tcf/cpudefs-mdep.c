@@ -285,36 +285,36 @@ RegisterDefinition regs_index[] = {
 
     { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 },
 
-    { "f0",     REG_OFFSET(fpx.st_space) +   0, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f1",     REG_OFFSET(fpx.st_space) +  16, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f2",     REG_OFFSET(fpx.st_space) +  32, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f3",     REG_OFFSET(fpx.st_space) +  48, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f4",     REG_OFFSET(fpx.st_space) +  64, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f5",     REG_OFFSET(fpx.st_space) +  80, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f6",     REG_OFFSET(fpx.st_space) +  96, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f7",     REG_OFFSET(fpx.st_space) + 112, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f0",     REG_OFFSET(other.st_space) +   0, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f1",     REG_OFFSET(other.st_space) +  16, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f2",     REG_OFFSET(other.st_space) +  32, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f3",     REG_OFFSET(other.st_space) +  48, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f4",     REG_OFFSET(other.st_space) +  64, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f5",     REG_OFFSET(other.st_space) +  80, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f6",     REG_OFFSET(other.st_space) +  96, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f7",     REG_OFFSET(other.st_space) + 112, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
 
-    { "cwd",    REG_OFFSET(fpx.cwd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "swd",    REG_OFFSET(fpx.swd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "twd",    REG_OFFSET(fpx.twd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fop",    REG_OFFSET(fpx.fop),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fip",    REG_OFFSET(fpx.fip),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fcs",    REG_OFFSET(fpx.fcs),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "foo",    REG_OFFSET(fpx.foo),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fos",    REG_OFFSET(fpx.fos),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "cwd",    REG_OFFSET(other.cwd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "swd",    REG_OFFSET(other.swd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "twd",    REG_OFFSET(other.twd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "fop",    REG_OFFSET(other.fop),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "fip",    REG_OFFSET(other.fip),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "fcs",    REG_OFFSET(other.fcs),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "foo",    REG_OFFSET(other.foo),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "fos",    REG_OFFSET(other.fos),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
 
-    { "mxcsr",  REG_OFFSET(fpx.mxcsr), 4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "mxcsr",  REG_OFFSET(other.mxcsr), 4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
 
     { "xmm",    0, 0, -1, -1, 0, 0, 1, 1 },
 
-    { "xmm0",   REG_OFFSET(fpx.xmm_space) +   0, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm1",   REG_OFFSET(fpx.xmm_space) +  16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm2",   REG_OFFSET(fpx.xmm_space) +  32, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm3",   REG_OFFSET(fpx.xmm_space) +  48, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm4",   REG_OFFSET(fpx.xmm_space) +  64, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm5",   REG_OFFSET(fpx.xmm_space) +  80, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm6",   REG_OFFSET(fpx.xmm_space) +  96, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm7",   REG_OFFSET(fpx.xmm_space) + 112, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm0",   REG_OFFSET(other.xmm_space) +   0, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm1",   REG_OFFSET(other.xmm_space) +  16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm2",   REG_OFFSET(other.xmm_space) +  32, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm3",   REG_OFFSET(other.xmm_space) +  48, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm4",   REG_OFFSET(other.xmm_space) +  64, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm5",   REG_OFFSET(other.xmm_space) +  80, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm6",   REG_OFFSET(other.xmm_space) +  96, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm7",   REG_OFFSET(other.xmm_space) + 112, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
 
 #endif
 
@@ -322,6 +322,41 @@ RegisterDefinition regs_index[] = {
 };
 
 unsigned char BREAK_INST[] = { 0xcc };
+
+#ifdef MDEP_OtherRegisters
+
+#include <sys/ptrace.h>
+
+#if !defined(PTRACE_GETFPXREGS) && !defined(PT_GETFPXREGS)
+#define PTRACE_GETFPXREGS 18
+#endif
+#if !defined(PTRACE_SETFPXREGS) && !defined(PT_SETFPXREGS)
+#define PTRACE_SETFPXREGS 19
+#endif
+
+int mdep_get_other_regs(pid_t pid, REG_SET * data,
+                       size_t data_offs, size_t data_size,
+                       size_t * done_offs, size_t * done_size) {
+    assert(data_offs >= offsetof(REG_SET, other));
+    assert(data_offs + data_size <= offsetof(REG_SET, other) + sizeof(data->other));
+    if (ptrace(PTRACE_GETFPXREGS, pid, 0, &data->other) < 0) return -1;
+    *done_offs = offsetof(REG_SET, other);
+    *done_size = sizeof(data->other);
+    return 0;
+}
+
+int mdep_set_other_regs(pid_t pid, REG_SET * data,
+                       size_t data_offs, size_t data_size,
+                       size_t * done_offs, size_t * done_size) {
+    assert(data_offs >= offsetof(REG_SET, other));
+    assert(data_offs + data_size <= offsetof(REG_SET, other) + sizeof(data->other));
+    if (ptrace(PTRACE_SETFPXREGS, pid, 0, &data->other) < 0) return -1;
+    *done_offs = offsetof(REG_SET, other);
+    *done_size = sizeof(data->other);
+    return 0;
+}
+
+#endif
 
 #ifndef _WRS_KERNEL
 #define JMPD08      0xeb

@@ -1354,12 +1354,44 @@
 					RelativePath=".\machine\x86_64\tcf\cpudefs-mdep.h"
 					>
 				</File>
+				<File
+					RelativePath=".\machine\x86_64\tcf\regset-mdep.h"
+					>
+				</File>
 			</Filter>
 			<Filter
 				Name="i386"
 				>
 				<File
+					RelativePath=".\machine\i386\tcf\cpudefs-mdep.c"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\i386\tcf\cpudefs-mdep.h"
+					>
+				</File>
+				<File
 					RelativePath=".\machine\i386\tcf\dwarfreloc-mdep.h"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\i386\tcf\regset-mdep.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="i686"
+				>
+				<File
+					RelativePath=".\machine\i686\tcf\cpudefs-mdep.c"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\i686\tcf\cpudefs-mdep.h"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\i686\tcf\regset-mdep.h"
 					>
 				</File>
 			</Filter>

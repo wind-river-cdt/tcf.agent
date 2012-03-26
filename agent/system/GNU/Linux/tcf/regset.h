@@ -19,15 +19,39 @@
  */
 
 #if defined(__linux__)
-#  include <sys/user.h>
-#  include <tcf/regset-mdep.h>
+
+#include <sys/user.h>
+#include <tcf/regset-mdep.h>
+
 typedef struct REG_SET {
     struct user user;
     struct user_fpregs_struct fp;
-#if defined(__i386__)
-    struct user_fpxregs_struct fpx;
-#else
-    ContextAddress fpx;
+
+/* Additional CPU registers - defined in regset-mdep.h */
+#ifdef MDEP_OtherRegisters
+    MDEP_OtherRegisters other;
 #endif
 } REG_SET;
+
+#ifdef MDEP_OtherRegisters
+
+/*
+ * Get/set additional CPU registers.
+ * Implementation is architecture specific.
+ * data_offs and data_size - offset and size of portion of 'data' to get/set.
+ * done_offs and done_size - offset and size of actually trasfered data.
+ * Actual transfer should, at least, include requested part of data.
+ * On success return 0 and set done_offs/done_size.
+ * On error return -1 and set errno.
+ */
+
+extern int mdep_get_other_regs(pid_t pid, REG_SET * data,
+                               size_t data_offs, size_t data_size,
+                               size_t * done_offs, size_t * done_size);
+
+extern int mdep_set_other_regs(pid_t pid, REG_SET * data,
+                               size_t data_offs, size_t data_size,
+                               size_t * done_offs, size_t * done_size);
+#endif
+
 #endif
