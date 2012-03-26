@@ -463,6 +463,7 @@ int context_continue(Context * ctx) {
             while (l != &prs->children) {
                 Context * c = cldl2ctxp(l);
                 l = l->next;
+                assert(!c->stopped);
                 if (!c->exited) {
                     free_regs(c);
                     send_context_exited_event(c);
@@ -1040,6 +1041,12 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     }
 
     ext = EXT(ctx);
+    if (ext->detach_done) {
+        if (ext->pid != EXT(ctx->mem)->pid || (EXT(ctx->mem)->attach_mode & CONTEXT_ATTACH_SELF) == 0) {
+            detach_waitpid_process();
+        }
+        return;
+    }
     assert(!ctx->exited);
     assert(!ext->attach_callback);
     if (signal == SIGSTOP) ext->sigstop_posted = 0;
