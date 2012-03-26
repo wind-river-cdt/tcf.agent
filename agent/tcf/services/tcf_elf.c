@@ -51,7 +51,8 @@
 #endif
 
 #define MIN_FILE_AGE 3
-#define MAX_FILE_AGE 600
+#define MAX_FILE_AGE 60
+#define MAX_FILE_CNT 100
 
 typedef struct FileINode {
     struct FileINode * next;
@@ -163,22 +164,46 @@ static int is_file_mapped(ELF_File * file) {
 
 static void elf_cleanup_event(void * arg) {
     ELF_File * prev = NULL;
-    ELF_File * file = files;
+    ELF_File * file = NULL;
+    unsigned file_cnt = 0;
+    unsigned max_file_age = MAX_FILE_AGE;
+    static unsigned event_cnt = 0;
 
     assert(elf_cleanup_posted);
     elf_cleanup_posted = 0;
+
+    if (event_cnt % 5 == 0) {
+        file = files;
+        while (file != NULL) {
+            struct stat st;
+            if (file->fd >= 0 && !file->mtime_changed &&
+                    fstat(file->fd, &st) == 0 && file->mtime != st.st_mtime) {
+                file->mtime_changed = 1;
+            }
+            file = file->next;
+            file_cnt++;
+        }
+    }
+
+    if (file_cnt > MAX_FILE_AGE + MAX_FILE_CNT - MIN_FILE_AGE) {
+        max_file_age = MIN_FILE_AGE;
+    }
+    else if (file_cnt > MAX_FILE_CNT) {
+        max_file_age = MAX_FILE_AGE + MAX_FILE_CNT - file_cnt;
+    }
+
+    file = files;
     while (file != NULL) {
         file->age++;
 #if SERVICE_MemoryMap
-        if (!file->debug_info_file && file->age % MAX_FILE_AGE / 2 == 0 && is_file_mapped(file)) {
+        if (!file->debug_info_file && file->age % max_file_age / 2 == 0 && is_file_mapped(file)) {
             file->age = 0;
             if (file->debug_info_file_name) {
-                ELF_File * dbg = find_open_file_by_name(file->debug_info_file_name);
-                if (dbg != NULL) dbg->age = 0;
+                find_open_file_by_name(file->debug_info_file_name);
             }
         }
 #endif
-        if (file->age > MAX_FILE_AGE || (file->age > MIN_FILE_AGE && list_is_empty(&context_root))) {
+        if (file->age > max_file_age || (file->age > MIN_FILE_AGE && list_is_empty(&context_root))) {
             ELF_File * next = file->next;
             elf_dispose(file);
             file = next;
@@ -189,18 +214,6 @@ static void elf_cleanup_event(void * arg) {
             prev = file;
             file = file->next;
         }
-    }
-
-    file = files;
-    while (file != NULL) {
-        struct stat st;
-        if (!file->mtime_changed && stat(file->name, &st) == 0) {
-            if (st.st_ino == 0) st.st_ino = file->ino;
-            if (file->dev == st.st_dev && file->ino == st.st_ino && file->mtime != st.st_mtime) {
-                file->mtime_changed = 1;
-            }
-        }
-        file = file->next;
     }
 
     if (files != NULL) {
@@ -221,6 +234,8 @@ static void elf_cleanup_event(void * arg) {
         elf_list_state = state->next;
         free_elf_list_state(state);
     }
+
+    event_cnt++;
 }
 
 static ino_t add_ino(const char * fnm, ino_t ino) {

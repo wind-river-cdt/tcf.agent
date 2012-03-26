@@ -418,7 +418,8 @@ struct ELF_File {
     void * dwarf_io_cache;
     void * dwarf_dt_cache;
 
-    int age;
+    unsigned age;   /* Seconds since last time the file was accessed */
+
     int listed;
     int debug_info_file; /* 1 means this file contains debug info only - no code */
     char * debug_info_file_name;
