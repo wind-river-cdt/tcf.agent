@@ -778,6 +778,7 @@ void json_splice_binary_offset(OutputStream * out, int fd, size_t size, int64_t 
 
 static int skip_char(InputStream * inp) {
     int ch = read_stream(inp);
+    if (ch < 0) exception(ERR_JSON_SYNTAX);
     buf_add(ch);
     return ch;
 }
