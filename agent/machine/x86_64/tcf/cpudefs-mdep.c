@@ -768,12 +768,15 @@ int cpu_bp_on_resume(Context * ctx, int * single_step) {
                     else {
                         dr7 |= (uint32_t)3 << (i * 4 + 16);
                     }
+                    dr7 |= 0x100u;
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
                     dr7 |= (uint32_t)1 << (i * 4 + 16);
+                    dr7 |= 0x100u;
                 }
                 else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
                     dr7 |= (uint32_t)3 << (i * 4 + 16);
+                    dr7 |= 0x100u;
                 }
                 else {
                     set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported access mode");
