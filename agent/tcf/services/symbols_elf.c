@@ -1520,8 +1520,10 @@ static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
                 char * fnm = (char *)tmp_alloc_zero(n);
                 memcpy(fnm, file->name, n - 6);
                 fnm = canonicalize_file_name(fnm);
-                file = elf_open(fnm);
-                free(fnm);
+                if (fnm != NULL) {
+                    file = elf_open(fnm);
+                    free(fnm);
+                }
             }
         }
         if (file != NULL) {
