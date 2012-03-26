@@ -832,19 +832,49 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
     return -1;
 }
 
-static int qualified_name(int mode, Value * scope, Value * v) {
+static int qualified_name(int mode, Value * scope, SYM_FLAGS flags, Value * v) {
     Value x;
     int sym_class = 0;
     for (;;) {
-        if (text_sy != SY_NAME) error(ERR_INV_EXPRESSION, "Identifier expected");
-        if (mode != MODE_SKIP) {
-            sym_class = identifier(mode, scope, (char *)text_val.value, 0, v);
-            if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
+        memset(v, 0, sizeof(Value));
+        if (text_sy == SY_NAME) {
+            if (mode != MODE_SKIP) {
+                sym_class = identifier(mode, scope, (char *)text_val.value, flags, v);
+                if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
+            }
+            next_sy();
+        }
+        else if (text_sy == SY_ID) {
+            if (mode != MODE_SKIP) {
+                int ok = 0;
+                const char * id = (char *)text_val.value;
+                {
+                    Context * ctx = NULL;
+                    int frame = STACK_NO_FRAME;
+                    RegisterDefinition * def = NULL;
+                    if (id2register(id, &ctx, &frame, &def) >= 0) {
+                        if (frame == STACK_TOP_FRAME) frame = expression_frame;
+                        sym_class = SYM_CLASS_UNKNOWN;
+                        reg2value(ctx, frame, def, v);
+                        ok = 1;
+                    }
+                }
+#if ENABLE_Symbols
+                if (!ok) {
+                    Symbol * sym = NULL;
+                    if (id2symbol(id, &sym) >= 0) {
+                        sym_class = sym2value(mode, sym, v);
+                        ok = 1;
+                    }
+                }
+#endif
+                if (!ok) error(ERR_INV_EXPRESSION, "Symbol not found: %s", id);
+            }
+            next_sy();
         }
         else {
-            memset(v, 0, sizeof(Value));
+            error(ERR_INV_EXPRESSION, "Identifier expected");
         }
-        next_sy();
         if (text_sy != SY_SCOPE) break;
         next_sy();
         scope = &x;
@@ -899,20 +929,20 @@ static int type_name(int mode, Symbol ** type) {
     SYM_FLAGS sym_flags = 0;
     int name_cnt = 0;
 
-    if (text_sy == SY_NAME) {
-        for (;;) {
-            if (strcmp((const char *)(text_val.value), "const") == 0) {
-                sym_flags |= SYM_FLAG_CONST_TYPE;
-                next_sy();
-            }
-            else if (strcmp((const char *)(text_val.value), "volatile") == 0) {
-                sym_flags |= SYM_FLAG_VOLATILE_TYPE;
-                next_sy();
-            }
-            else {
-                break;
-            }
+    while (text_sy == SY_NAME) {
+        if (strcmp((const char *)(text_val.value), "const") == 0) {
+            sym_flags |= SYM_FLAG_CONST_TYPE;
+            next_sy();
         }
+        else if (strcmp((const char *)(text_val.value), "volatile") == 0) {
+            sym_flags |= SYM_FLAG_VOLATILE_TYPE;
+            next_sy();
+        }
+        else {
+            break;
+        }
+    }
+    if (text_sy == SY_NAME) {
         if (strcmp((const char *)(text_val.value), "struct") == 0) {
             sym_flags |= SYM_FLAG_STRUCT_TYPE;
             next_sy();
@@ -929,7 +959,9 @@ static int type_name(int mode, Symbol ** type) {
             sym_flags |= SYM_FLAG_ENUM_TYPE;
             next_sy();
         }
-        if (text_sy != SY_NAME) return 0;
+    }
+
+    if (text_sy == SY_NAME) {
         do {
             if (name == NULL) {
                 name = tmp_strdup((char *)text_val.value);
@@ -1007,6 +1039,7 @@ static int type_name(int mode, Symbol ** type) {
     }
 #endif
     else {
+        if (sym_flags) error(ERR_INV_EXPRESSION, "Identifier expected");
         return 0;
     }
 
@@ -1014,7 +1047,7 @@ static int type_name(int mode, Symbol ** type) {
     if (text_sy == SY_SCOPE) {
         Value scope = v;
         next_sy();
-        sym_class = qualified_name(mode, &scope, &v);
+        sym_class = qualified_name(mode, &scope, sym_flags, &v);
     }
     if (sym_class != SYM_CLASS_TYPE) {
         if (sym_flags) error(ERR_INV_EXPRESSION, "Type '%s' not found", name);
@@ -1272,40 +1305,12 @@ static void primary_expression(int mode, Value * v) {
         Value x;
         next_sy();
         memset(&x, 0, sizeof(x));
-        if (qualified_name(mode, &x, v) == SYM_CLASS_TYPE)
+        if (qualified_name(mode, &x, 0, v) == SYM_CLASS_TYPE)
             error(ERR_INV_EXPRESSION, "Illegal usage of a type in expression");
     }
-    else if (text_sy == SY_NAME) {
-        if (qualified_name(mode, NULL, v) == SYM_CLASS_TYPE)
+    else if (text_sy == SY_NAME || text_sy == SY_ID) {
+        if (qualified_name(mode, NULL, 0, v) == SYM_CLASS_TYPE)
             error(ERR_INV_EXPRESSION, "Illegal usage of a type in expression");
-    }
-    else if (text_sy == SY_ID) {
-        if (mode != MODE_SKIP) {
-            int ok = 0;
-            const char * id = (char *)text_val.value;
-            {
-                Context * ctx = NULL;
-                int frame = STACK_NO_FRAME;
-                RegisterDefinition * def = NULL;
-                if (id2register(id, &ctx, &frame, &def) >= 0) {
-                    if (frame == STACK_TOP_FRAME) frame = expression_frame;
-                    reg2value(ctx, frame, def, v);
-                    ok = 1;
-                }
-            }
-#if ENABLE_Symbols
-            if (!ok) {
-                Symbol * sym = NULL;
-                if (id2symbol(id, &sym) >= 0) {
-                    int sym_class = sym2value(mode, sym, v);
-                    if (sym_class == SYM_CLASS_TYPE) error(ERR_INV_EXPRESSION, "Illegal usage of type '%s'", id);
-                    ok = 1;
-                }
-            }
-#endif
-            if (!ok) error(ERR_INV_EXPRESSION, "Symbol not found: %s", id);
-        }
-        next_sy();
     }
     else {
         error(ERR_INV_EXPRESSION, "Syntax error");
