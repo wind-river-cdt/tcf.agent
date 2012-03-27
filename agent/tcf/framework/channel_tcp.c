@@ -89,7 +89,7 @@
 #define MAX_IFC 10
 
 #if !defined(ENABLE_OutputQueue)
-#  if ENABLE_SSL || ENABLE_ContextProxy || defined(_WIN32)
+#  if ENABLE_SSL || ENABLE_ContextProxy || defined(_WIN32) || defined(__linux__)
 #    define ENABLE_OutputQueue 1
 #  else
 #    define ENABLE_OutputQueue 0

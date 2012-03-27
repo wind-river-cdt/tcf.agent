@@ -27,6 +27,14 @@
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/inputbuf.h>
 
+#if !defined(ENABLE_InputQueue)
+#  if ENABLE_SSL || ENABLE_ContextProxy || defined(_WIN32) || defined(__linux__)
+#    define ENABLE_InputQueue 1
+#  else
+#    define ENABLE_InputQueue 0
+#  endif
+#endif
+
 static void ibuf_new_message(InputBuf * ibuf) {
     ibuf->message_count++;
     ibuf->trigger_message(ibuf);
@@ -275,7 +283,7 @@ void ibuf_read_done(InputBuf * ibuf, size_t len) {
 
     ibuf->inp = inp;
 
-#if ENABLE_ContextProxy
+#if ENABLE_InputQueue
     if (!ibuf->eof && ibuf_free_size(ibuf) == 0 && ibuf->buf_size < 0x1000000) {
         /* Not running on a target - increase size of input buffer
            to accommodate very larges messages, up to 16MB */
