@@ -261,6 +261,7 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
                 uint64_t n = 0;
                 uint8_t buf[8];
 
+                assert(size <= sizeof(buf));
                 if (context_read_mem(ctx, (ContextAddress)stk[stk_pos - 1], buf, size) < 0) exception(errno);
                 for (j = 0; j < size; j++) {
                     n = (n << 8) | buf[cmd->args.mem.big_endian ? j : size - j - 1];
@@ -276,8 +277,9 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
                 uint64_t n = stk[stk_pos - 1];
                 uint8_t buf[8];
 
+                assert(size <= sizeof(buf));
                 for (j = 0; j < size; j++) {
-                    buf[cmd->args.mem.big_endian ? size - j - 1 : j] = n & 0xFFu;
+                    buf[cmd->args.mem.big_endian ? size - j - 1 : j] = (uint8_t)n;
                     n >>= 8;
                 }
                 if (context_write_mem(ctx, (ContextAddress)stk[stk_pos - 2], buf, size) < 0) exception(errno);
