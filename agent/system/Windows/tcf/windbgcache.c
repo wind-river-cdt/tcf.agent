@@ -39,6 +39,13 @@
 #include <tcf/framework/myalloc.h>
 #include <tcf/services/memorymap.h>
 
+/* Require that the user install a later dbghelp API that has all the required features */
+#if API_VERSION_NUMBER <= 9
+#  error "The dbghelp.h API version must be greater than 9. Install the latest version at \
+http://www.microsoft.com/whdc/devtools/debugging/default.mspx \
+and rebuild."
+#endif
+
 static HINSTANCE dbghelp_dll = NULL;
 
 #define SYM_SEARCH_PATH ""
