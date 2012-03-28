@@ -26,9 +26,6 @@
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/cpudefs.h>
 #include <tcf/services/funccall.h>
-#if defined(_WIN32)
-#include <system/Windows/tcf/windbgcache.h>
-#endif
 
 #define EM_386          3 /* Intel Architecture */
 #define EM_X86_64      62 /* AMD x86-64 architecture */
