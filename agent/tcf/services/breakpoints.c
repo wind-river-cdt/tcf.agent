@@ -1620,12 +1620,12 @@ static int set_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * 
                 loc_free(new_attr);
                 continue;
             }
-            diff++;
             loc_free(old_attr->value);
             loc_free(old_attr->name);
             loc_free(old_attr);
             old_attr = NULL;
         }
+        diff++;
 
         *new_ref = new_attr;
         new_ref = &new_attr->next;
