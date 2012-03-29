@@ -20,6 +20,7 @@
 #ifndef D_pthreads_win32
 #define D_pthreads_win32
 
+#include <time.h>
 #if defined(__CYGWIN__)
 #  include <cygwin/types.h>
 #else
