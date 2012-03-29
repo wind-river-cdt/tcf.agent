@@ -118,7 +118,7 @@ static size_t context_extension_offset = 0;
 
 #include <tcf/framework/pid-hash.h>
 
-static LINK pending_list = TCF_LIST_INIT(pending_list);
+static LINK attach_list = TCF_LIST_INIT(attach_list);
 static LINK detach_list = TCF_LIST_INIT(detach_list);
 
 static MemoryErrorInfo mem_err_info;
@@ -189,7 +189,8 @@ int context_attach(pid_t pid, ContextAttachCallBack * done, void * data, int mod
     ext->attach_callback = done;
     ext->attach_data = data;
     ext->attach_mode = mode;
-    list_add_first(&ctx->ctxl, &pending_list);
+    ext->sigstop_posted = (mode & CONTEXT_ATTACH_SELF) == 0;
+    list_add_first(&ctx->ctxl, &attach_list);
     /* TODO: context_attach works only for main task in a process */
     return 0;
 }
@@ -198,14 +199,14 @@ static int context_detach(Context * ctx) {
     ContextExtensionLinux * ext = EXT(ctx);
 
     assert(is_dispatch_thread());
-    assert(!ctx->exited);
     assert(ctx->parent == NULL);
+    assert(!ctx->exited);
 
     trace(LOG_CONTEXT, "context: detach ctx %#lx, id %s", ctx, ctx->id);
 
+    unplant_breakpoints(ctx);
     ctx->exiting = 1;
     ext->detach_req = 1;
-    unplant_breakpoints(ctx);
     if (!list_is_empty(&ctx->children)) {
         LINK * l = ctx->children.next;
         while (l != &ctx->children) {
@@ -362,7 +363,6 @@ static int do_single_step(Context * ctx) {
 
     if (skip_breakpoint(ctx, 1)) return 0;
 
-    if (syscall_never_returns(ctx)) return context_continue(ctx);
     trace(LOG_CONTEXT, "context: single step ctx %#lx, id %s", ctx, ctx->id);
     if (flush_regs(ctx) < 0) return -1;
     if (!ctx->stopped) return 0;
@@ -477,6 +477,7 @@ int context_continue(Context * ctx) {
 }
 
 int context_single_step(Context * ctx) {
+    ContextExtensionLinux * ext = EXT(ctx);
     int cpu_bp_step = 0;
 
     assert(is_dispatch_thread());
@@ -485,6 +486,7 @@ int context_single_step(Context * ctx) {
     assert(!is_intercepted(ctx));
     assert(!ctx->exited);
 
+    if (ext->detach_req || syscall_never_returns(ctx)) return context_continue(ctx);
     if (cpu_bp_on_resume(ctx, &cpu_bp_step) < 0) return -1;
     return do_single_step(ctx);
 }
@@ -774,6 +776,7 @@ int context_get_supported_bp_access_types(Context * ctx) {
 }
 
 int context_plant_breakpoint(ContextBreakpoint * bp) {
+    assert(!EXT(bp->ctx->mem)->detach_req);
     return cpu_bp_plant(bp);
 }
 
@@ -860,9 +863,22 @@ int context_get_memory_map(Context * ctx, MemoryMap * map) {
     return 0;
 }
 
-static Context * find_pending(pid_t pid) {
-    LINK * l = pending_list.next;
-    while (l != &pending_list) {
+static Context * find_pending_attach(pid_t pid) {
+    LINK * l = attach_list.next;
+    while (l != &attach_list) {
+        Context * c = ctxl2ctxp(l);
+        if (EXT(c)->pid == pid) {
+            list_remove(&c->ctxl);
+            return c;
+        }
+        l = l->next;
+    }
+    return NULL;
+}
+
+static Context * find_pending_detach(pid_t pid) {
+    LINK * l = detach_list.next;
+    while (l != &detach_list) {
         Context * c = ctxl2ctxp(l);
         if (EXT(c)->pid == pid) {
             list_remove(&c->ctxl);
@@ -878,7 +894,7 @@ static void event_pid_exited(pid_t pid, int status, int signal) {
 
     ctx = context_find_from_pid(pid, 1);
     if (ctx == NULL) {
-        ctx = find_pending(pid);
+        ctx = find_pending_attach(pid);
         if (ctx == NULL) {
             trace(LOG_EVENTS, "event: ctx not found, pid %d, exit status %d, term signal %d", pid, status, signal);
         }
@@ -995,9 +1011,8 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     ctx = context_find_from_pid(pid, 1);
 
     if (ctx == NULL) {
-        ctx = find_pending(pid);
-        if (ctx != NULL) {
-            Context * prs = ctx;
+        Context * prs = find_pending_attach(pid);
+        if (prs != NULL) {
             assert(prs->ref_count == 0);
             ctx = create_context(pid2id(pid, pid));
             EXT(ctx)->pid = pid;
@@ -1023,18 +1038,18 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     }
 
     if (ctx == NULL) {
-        ctx = context_find_from_pid(pid, 0);
-        if (ctx != NULL) {
+        Context * prs = find_pending_detach(pid);
+        if (prs != NULL) {
             /* Fork child that we don't want to attach */
-            unplant_breakpoints(ctx);
-            assert(ctx->ref_count == 1);
-            ctx->exited = 1;
+            unplant_breakpoints(prs);
+            assert(prs->ref_count == 1);
+            prs->exited = 1;
             if (ptrace((enum __ptrace_request)PTRACE_DETACH, pid, 0, 0) < 0) {
                 trace(LOG_ALWAYS, "error: ptrace(PTRACE_DETACH) failed: pid %d, error %d %s",
                     pid, errno, errno_to_str(errno));
             }
-            list_remove(ctx2pidlink(ctx));
-            context_unlock(ctx);
+            list_remove(ctx2pidlink(prs));
+            context_unlock(prs);
         }
         detach_waitpid_process();
         return;
@@ -1042,7 +1057,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
 
     ext = EXT(ctx);
     if (ext->detach_done) {
-        if (ext->pid != EXT(ctx->mem)->pid || (EXT(ctx->mem)->attach_mode & CONTEXT_ATTACH_SELF) == 0) {
+        if (ext->pid != EXT(ctx->parent)->pid || (EXT(ctx->parent)->attach_mode & CONTEXT_ATTACH_SELF) == 0) {
             detach_waitpid_process();
         }
         return;
@@ -1099,7 +1114,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             else {
                 prs2 = create_context(pid2id(msg, 0));
                 EXT(prs2)->pid = msg;
-                EXT(prs2)->attach_mode = ext->attach_mode;
+                EXT(prs2)->attach_mode = ext->attach_mode & ~CONTEXT_ATTACH_SELF;
                 prs2->mem = prs2;
                 prs2->mem_access |= MEM_ACCESS_INSTRUCTION;
                 prs2->mem_access |= MEM_ACCESS_DATA;
@@ -1108,19 +1123,19 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 (prs2->creator = ctx)->ref_count++;
                 prs2->sig_dont_stop = ctx->sig_dont_stop;
                 prs2->sig_dont_pass = ctx->sig_dont_pass;
-                link_context(prs2);
                 clone_breakpoints_on_process_fork(ctx, prs2);
                 if ((ext->attach_mode & CONTEXT_ATTACH_CHILDREN) == 0) {
-                    list_remove(&prs2->ctxl);
                     list_add_first(&prs2->ctxl, &detach_list);
                     break;
                 }
+                link_context(prs2);
                 send_context_created_event(prs2);
             }
 
             ctx2 = create_context(pid2id(msg, EXT(prs2)->pid));
             EXT(ctx2)->pid = msg;
             EXT(ctx2)->attach_mode = EXT(prs2)->attach_mode;
+            EXT(ctx2)->sigstop_posted = 1;
             alloc_regs(ctx2);
             ctx2->mem = prs2;
             ctx2->big_endian = prs2->big_endian;

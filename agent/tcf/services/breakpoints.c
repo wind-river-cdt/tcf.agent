@@ -248,6 +248,7 @@ static void plant_instruction(BreakInstruction * bi) {
     assert(!bi->stepping_over_bp);
     assert(!bi->planted);
     assert(!bi->cb.ctx->exited);
+    assert(!bi->cb.ctx->exiting);
     assert(bi->valid || bi->virtual_addr);
     if (bi->address_error != NULL) return;
     assert(is_all_stopped(bi->cb.ctx));
@@ -2455,7 +2456,7 @@ static void safe_restore_breakpoint(void * arg) {
         if (generation_done != generation_posted) {
             bi->valid = 0;
         }
-        else if (!ctx->exited && bi->ref_cnt > 0 && !bi->planted) {
+        else if (!ctx->exited && !ctx->exiting && bi->ref_cnt > 0 && !bi->planted) {
             plant_instruction(bi);
         }
     }
