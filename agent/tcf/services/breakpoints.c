@@ -103,7 +103,6 @@ struct InstructionRef {
     BreakpointInfo * bp;
     Context * ctx;
     ContextAddress addr;
-    ContextAddress size;
     int cnt;
 };
 
@@ -219,25 +218,28 @@ static unsigned id2bp_hash(char * id) {
     return hash % ID2BP_HASH_SIZE;
 }
 
-static void get_bi_access_types(BreakInstruction * bi, unsigned * access_types, ContextAddress * access_size) {
+static unsigned get_bp_access_types(BreakpointInfo * bp, int virtual_addr) {
+    char * type = bp->type;
+    unsigned access_types = bp->access_mode;
+    if (access_types == 0 && (bp->file != NULL || bp->location != NULL)) access_types |= CTX_BP_ACCESS_INSTRUCTION;
+    if (type != NULL && strcmp(type, "Software") == 0) access_types |= CTX_BP_ACCESS_SOFTWARE;
+    if (virtual_addr) access_types |= CTX_BP_ACCESS_VIRTUAL;
+    return access_types;
+}
+
+static unsigned get_bi_access_types(BreakInstruction * bi) {
     int i;
-    int soft = 1;
-    unsigned t = 0;
-    ContextAddress sz = 0;
-    if (bi->no_addr) t |= CTX_BP_ACCESS_NO_ADDRESS;
-    if (bi->virtual_addr) t |= CTX_BP_ACCESS_VIRTUAL;
+    unsigned access_types = 0;
+    if (bi->no_addr) access_types |= CTX_BP_ACCESS_NO_ADDRESS;
     for (i = 0; i < bi->ref_cnt; i++) {
-        if (bi->refs[i].cnt) {
-            char * type = bi->refs[i].bp->type;
-            int md = bi->refs[i].bp->access_mode;
-            t |= md || bi->no_addr ? md : CTX_BP_ACCESS_INSTRUCTION;
-            if (sz < bi->refs[i].size) sz = bi->refs[i].size;
-            if (type == NULL || strcmp(type, "Software") != 0) soft = 0;
-        }
+        if (bi->refs[i].cnt) access_types |= get_bp_access_types(bi->refs[i].bp, bi->virtual_addr);
     }
-    if (soft) t |= CTX_BP_ACCESS_SOFTWARE;
-    *access_types = t;
-    *access_size = sz;
+    return access_types;
+}
+
+static int is_software_break_instruction(BreakInstruction * bi) {
+    unsigned mask = ~(unsigned)(CTX_BP_ACCESS_VIRTUAL | CTX_BP_ACCESS_SOFTWARE);
+    return (bi->cb.access_types & mask) == CTX_BP_ACCESS_INSTRUCTION && bi->cb.length == 1 && !bi->virtual_addr;
 }
 
 static void plant_instruction(BreakInstruction * bi) {
@@ -254,12 +256,11 @@ static void plant_instruction(BreakInstruction * bi) {
     assert(is_all_stopped(bi->cb.ctx));
 
     bi->saved_size = 0;
-    get_bi_access_types(bi, &bi->cb.access_types, &bi->cb.length);
+    bi->cb.access_types = get_bi_access_types(bi);
 
     if (context_plant_breakpoint(&bi->cb) < 0) error = errno;
 
-    if ((bi->cb.access_types & ~CTX_BP_ACCESS_SOFTWARE) == CTX_BP_ACCESS_INSTRUCTION &&
-            get_error_code(error) == ERR_UNSUPPORTED) {
+    if (error && is_software_break_instruction(bi) && get_error_code(error) == ERR_UNSUPPORTED) {
         uint8_t * break_inst = get_break_instruction(bi->cb.ctx, &bi->saved_size);
         assert(sizeof(bi->saved_code) >= bi->saved_size);
         assert(!bi->virtual_addr);
@@ -321,7 +322,8 @@ static int is_canonical_addr(Context * ctx, ContextAddress address) {
 }
 #endif
 
-static BreakInstruction * find_instruction(Context * ctx, int virtual_addr, ContextAddress address) {
+static BreakInstruction * find_instruction(Context * ctx, int virtual_addr,
+        ContextAddress address, unsigned access_types, ContextAddress access_size) {
     int hash = addr2instr_hash(ctx, address);
     LINK * l = addr2instr[hash].next;
     if (address == 0) return NULL;
@@ -331,21 +333,29 @@ static BreakInstruction * find_instruction(Context * ctx, int virtual_addr, Cont
         if (bi->cb.ctx == ctx &&
             bi->cb.address == address &&
             bi->virtual_addr == virtual_addr &&
-            bi->no_addr == 0) return bi;
+            bi->no_addr == 0)
+        {
+            if (bi->cb.access_types == access_types && bi->cb.length == access_size) return bi;
+            if (!virtual_addr && access_types == CTX_BP_ACCESS_INSTRUCTION && access_size == 1 &&
+                is_software_break_instruction(bi)) return bi;
+        }
         l = l->next;
     }
     return NULL;
 }
 
-static BreakInstruction * add_instruction(Context * ctx, int virtual_addr, ContextAddress address) {
+static BreakInstruction * add_instruction(Context * ctx, int virtual_addr,
+        ContextAddress address, unsigned access_types, ContextAddress access_size) {
     int hash = addr2instr_hash(ctx, address);
     BreakInstruction * bi = (BreakInstruction *)loc_alloc_zero(sizeof(BreakInstruction));
-    assert(find_instruction(ctx, virtual_addr, address) == NULL);
+    assert(find_instruction(ctx, virtual_addr, address, access_types, access_size) == NULL);
     list_add_last(&bi->link_all, &instructions);
     list_add_last(&bi->link_adr, addr2instr + hash);
     context_lock(ctx);
     bi->cb.ctx = ctx;
     bi->cb.address = address;
+    bi->cb.length = access_size;
+    bi->cb.access_types = access_types;
     bi->virtual_addr = (uint8_t)virtual_addr;
     return bi;
 }
@@ -359,7 +369,6 @@ static void clear_instruction_refs(Context * ctx, BreakpointInfo * bp) {
             InstructionRef * ref = bi->refs + i;
             if (ref->ctx != ctx) continue;
             if (bp != NULL && ref->bp != bp) continue;
-            ref->size = 0;
             ref->cnt = 0;
             bi->valid = 0;
         }
@@ -429,9 +438,7 @@ void clone_breakpoints_on_process_fork(Context * parent, Context * child) {
         if (!bi->planted) continue;
         if (!bi->saved_size) continue;
         if (bi->cb.ctx != mem) continue;
-        ci = add_instruction(child, bi->virtual_addr, bi->cb.address);
-        ci->cb.length = bi->cb.length;
-        ci->cb.access_types = bi->cb.access_types;
+        ci = add_instruction(child, bi->virtual_addr, bi->cb.address, bi->cb.access_types, bi->cb.length);
         memcpy(ci->saved_code, bi->saved_code, bi->saved_size);
         ci->saved_size = bi->saved_size;
         ci->ref_size = bi->ref_size;
@@ -580,11 +587,11 @@ static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
                         write_stream(out, ':');
                         json_write_uint64(out, bi->refs[i].addr);
                     }
-                    if (bi->refs[i].size > 0) {
+                    if (bi->cb.length > 0) {
                         write_stream(out, ',');
                         json_write_string(out, "Size");
                         write_stream(out, ':');
-                        json_write_uint64(out, bi->refs[i].size);
+                        json_write_uint64(out, bi->cb.length);
                     }
                     if (bi->planting_error != NULL) {
                         write_stream(out, ',');
@@ -673,9 +680,10 @@ static BreakInstruction * link_breakpoint_instruction(
         bi->address_error = address_error;
     }
     else {
-        bi = find_instruction(mem, virtual_addr, mem_addr);
+        unsigned access_types = get_bp_access_types(bp, virtual_addr);
+        bi = find_instruction(mem, virtual_addr, mem_addr, access_types, size);
         if (bi == NULL) {
-            bi = add_instruction(mem, virtual_addr, mem_addr);
+            bi = add_instruction(mem, virtual_addr, mem_addr, access_types, size);
         }
         else {
             int i = 0;
@@ -684,7 +692,6 @@ static BreakInstruction * link_breakpoint_instruction(
                 ref = bi->refs + i;
                 if (ref->bp == bp && ref->ctx == ctx) {
                     assert(!bi->valid);
-                    if (ref->size < size) ref->size = size;
                     ref->addr = ctx_addr;
                     ref->cnt++;
                     return bi;
@@ -703,7 +710,6 @@ static BreakInstruction * link_breakpoint_instruction(
     ref->bp = bp;
     ref->ctx = ctx;
     ref->addr = ctx_addr;
-    ref->size = size;
     ref->cnt = 1;
     bi->valid = 0;
     bp->instruction_cnt++;
@@ -2354,7 +2360,7 @@ int is_breakpoint_address(Context * ctx, ContextAddress address) {
     ContextAddress mem_addr = 0;
     BreakInstruction * bi = NULL;
     if (context_get_canonical_addr(ctx, address, &mem, &mem_addr, NULL, NULL) < 0) return 0;
-    bi = find_instruction(mem, 0, mem_addr);
+    bi = find_instruction(mem, 0, mem_addr, CTX_BP_ACCESS_INSTRUCTION, 1);
     return bi != NULL && bi->planted;
 }
 
@@ -2375,7 +2381,7 @@ void evaluate_breakpoint(Context * ctx) {
 
     if (ctx->stopped_by_bp) {
         if (context_get_canonical_addr(ctx, get_regs_PC(ctx), &mem, &mem_addr, NULL, NULL) < 0) return;
-        bi = find_instruction(mem, 0, mem_addr);
+        bi = find_instruction(mem, 0, mem_addr, CTX_BP_ACCESS_INSTRUCTION, 1);
         if (bi != NULL && bi->planted) {
             assert(bi->valid);
             for (i = 0; i < bi->ref_cnt; i++) {
@@ -2440,7 +2446,7 @@ static void safe_restore_breakpoint(void * arg) {
     BreakInstruction * bi = ext->stepping_over_bp;
 
     assert(bi->stepping_over_bp > 0);
-    assert(find_instruction(bi->cb.ctx, 0, bi->cb.address) == bi);
+    assert(find_instruction(bi->cb.ctx, 0, bi->cb.address, bi->cb.access_types, bi->cb.length) == bi);
     if (!ctx->exiting && ctx->stopped && !ctx->stopped_by_exception && get_regs_PC(ctx) == bi->cb.address) {
         if (ext->step_over_bp_cnt < 100) {
             ext->step_over_bp_cnt++;
@@ -2471,7 +2477,7 @@ static void safe_skip_breakpoint(void * arg) {
 
     assert(bi != NULL);
     assert(bi->stepping_over_bp > 0);
-    assert(find_instruction(bi->cb.ctx, 0, bi->cb.address) == bi);
+    assert(find_instruction(bi->cb.ctx, 0, bi->cb.address, bi->cb.access_types, bi->cb.length) == bi);
 
     post_safe_event(ctx, safe_restore_breakpoint, ctx);
 
@@ -2521,7 +2527,7 @@ int skip_breakpoint(Context * ctx, int single_step) {
     if (ctx->exited || ctx->exiting) return 0;
 
     if (context_get_canonical_addr(ctx, get_regs_PC(ctx), &mem, &mem_addr, NULL, NULL) < 0) return -1;
-    bi = find_instruction(mem, 0, mem_addr);
+    bi = find_instruction(mem, 0, mem_addr, CTX_BP_ACCESS_INSTRUCTION, 1);
     if (bi == NULL || bi->planting_error) return 0;
     bi->stepping_over_bp++;
     ext->stepping_over_bp = bi;
