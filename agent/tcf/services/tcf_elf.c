@@ -1544,6 +1544,50 @@ int elf_find_got_entry(ELF_File * file, const char * name, ContextAddress * addr
     return 0;
 }
 
+int elf_find_plt_dynsym(ELF_Section * plt, unsigned entry, ELF_SymbolInfo * sym_info, ContextAddress * offs) {
+    Trap trap;
+    unsigned idx;
+    ELF_File * file = plt->file;
+    if (!set_trap(&trap)) return -1;
+    for (idx = 1; idx < file->section_cnt; idx++) {
+        U4_T sym_index = 0;
+        U8_T sym_offset = 0;
+        ELF_Section * sec = file->sections + idx;
+        if (sec->type != SHT_RELA) continue;
+        if (sec->link == 0 || sec->link >= file->section_cnt) continue;
+        if ((file->sections + sec->link)->type != SHT_DYNSYM) continue;
+        if (sec->name == NULL) continue;
+        if (strcmp(sec->name, ".rela.plt") != 0) continue;
+        if (entry >= sec->size / sec->entsize) break;
+        if (elf_load(sec) < 0) exception(errno);
+        if (!file->elf64) {
+            Elf32_Rela bf = *(Elf32_Rela *)((U1_T *)sec->data + entry * sec->entsize);
+            if (file->byte_swap) {
+                SWAP(bf.r_addend);
+                SWAP(bf.r_info);
+            }
+            sym_index = ELF32_R_SYM(bf.r_info);
+            sym_offset = bf.r_addend;
+        }
+        else {
+            Elf64_Rela bf = *(Elf64_Rela *)((U1_T *)sec->data + entry * sec->entsize);
+            if (file->byte_swap) {
+                SWAP(bf.r_addend);
+                SWAP(bf.r_info);
+            }
+            sym_index = ELF64_R_SYM(bf.r_info);
+            sym_offset = bf.r_addend;
+        }
+        *offs = (ContextAddress)sym_offset;
+        unpack_elf_symbol_info(file->sections + sec->link, sym_index, sym_info);
+        clear_trap(&trap);
+        return 0;
+    }
+    clear_trap(&trap);
+    memset(sym_info, 0, sizeof(ELF_SymbolInfo));
+    return 0;
+}
+
 void ini_elf(void) {
 }
 

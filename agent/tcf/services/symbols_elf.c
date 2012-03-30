@@ -1072,6 +1072,7 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
     ELF_Section * section = NULL;
     ELF_SymbolInfo sym_info;
     ContextAddress lt_addr = elf_map_to_link_time_address(sym_ctx, addr, &file, &section);
+    if (section == NULL) return 0;
     elf_find_symbol_by_address(section, lt_addr, &sym_info);
     while (sym_info.sym_section != NULL) {
         int sym_class = SYM_CLASS_UNKNOWN;
@@ -1102,6 +1103,38 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
             return 0;
         }
         elf_prev_symbol_by_address(&sym_info);
+    }
+    if (section->name != NULL && strcmp(section->name, ".plt") == 0) {
+        /* Create synthetic symbol for PLT section entry */
+        unsigned first_size = section->entsize;
+        unsigned entry_size = section->entsize;
+        switch (file->machine) {
+        case EM_386:
+        case EM_X86_64:
+            if (entry_size > 0) break;
+            first_size = 16;
+            entry_size = 16;
+            break;
+        case EM_PPC:
+            first_size = 72;
+            break;
+        case EM_ARM:
+            first_size = 20;
+            entry_size = 12;
+            break;
+        }
+        if (lt_addr >= section->addr + first_size && entry_size > 0) {
+            Symbol * sym = alloc_symbol();
+            sym->sym_class = SYM_CLASS_FUNCTION;
+            sym->frame = STACK_NO_FRAME;
+            sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
+            sym->tbl = section;
+            sym->index = (unsigned)((lt_addr - section->addr - first_size) / entry_size);
+            sym->cardinal = first_size;
+            sym->dimension = entry_size;
+            *res = sym;
+            return 1;
+        }
     }
     return 0;
 }
@@ -1881,6 +1914,10 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
     }
     if (sym->tbl != NULL) {
         ELF_SymbolInfo info;
+        if (sym->dimension != 0) {
+            *type_class = TYPE_CLASS_FUNCTION;
+            return 0;
+        }
         unpack_elf_symbol_info(sym->tbl, sym->index, &info);
         if (info.type == STT_FUNC || info.type == STT_GNU_IFUNC) {
             *type_class = TYPE_CLASS_FUNCTION;
@@ -1910,18 +1947,35 @@ int get_symbol_name(const Symbol * sym, char ** name) {
         *name = (char *)sym->obj->mName;
     }
     else if (sym->tbl != NULL) {
-        size_t i;
-        ELF_SymbolInfo info;
-        unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        for (i = 0;; i++) {
-            if (info.name[i] == 0) {
-                *name = info.name;
-                break;
+        ELF_SymbolInfo sym_info;
+        if (sym->dimension == 0) {
+            size_t i;
+            unpack_elf_symbol_info(sym->tbl, sym->index, &sym_info);
+            for (i = 0;; i++) {
+                if (sym_info.name[i] == 0) {
+                    *name = sym_info.name;
+                    break;
+                }
+                if (sym_info.name[i] == '@' && sym_info.name[i + 1] == '@') {
+                    *name = (char *)tmp_alloc_zero(i + 1);
+                    memcpy(*name, sym_info.name, i);
+                    break;
+                }
             }
-            if (info.name[i] == '@' && info.name[i + 1] == '@') {
-                *name = (char *)tmp_alloc_zero(i + 1);
-                memcpy(*name, info.name, i);
-                break;
+        }
+        else {
+            ContextAddress sym_offs = 0;
+            if (elf_find_plt_dynsym(sym->tbl, sym->index, &sym_info, &sym_offs) < 0) return -1;
+            if (sym_info.name != NULL) {
+                *name = tmp_strdup2(sym_info.name, "@plt");
+                if (sym_offs > 0) {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "+0x%x", (unsigned)sym_offs);
+                    *name = tmp_strdup2(*name, buf);
+                }
+            }
+            else {
+                *name = NULL;
             }
         }
     }
@@ -1944,6 +1998,10 @@ static int err_wrong_obj(void) {
 int get_symbol_size(const Symbol * sym, ContextAddress * size) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
+    if (sym->has_size != 0) {
+        *size = sym->size;
+        return 0;
+    }
     if (is_constant_pseudo_symbol(sym)) return get_symbol_size(sym->base, size);
     if (is_array_type_pseudo_symbol(sym)) {
         if (sym->length > 0) {
@@ -1960,10 +2018,6 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
     }
     if (is_cardinal_type_pseudo_symbol(sym)) {
         *size = sym->cardinal;
-        return 0;
-    }
-    if (sym->has_size != 0) {
-        *size = sym->size;
         return 0;
     }
     if (unpack(sym) < 0) return -1;
@@ -2007,19 +2061,24 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
         *size = (ContextAddress)sz;
     }
     else if (sym->tbl != NULL) {
-        ELF_SymbolInfo info;
-        unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        switch (info.type) {
-        case STT_OBJECT:
-        case STT_FUNC:
-            *size = (ContextAddress)info.size;
-            break;
-        case STT_GNU_IFUNC:
-            set_errno(ERR_OTHER, "Size not available: indirect symbol");
-            return -1;
-        default:
-            *size = info.sym_section->file->elf64 ? 8 : 4;
-            break;
+        if (sym->dimension == 0) {
+            ELF_SymbolInfo info;
+            unpack_elf_symbol_info(sym->tbl, sym->index, &info);
+            switch (info.type) {
+            case STT_OBJECT:
+            case STT_FUNC:
+                *size = (ContextAddress)info.size;
+                break;
+            case STT_GNU_IFUNC:
+                set_errno(ERR_OTHER, "Size not available: indirect symbol");
+                return -1;
+            default:
+                *size = info.sym_section->file->elf64 ? 8 : 4;
+                break;
+            }
+        }
+        else {
+            *size = sym->dimension;
         }
     }
     else {
@@ -2422,7 +2481,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
         set_errno(ERR_OTHER, "No object location or value info found in DWARF data");
         return -1;
     }
-    if (sym->tbl != NULL) {
+    if (sym->tbl != NULL && sym->dimension == 0) {
         ELF_SymbolInfo info;
         unpack_elf_symbol_info(sym->tbl, sym->index, &info);
         switch (info.type) {
@@ -2475,6 +2534,11 @@ static int calc_member_offset(ObjectInfo * type, ObjectInfo * member, ContextAdd
 static int get_elf_symbol_address(const Symbol * sym, ContextAddress * address) {
     ELF_SymbolInfo info;
     assert(sym_ctx == sym->ctx);
+    if (sym->dimension != 0) {
+        /* @plt symbol */
+        *address = sym->tbl->addr + sym->cardinal + sym->index * sym->dimension;
+        return 0;
+    }
     unpack_elf_symbol_info(sym->tbl, sym->index, &info);
     if (info.type == STT_GNU_IFUNC && info.name != NULL) {
         int error = 0;

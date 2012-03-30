@@ -605,6 +605,12 @@ extern void elf_next_symbol_by_address(ELF_SymbolInfo * info);
 extern int elf_find_got_entry(ELF_File * file, const char * name, ContextAddress * addr);
 
 /*
+ * Find target symbol for a PLT entry.
+ */
+extern int elf_find_plt_dynsym(ELF_Section * plt, unsigned entry,
+                               ELF_SymbolInfo * sym_info, ContextAddress * offs);
+
+/*
  * Initialize ELF support module.
  */
 extern void ini_elf(void);
