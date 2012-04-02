@@ -1513,17 +1513,18 @@ static void sync_run_state(void) {
     while (l != &context_root) {
         Context * ctx = ctxl2ctxp(l);
         ContextExtensionRC * ext = EXT(ctx);
+        l = l->next;
         ext->pending_safe_event = 0;
         if (context_has_state(ctx)) {
             Context * grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
             EXT(grp)->intercept_group = 0;
         }
         else if (ext->step_mode == RM_TERMINATE || ext->step_mode == RM_DETACH) {
-            assert(is_all_stopped(ctx));
-            if (context_resume(ctx, ext->step_mode, 0, 0) < 0) resume_error(ctx, errno);
+            int md = ext->step_mode;
             ext->step_mode = 0;
+            assert(is_all_stopped(ctx));
+            if (context_resume(ctx, md, 0, 0) < 0) resume_error(ctx, errno);
         }
-        l = l->next;
     }
 
     /* Set intercept group flags */

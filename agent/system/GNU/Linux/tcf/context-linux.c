@@ -108,8 +108,8 @@ typedef struct ContextExtensionLinux {
     int                     pending_step;
     int                     stop_cnt;
     int                     sigstop_posted;
+    int                     waitpid_posted;
     int                     detach_req;
-    int                     detach_done;
 } ContextExtensionLinux;
 
 static size_t context_extension_offset = 0;
@@ -189,7 +189,6 @@ int context_attach(pid_t pid, ContextAttachCallBack * done, void * data, int mod
     ext->attach_callback = done;
     ext->attach_data = data;
     ext->attach_mode = mode;
-    ext->sigstop_posted = (mode & CONTEXT_ATTACH_SELF) == 0;
     list_add_first(&ctx->ctxl, &attach_list);
     /* TODO: context_attach works only for main task in a process */
     return 0;
@@ -235,6 +234,7 @@ int context_stop(Context * ctx) {
     assert(!ctx->exited);
     assert(!ctx->exiting);
     assert(!ctx->stopped);
+    assert(ext->waitpid_posted);
     if (ext->stop_cnt > 4) {
         /* Waiting too long, check for zombies */
         int ch = 0;
@@ -356,6 +356,21 @@ static void free_regs(Context * ctx) {
     ext->regs_dirty = NULL;
 }
 
+static void send_process_exited_event(Context * prs) {
+    LINK * l = prs->children.next;
+    assert(prs->parent == NULL);
+    assert(prs->exited == 0);
+    assert(prs->stopped == 0);
+    assert(EXT(prs)->regs == NULL);
+    while (l != &prs->children) {
+        Context * c = cldl2ctxp(l);
+        if (!c->exited) return;
+        l = l->next;
+    }
+    prs->exiting = 1;
+    send_context_exited_event(prs);
+}
+
 static int do_single_step(Context * ctx) {
     ContextExtensionLinux * ext = EXT(ctx);
 
@@ -427,8 +442,7 @@ int context_continue(Context * ctx) {
     }
 #endif
     if (flush_regs(ctx) < 0) return -1;
-    if (ext->detach_req && !ext->sigstop_posted) cmd = PTRACE_DETACH;
-    assert(!ext->detach_done || cmd != PTRACE_DETACH);
+    if (ext->detach_req && !ext->waitpid_posted) cmd = PTRACE_DETACH;
     if (ptrace((enum __ptrace_request)cmd, ext->pid, 0, signal) < 0) {
         int err = errno;
         if (err == ESRCH) {
@@ -449,29 +463,17 @@ int context_continue(Context * ctx) {
     }
     send_context_started_event(ctx);
     if (cmd == PTRACE_DETACH) {
-        int all_detached = 1;
         Context * prs = ctx->parent;
-        LINK * l = prs->children.next;
-        ext->detach_done = 1;
-        while (l != &prs->children) {
-            Context * c = cldl2ctxp(l);
-            if (!c->exited && !EXT(c)->detach_done) all_detached = 0;
-            l = l->next;
-        }
-        if (all_detached) {
-            l = prs->children.next;
-            while (l != &prs->children) {
-                Context * c = cldl2ctxp(l);
-                l = l->next;
-                assert(!c->stopped);
-                if (!c->exited) {
-                    free_regs(c);
-                    send_context_exited_event(c);
-                }
-            }
-            assert(EXT(prs)->regs == NULL);
-            send_context_exited_event(prs);
-        }
+        assert(ctx->exiting);
+        assert(ext->waitpid_posted == 0);
+        free_regs(ctx);
+        send_context_exited_event(ctx);
+        send_process_exited_event(prs);
+    }
+    else if (ext->detach_req && !ext->sigstop_posted) {
+        assert(ext->waitpid_posted);
+        if (tkill(ext->pid, SIGSTOP) < 0) return -1;
+        ext->sigstop_posted = 1;
     }
     return 0;
 }
@@ -915,31 +917,21 @@ static void event_pid_exited(pid_t pid, int status, int signal) {
         /* Note: ctx->exiting should be 1 here. However, PTRACE_EVENT_EXIT can be lost by PTRACE because of racing
          * between PTRACE_CONT (or PTRACE_SYSCALL) and SIGTRAP/PTRACE_EVENT_EXIT. So, ctx->exiting can be 0.
          */
-        if (EXT(ctx->parent)->pid == pid) ctx = ctx->parent;
+        Context * prs = ctx->parent;
+        EXT(ctx)->waitpid_posted = 0;
         trace(LOG_EVENTS, "event: ctx %#lx, pid %d, exit status %d, term signal %d", ctx, pid, status, signal);
-        assert(EXT(ctx)->attach_callback == NULL);
+        assert(EXT(prs)->attach_callback == NULL);
+        assert(!prs->exited);
         assert(!ctx->exited);
         ctx->exiting = 1;
         if (ctx->stopped) send_context_started_event(ctx);
-        if (!list_is_empty(&ctx->children)) {
-            LINK * l = ctx->children.next;
-            while (l != &ctx->children) {
-                Context * c = cldl2ctxp(l);
-                l = l->next;
-                assert(c->parent == ctx);
-                if (!c->exited) {
-                    c->exiting = 1;
-                    if (c->stopped) send_context_started_event(c);
-                    free_regs(c);
-                    send_context_exited_event(c);
-                }
-            }
-        }
         free_regs(ctx);
         send_context_exited_event(ctx);
+        send_process_exited_event(prs);
     }
     assert(context_find_from_pid(pid, 1) == NULL);
-    assert(context_find_from_pid(pid, 0) == NULL);
+    assert(find_pending_attach(pid) == NULL);
+    assert(find_pending_detach(pid) == NULL);
 }
 
 #if !USE_PTRACE_SYSCALL
@@ -1023,6 +1015,8 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             ctx->mem = prs;
             ctx->big_endian = prs->big_endian;
             EXT(ctx)->attach_mode = EXT(prs)->attach_mode;
+            EXT(ctx)->sigstop_posted = (EXT(ctx)->attach_mode & CONTEXT_ATTACH_SELF) == 0;
+            EXT(ctx)->waitpid_posted = 1;
             (ctx->parent = prs)->ref_count++;
             list_add_last(&ctx->cldl, &prs->children);
             link_context(prs);
@@ -1056,12 +1050,13 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     }
 
     ext = EXT(ctx);
-    if (ext->detach_done) {
-        if (ext->pid != EXT(ctx->parent)->pid || (EXT(ctx->parent)->attach_mode & CONTEXT_ATTACH_SELF) == 0) {
-            detach_waitpid_process();
-        }
+    if (!ext->waitpid_posted && event == PTRACE_EVENT_EXIT && ext->pid == EXT(ctx->parent)->pid) {
+        /* PTRACE_EVENT_EXIT can come in while the thread is stopped,
+         * after we got SIGSTOP, but before we do PTRACE_DETACH. */
+        assert(ctx->exited);
         return;
     }
+    assert(ext->waitpid_posted);
     assert(!ctx->exited);
     assert(!ext->attach_callback);
     if (signal == SIGSTOP) ext->sigstop_posted = 0;
@@ -1136,6 +1131,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             EXT(ctx2)->pid = msg;
             EXT(ctx2)->attach_mode = EXT(prs2)->attach_mode;
             EXT(ctx2)->sigstop_posted = 1;
+            EXT(ctx2)->waitpid_posted = 1;
             alloc_regs(ctx2);
             ctx2->mem = prs2;
             ctx2->big_endian = prs2->big_endian;
@@ -1165,6 +1161,8 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 Context * ctx2 = create_context(pid2id(child_pid, EXT(prs)->pid));
                 EXT(ctx2)->pid = child_pid;
                 EXT(ctx2)->attach_mode = EXT(prs)->attach_mode;
+                EXT(ctx2)->sigstop_posted = 1;
+                EXT(ctx2)->waitpid_posted = 1;
                 alloc_regs(ctx2);
                 ctx2->mem = prs;
                 ctx2->big_endian = prs->big_endian;
@@ -1272,6 +1270,13 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         }
         ext->pending_step = 0;
         send_context_stopped_event(ctx);
+    }
+
+    if (ext->detach_req && !ext->sigstop_posted && !ctx->pending_signals) {
+        ext->waitpid_posted = 0;
+        if (ext->pid != EXT(ctx->parent)->pid || (EXT(ctx->parent)->attach_mode & CONTEXT_ATTACH_SELF) == 0) {
+            detach_waitpid_process();
+        }
     }
 }
 
