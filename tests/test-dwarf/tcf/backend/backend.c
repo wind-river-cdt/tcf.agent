@@ -559,10 +559,12 @@ static void loc_var_func(void * args, Symbol * sym) {
                 errno = ERR_OTHER;
                 error("Invalid original type of typedef");
             }
+#if 0
             if (type_name == NULL) {
                 errno = ERR_OTHER;
                 error("typedef must have a name");
             }
+#endif
             if ((flags & SYM_FLAG_CONST_TYPE) || (flags & SYM_FLAG_VOLATILE_TYPE)) {
                 errno = ERR_OTHER;
                 error("Invalid flags of typedef");
@@ -638,15 +640,26 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
         else if (container_class == SYM_CLASS_COMP_UNIT && type_name != NULL) {
             Symbol * find_sym = NULL;
-            ContextAddress find_size = 0;
-            int find_class = 0;
-            SYM_FLAGS find_flags = 0;
-            uint64_t n = 0;
-            Value v;
+            unsigned find_cnt = 0;
+            unsigned find_max = 16;
+            Symbol ** find_syms = (Symbol **)tmp_alloc(sizeof(Symbol *) * find_max);
+            unsigned i;
             if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, type_name, &find_sym) < 0) {
                 error("find_symbol_by_name");
             }
-            for (;;) {
+            find_syms[find_cnt++] = find_sym;
+            while (find_next_symbol(&find_sym) == 0) {
+                if (find_cnt >= find_max) {
+                    find_max *= 2;
+                    find_syms = (Symbol **)tmp_realloc(find_syms, sizeof(Symbol *) * find_max);
+                }
+                find_syms[find_cnt++] = find_sym;
+            }
+            for (i = 0; i < find_cnt; i++) {
+                int find_class = 0;
+                SYM_FLAGS find_flags = 0;
+                ContextAddress find_size = 0;
+                find_sym = find_syms[i];
                 if (get_symbol_class(find_sym, &find_class) < 0) {
                     error("get_symbol_class");
                 }
@@ -654,28 +667,13 @@ static void loc_var_func(void * args, Symbol * sym) {
                     error("get_symbol_flags");
                 }
                 switch (find_class) {
-                case SYM_CLASS_REFERENCE:
                 case SYM_CLASS_TYPE:
                     if (get_symbol_size(find_sym, &find_size) == 0) {
-                        char * expr = (char *)tmp_alloc(strlen(type_name) + 64);
-                        if (find_class != SYM_CLASS_TYPE) {
-                            sprintf(expr, "sizeof(%s)", type_name);
-                        }
-                        else if (find_flags & SYM_FLAG_STRUCT_TYPE) {
-                            sprintf(expr, "sizeof(struct %s)", type_name);
-                        }
-                        else if (find_flags & SYM_FLAG_CLASS_TYPE) {
-                            sprintf(expr, "sizeof(class %s)", type_name);
-                        }
-                        else if (find_flags & SYM_FLAG_UNION_TYPE) {
-                            sprintf(expr, "sizeof(union %s)", type_name);
-                        }
-                        else if (find_flags & SYM_FLAG_ENUM_TYPE) {
-                            sprintf(expr, "sizeof(enum %s)", type_name);
-                        }
-                        else {
-                            sprintf(expr, "sizeof(%s)", type_name);
-                        }
+                        Value v;
+                        uint64_t n = 0;
+                        char * expr = (char *)tmp_alloc(512);
+                        const char * id = symbol2id(find_sym);
+                        sprintf(expr, "sizeof(${%s})", id);
                         if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
                             error("evaluate_expression");
                         }
@@ -689,7 +687,6 @@ static void loc_var_func(void * args, Symbol * sym) {
                     }
                     break;
                 }
-                if (find_next_symbol(&find_sym) < 0) break;
             }
         }
         if (get_symbol_length(type, &length) < 0) {
@@ -828,10 +825,9 @@ static void next_pc(void) {
     Trap trap;
     int test_cnt = 0;
     int loaded = mem_region_pos < 0;
-    ContextAddress next_pc = 0;
+    ContextAddress next_pc = pc + 1;
 
     for (;;) {
-        if (next_pc <= pc) next_pc = pc + 16;
         if (mem_region_pos < 0) {
             mem_region_pos = 0;
             pc = mem_map.regions[mem_region_pos].addr;
@@ -847,8 +843,6 @@ static void next_pc(void) {
             mem_region_pos++;
             pc = 0;
             print_time(time_start, test_cnt);
-            post_event_with_delay(test, NULL, 1000000);
-            test_posted = 1;
             return;
         }
 
@@ -861,8 +855,6 @@ static void next_pc(void) {
                 mem_region_pos++;
                 pc = 0;
                 print_time(time_start, test_cnt);
-                post_event_with_delay(test, NULL, 1000000);
-                test_posted = 1;
                 return;
             }
         }
@@ -969,6 +961,7 @@ static void next_pc(void) {
         }
         next_pc = area.end_address;
         if (next_pc > 0) next_pc += test_cnt % 6;
+        else next_pc = pc + 16;
         if (area.start_line > 0) {
             char * elf_file_name = tmp_strdup(area.file);
             if (area.start_address > pc || area.end_address <= pc) {
@@ -1051,8 +1044,6 @@ static void next_pc(void) {
         else if (test_cnt >= 10000) {
             print_time(time_start, test_cnt);
             clock_gettime(CLOCK_REALTIME, &time_start);
-            test_posted = 1;
-            post_event(test, NULL);
             return;
         }
     }
@@ -1106,8 +1097,8 @@ static void next_file(void) {
         r->file_name = loc_strdup(elf_file_name);
         r->file_offs = p->offset;
         r->size = (ContextAddress)p->mem_size;
-        if ((p->flags & PF_X) == 0 && (r->size % 0x1000) != 0) {
-            r->size = r->size + 0x1000 - r->size % 0x1000;
+        if ((p->flags & PF_X) == 0 && (r->addr + r->size) % p->align != 0) {
+            r->size = r->size + p->align - (r->addr + r->size) % p->align;
         }
         r->flags = MM_FLAG_R | MM_FLAG_W;
         if (p->flags & PF_X) r->flags |= MM_FLAG_X;
@@ -1172,9 +1163,6 @@ static void next_file(void) {
 
     pc = 0;
     pass_cnt++;
-
-    test_posted = 1;
-    post_event(test, NULL);
 }
 
 static void test(void * args) {
@@ -1186,6 +1174,9 @@ static void test(void * args) {
     else {
         next_pc();
     }
+    assert(test_posted == 0);
+    test_posted = 1;
+    post_event_with_delay(test, NULL, 1);
 }
 
 static void add_dir(const char * dir_name) {
