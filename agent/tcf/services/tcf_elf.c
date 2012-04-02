@@ -106,9 +106,11 @@ static void elf_dispose(ELF_File * file) {
 #if !defined(USE_MMAP)
             loc_free(s->data);
 #elif defined(_WIN32)
-            UnmapViewOfFile(s->data);
+            if (s->mmap_addr == NULL) loc_free(s->data);
+            else UnmapViewOfFile(s->mmap_addr);
 #else
-            if (s->mmap_addr != NULL) munmap(s->mmap_addr, s->mmap_size);
+            if (s->mmap_addr == NULL) loc_free(s->data);
+            else munmap(s->mmap_addr, s->mmap_size);
 #endif
             loc_free(s->sym_addr_table);
             loc_free(s->sym_names_hash);
@@ -770,7 +772,7 @@ int elf_load(ELF_Section * s) {
 
 #ifdef USE_MMAP
 #ifdef _WIN32
-    {
+    if (s->size >= 0x100000) {
         ELF_File * file = s->file;
         if (file->mmap_handle == NULL) {
             file->mmap_handle = CreateFileMapping(
@@ -800,7 +802,7 @@ int elf_load(ELF_Section * s) {
         }
     }
 #else
-    {
+    if (s->size >= 0x100000) {
         long page = sysconf(_SC_PAGE_SIZE);
         off_t offs = (off_t)s->offset;
         offs -= offs % page;

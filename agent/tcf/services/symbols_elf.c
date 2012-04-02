@@ -1585,14 +1585,16 @@ static U8_T read_string_length(ObjectInfo * obj);
 static int get_object_size(ObjectInfo * obj, unsigned dimension, U8_T * byte_size, U8_T * bit_size) {
     U8_T n = 0, m = 0;
     obj = find_definition(obj);
-    if (get_num_prop(obj, AT_byte_size, &n)) {
-        *byte_size = n;
-        return 1;
-    }
-    if (get_num_prop(obj, AT_bit_size, &n)) {
-        *byte_size = (n + 7) / 8;
-        *bit_size = n;
-        return 1;
+    if (obj->mTag != TAG_string_type) {
+        if (get_num_prop(obj, AT_byte_size, &n)) {
+            *byte_size = n;
+            return 1;
+        }
+        if (get_num_prop(obj, AT_bit_size, &n)) {
+            *byte_size = (n + 7) / 8;
+            *bit_size = n;
+            return 1;
+        }
     }
     switch (obj->mTag) {
     case TAG_enumerator:
@@ -1675,9 +1677,14 @@ static void read_object_value(PropertyValue * v, void ** value, size_t * size, i
         U8_T val_size = 0;
         U8_T bit_size = 0;
 
-        if (get_object_size(v->mObject, 0, &val_size, &bit_size)) {}
-        else if (v->mAttr == AT_string_length) val_size = v->mObject->mCompUnit->mDesc.mAddressSize;
-        else str_exception(ERR_INV_DWARF, "Unknown object size");
+        if (v->mAttr == AT_string_length) {
+            if (!get_num_prop(v->mObject, AT_byte_size, &val_size)) {
+                val_size = v->mObject->mCompUnit->mDesc.mAddressSize;
+            }
+        }
+        else if (!get_object_size(v->mObject, 0, &val_size, &bit_size)) {
+            str_exception(ERR_INV_DWARF, "Unknown object size");
+        }
         bf = (U1_T *)tmp_alloc((size_t)val_size);
         if (v->mForm == FORM_EXPR_VALUE) {
             if (context_read_mem(sym_ctx, (ContextAddress)v->mValue, bf, (size_t)val_size) < 0) exception(errno);
@@ -1715,6 +1722,7 @@ static U8_T read_string_length(ObjectInfo * obj) {
     Trap trap;
     U8_T len = 0;
 
+    assert(obj->mTag == TAG_string_type);
     if (set_trap(&trap)) {
         PropertyValue v;
         read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_string_length, &v);
@@ -2023,13 +2031,15 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
     if (unpack(sym) < 0) return -1;
     *size = 0;
     if (obj != NULL) {
+        Trap trap;
         int ok = 0;
         U8_T sz = 0;
         U8_T n = 0;
 
+        if (!set_trap(&trap)) return -1;
         ok = get_object_size(obj, sym->dimension, &sz, &n);
+        clear_trap(&trap);
         if (!ok && sym->sym_class == SYM_CLASS_REFERENCE) {
-            Trap trap;
             if (set_trap(&trap)) {
                 PropertyValue v;
                 read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_location, &v);
@@ -2849,6 +2859,9 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
             break;
         case TAG_structure_type:
             *flags |= SYM_FLAG_STRUCT_TYPE;
+            break;
+        case TAG_string_type:
+            *flags |= SYM_FLAG_STRING_TYPE;
             break;
         case TAG_enumeration_type:
             *flags |= SYM_FLAG_ENUM_TYPE;
