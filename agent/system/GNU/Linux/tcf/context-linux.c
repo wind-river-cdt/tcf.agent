@@ -457,8 +457,8 @@ int context_continue(Context * ctx) {
             send_context_started_event(ctx);
             return 0;
         }
-        trace(LOG_ALWAYS, "error: ptrace(PTRACE_CONT, ...) failed: ctx %#lx, id %s, error %d %s",
-            ctx, ctx->id, err, errno_to_str(err));
+        trace(LOG_ALWAYS, "error: ptrace(%d, ...) failed: ctx %#lx, id %s, error %d %s",
+            cmd, ctx, ctx->id, err, errno_to_str(err));
         errno = err;
         return -1;
     }
@@ -478,9 +478,9 @@ int context_continue(Context * ctx) {
         send_process_exited_event(prs);
     }
     else if (ext->detach_req && !ext->sigstop_posted) {
+        assert(ctx->exiting);
         assert(ext->waitpid_posted);
-        if (tkill(ext->pid, SIGSTOP) < 0) return -1;
-        ext->sigstop_posted = 1;
+        if (tkill(ext->pid, SIGSTOP) >= 0) ext->sigstop_posted = 1;
     }
     return 0;
 }
