@@ -225,6 +225,21 @@ int context_has_state(Context * ctx) {
     return ctx != NULL && ctx->parent != NULL;
 }
 
+static int get_process_state(pid_t pid) {
+    int ch = 0;
+    FILE * file = NULL;
+    char file_name[FILE_PATH_SIZE];
+    snprintf(file_name, sizeof(file_name), "/proc/%d/stat", pid);
+    if ((file = fopen(file_name, "r")) == NULL) return EOF;
+    while (ch != EOF && ch != ')') ch = fgetc(file);
+    if (ch != EOF) {
+        ch = fgetc(file);
+        if (ch == ' ') ch = fgetc(file);
+    }
+    fclose(file);
+    return ch;
+}
+
 int context_stop(Context * ctx) {
     ContextExtensionLinux * ext = EXT(ctx);
     trace(LOG_CONTEXT, "context:%s suspending ctx %#lx id %s",
@@ -237,19 +252,12 @@ int context_stop(Context * ctx) {
     assert(ext->waitpid_posted);
     if (ext->stop_cnt > 4) {
         /* Waiting too long, check for zombies */
-        int ch = 0;
-        FILE * file = NULL;
-        char file_name[FILE_PATH_SIZE];
-        snprintf(file_name, sizeof(file_name), "/proc/%d/stat", ext->pid);
-        if ((file = fopen(file_name, "r")) == NULL) return -1;
-        while (ch != EOF && ch != ')') ch = fgetc(file);
-        if (ch == EOF || fgetc(file) != ' ' || fgetc(file) == 'Z') {
-            /* Zombie found */
-            fclose(file);
+        int ch = get_process_state(ext->pid);
+        if (ch == EOF || ch == 'Z') {
+            /* Already exited or zombie */
             ctx->exiting = 1;
             return 0;
         }
-        fclose(file);
         ext->stop_cnt = 0;
         ext->sigstop_posted = 0;
     }
@@ -336,7 +344,6 @@ static int flush_regs(Context * ctx) {
     if (err == ESRCH) {
         ctx->exiting = 1;
         memset(ext->regs_dirty, 0, sizeof(REG_SET));
-        send_context_started_event(ctx);
         return 0;
     }
 
@@ -1050,15 +1057,18 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     }
 
     ext = EXT(ctx);
-    if (!ext->waitpid_posted && event == PTRACE_EVENT_EXIT && ext->pid == EXT(ctx->parent)->pid) {
-        /* PTRACE_EVENT_EXIT can come in while the thread is stopped,
-         * after we got SIGSTOP, but before we do PTRACE_DETACH. */
-        assert(ctx->exited);
-        return;
-    }
-    assert(ext->waitpid_posted);
-    assert(!ctx->exited);
     assert(!ext->attach_callback);
+    if (event == PTRACE_EVENT_EXIT && !ctx->stopped) {
+        int ch = get_process_state(ext->pid);
+        if (ch != 't' && ch != 'T') {
+            /* Lost PTRACE_EVENT_EXIT event - we alredy have resumed the process */
+            /* This happens when the agent resumes a process right after the process receives SIGKILL */
+            ctx->exiting = 1;
+            return;
+        }
+    }
+    assert(!ctx->exited);
+    assert(ext->waitpid_posted);
     if (signal == SIGSTOP) ext->sigstop_posted = 0;
     ext->stop_cnt = 0;
 
@@ -1157,26 +1167,31 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             /* SIGKILL can override PTRACE_EVENT_CLONE event with PTRACE_EVENT_EXIT */
             unsigned long child_pid = get_child_pid(EXT(ctx->parent)->pid);
             if (child_pid) {
-                Context * prs = ctx->parent;
-                Context * ctx2 = create_context(pid2id(child_pid, EXT(prs)->pid));
-                EXT(ctx2)->pid = child_pid;
-                EXT(ctx2)->attach_mode = EXT(prs)->attach_mode;
-                EXT(ctx2)->sigstop_posted = 1;
-                EXT(ctx2)->waitpid_posted = 1;
-                alloc_regs(ctx2);
-                ctx2->mem = prs;
-                ctx2->big_endian = prs->big_endian;
-                ctx2->sig_dont_stop = ctx->sig_dont_stop;
-                ctx2->sig_dont_pass = ctx->sig_dont_pass;
-                ctx2->exiting = 1;
-                (ctx2->creator = ctx)->ref_count++;
-                (ctx2->parent = prs)->ref_count++;
-                list_add_last(&ctx2->cldl, &prs->children);
-                link_context(ctx2);
-                trace(LOG_EVENTS, "event: new context 0x%x, id %s", ctx2, ctx2->id);
-                send_context_created_event(ctx2);
-                event_pid_stopped(child_pid, SIGTRAP, 0, 0);
-                add_waitpid_process(child_pid);
+                int state = get_process_state(child_pid);
+                if (state != EOF) {
+                    Context * prs = ctx->parent;
+                    Context * ctx2 = create_context(pid2id(child_pid, EXT(prs)->pid));
+                    EXT(ctx2)->pid = child_pid;
+                    EXT(ctx2)->attach_mode = EXT(prs)->attach_mode;
+                    EXT(ctx2)->sigstop_posted = 1;
+                    EXT(ctx2)->waitpid_posted = 1;
+                    alloc_regs(ctx2);
+                    ctx2->mem = prs;
+                    ctx2->big_endian = prs->big_endian;
+                    ctx2->sig_dont_stop = ctx->sig_dont_stop;
+                    ctx2->sig_dont_pass = ctx->sig_dont_pass;
+                    ctx2->exiting = 1;
+                    (ctx2->creator = ctx)->ref_count++;
+                    (ctx2->parent = prs)->ref_count++;
+                    list_add_last(&ctx2->cldl, &prs->children);
+                    link_context(ctx2);
+                    trace(LOG_EVENTS, "event: new context 0x%x, id %s", ctx2, ctx2->id);
+                    send_context_created_event(ctx2);
+                    if (state == 't' || state == 'T') {
+                        event_pid_stopped(child_pid, SIGSTOP, 0, 0);
+                    }
+                    add_waitpid_process(child_pid);
+                }
             }
         }
         ctx->exiting = 1;
