@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2011, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -36,16 +36,16 @@
 
 #define HASH_SIZE (16 * MEM_USAGE_FACTOR - 1)
 
-/* Line numbers cahce, one per channel */
+/* Line numbers cache, one per channel */
 typedef struct LineNumbersCache {
     unsigned magic;
     Channel * channel;
     LINK link_root;
-    LINK link_addr[HASH_SIZE];
+    LINK link_entries[HASH_SIZE];
 } LineNumbersCache;
 
-/* Line number to address translation cache */
-typedef struct LineAddressCache {
+/* Cache entry */
+typedef struct LineNumbersCacheEntry {
     unsigned magic;
     LINK link_cache;
     AbstractCache cache;
@@ -53,17 +53,19 @@ typedef struct LineAddressCache {
     char * file;
     int line;
     int column;
+    ContextAddress addr0;
+    ContextAddress addr1;
     ReplyHandlerInfo * pending;
     ErrorReport * error;
-    int areas_cnt;
+    unsigned areas_cnt;
     CodeArea * areas;
     int disposed;
-} LineAddressCache;
+} LineNumbersCacheEntry;
 
 #define LINE_NUMBERS_CACHE_MAGIC 0x19873654
 
 #define root2cache(A) ((LineNumbersCache *)((char *)(A) - offsetof(LineNumbersCache, link_root)))
-#define cache2addr(A) ((LineAddressCache *)((char *)(A) - offsetof(LineAddressCache, link_cache)))
+#define cache2entry(A) ((LineNumbersCacheEntry *)((char *)(A) - offsetof(LineNumbersCacheEntry, link_cache)))
 
 static LINK root = TCF_LIST_INIT(root);
 
@@ -71,12 +73,12 @@ static int code_area_cnt = 0;
 static int code_area_max = 0;
 static CodeArea * code_area_buf = NULL;
 
-static void free_line_address_cache(LineAddressCache * cache) {
+static void free_cache_entry(LineNumbersCacheEntry * cache) {
     assert(cache->magic == LINE_NUMBERS_CACHE_MAGIC);
     list_remove(&cache->link_cache);
     cache->disposed = 1;
     if (cache->pending == NULL) {
-        int i;
+        unsigned i;
         cache->magic = 0;
         cache_dispose(&cache->cache);
         release_error_report(cache->error);
@@ -93,12 +95,12 @@ static void free_line_address_cache(LineAddressCache * cache) {
 }
 
 static void free_line_numbers_cache(LineNumbersCache * cache) {
-    int i;
+    unsigned i;
     assert(cache->magic == LINE_NUMBERS_CACHE_MAGIC);
     cache->magic = 0;
     for (i = 0; i < HASH_SIZE; i++) {
-        while (!list_is_empty(cache->link_addr + i)) {
-            free_line_address_cache(cache2addr(cache->link_addr[i].next));
+        while (!list_is_empty(cache->link_entries + i)) {
+            free_cache_entry(cache2entry(cache->link_entries[i].next));
         }
     }
     channel_unlock(cache->channel);
@@ -125,17 +127,19 @@ static LineNumbersCache * get_line_numbers_cache(void) {
         cache->channel = c;
         list_add_first(&cache->link_root, &root);
         for (i = 0; i < HASH_SIZE; i++) {
-            list_init(cache->link_addr + i);
+            list_init(cache->link_entries + i);
         }
         channel_lock(c);
     }
     return cache;
 }
 
-static unsigned hash_addr(Context * ctx, const char * file, int line, int column) {
-    int i;
-    unsigned h = 0;
-    for (i = 0; file[i]; i++) h += file[i];
+static unsigned calc_hash(Context * ctx, const char * file, int line, int column, ContextAddress addr) {
+    unsigned h = (unsigned)addr;
+    if (file) {
+        unsigned i;
+        for (i = 0; file[i]; i++) h += file[i];
+    }
     return (h + ((uintptr_t)ctx >> 4) + (unsigned)line + (unsigned)column) % HASH_SIZE;
 }
 
@@ -170,14 +174,14 @@ static void read_code_area_array(InputStream * inp, void * args) {
     json_read_struct(inp, read_code_area_props, area);
 }
 
-static void validate_map_to_memory(Channel * c, void * args, int error) {
+static void validate_cache_entry(Channel * c, void * args, int error) {
     Trap trap;
-    LineAddressCache * f = (LineAddressCache *)args;
-    assert(f->magic == LINE_NUMBERS_CACHE_MAGIC);
-    assert(f->pending != NULL);
-    assert(f->error == NULL);
+    LineNumbersCacheEntry * entry = (LineNumbersCacheEntry *)args;
+    assert(entry->magic == LINE_NUMBERS_CACHE_MAGIC);
+    assert(entry->pending != NULL);
+    assert(entry->error == NULL);
     if (set_trap(&trap)) {
-        f->pending = NULL;
+        entry->pending = NULL;
         if (!error) {
             error = read_errno(&c->inp);
             code_area_cnt = 0;
@@ -185,9 +189,9 @@ static void validate_map_to_memory(Channel * c, void * args, int error) {
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
             if (code_area_cnt > 0) {
-                f->areas_cnt = code_area_cnt;
-                f->areas = (CodeArea *)loc_alloc(sizeof(CodeArea) * code_area_cnt);
-                memcpy(f->areas, code_area_buf, sizeof(CodeArea) * code_area_cnt);
+                entry->areas_cnt = code_area_cnt;
+                entry->areas = (CodeArea *)loc_alloc(sizeof(CodeArea) * code_area_cnt);
+                memcpy(entry->areas, code_area_buf, sizeof(CodeArea) * code_area_cnt);
             }
         }
         clear_trap(&trap);
@@ -195,45 +199,45 @@ static void validate_map_to_memory(Channel * c, void * args, int error) {
     else {
         error = trap.error;
     }
-    f->error = get_error_report(error);
-    cache_notify(&f->cache);
-    if (f->disposed) free_line_address_cache(f);
+    entry->error = get_error_report(error);
+    cache_notify(&entry->cache);
+    if (entry->disposed) free_cache_entry(entry);
 }
 
 int line_to_address(Context * ctx, char * file, int line, int column,
                     LineNumbersCallBack * client, void * args) {
     LINK * l = NULL;
     LineNumbersCache * cache = NULL;
-    LineAddressCache * f = NULL;
+    LineNumbersCacheEntry * entry = NULL;
     unsigned h;
     Trap trap;
 
     if (!set_trap(&trap)) return -1;
 
     ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
-    h = hash_addr(ctx, file, line, column);
+    h = calc_hash(ctx, file, line, column, 0);
     cache = get_line_numbers_cache();
     assert(cache->magic == LINE_NUMBERS_CACHE_MAGIC);
-    for (l = cache->link_addr[h].next; l != cache->link_addr + h; l = l->next) {
-        LineAddressCache * c = cache2addr(l);
-        if (c->ctx == ctx && c->line == line && c->column == column && strcmp(c->file, file) == 0) {
+    for (l = cache->link_entries[h].next; l != cache->link_entries + h; l = l->next) {
+        LineNumbersCacheEntry * c = cache2entry(l);
+        if (c->ctx == ctx && c->line == line && c->column == column && c->file && strcmp(c->file, file) == 0) {
             assert(c->magic == LINE_NUMBERS_CACHE_MAGIC);
-            f = c;
+            entry = c;
             break;
         }
     }
 
-    if (f == NULL) {
+    if (entry == NULL) {
         Channel * c = cache_channel();
         if (c == NULL || is_channel_closed(c)) exception(ERR_UNSUPPORTED);
-        f = (LineAddressCache *)loc_alloc_zero(sizeof(LineAddressCache));
-        list_add_first(&f->link_cache, cache->link_addr + h);
-        f->magic = LINE_NUMBERS_CACHE_MAGIC;
-        context_lock(f->ctx = ctx);
-        f->file = loc_strdup(file);
-        f->line = line;
-        f->column = column;
-        f->pending = protocol_send_command(c, "LineNumbers", "mapToMemory", validate_map_to_memory, f);
+        entry = (LineNumbersCacheEntry *)loc_alloc_zero(sizeof(LineNumbersCacheEntry));
+        list_add_first(&entry->link_cache, cache->link_entries + h);
+        entry->magic = LINE_NUMBERS_CACHE_MAGIC;
+        context_lock(entry->ctx = ctx);
+        entry->file = loc_strdup(file);
+        entry->line = line;
+        entry->column = column;
+        entry->pending = protocol_send_command(c, "LineNumbers", "mapToMemory", validate_cache_entry, entry);
         json_write_string(&c->out, ctx->id);
         write_stream(&c->out, 0);
         json_write_string(&c->out, file);
@@ -243,19 +247,77 @@ int line_to_address(Context * ctx, char * file, int line, int column,
         json_write_long(&c->out, column);
         write_stream(&c->out, 0);
         write_stream(&c->out, MARKER_EOM);
-        cache_wait(&f->cache);
+        cache_wait(&entry->cache);
     }
-    else if (f->pending != NULL) {
-        cache_wait(&f->cache);
+    else if (entry->pending != NULL) {
+        cache_wait(&entry->cache);
     }
-    else if (f->error != NULL) {
-        exception(set_fmt_errno(set_error_report_errno(f->error),
+    else if (entry->error != NULL) {
+        exception(set_fmt_errno(set_error_report_errno(entry->error),
             "Text position '%s:%d' not found", file, line));
     }
     else {
-        int i;
-        for (i = 0; i < f->areas_cnt; i++) {
-            client(f->areas + i, args);
+        unsigned i;
+        for (i = 0; i < entry->areas_cnt; i++) {
+            client(entry->areas + i, args);
+        }
+    }
+    clear_trap(&trap);
+    return 0;
+}
+
+int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, LineNumbersCallBack * client, void * args) {
+    LINK * l = NULL;
+    LineNumbersCache * cache = NULL;
+    LineNumbersCacheEntry * entry = NULL;
+    unsigned h;
+    Trap trap;
+
+    if (!set_trap(&trap)) return -1;
+
+    ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
+    h = calc_hash(ctx, NULL, 0, 0, addr0);
+    cache = get_line_numbers_cache();
+    assert(cache->magic == LINE_NUMBERS_CACHE_MAGIC);
+    for (l = cache->link_entries[h].next; l != cache->link_entries + h; l = l->next) {
+        LineNumbersCacheEntry * c = cache2entry(l);
+        if (c->ctx == ctx && c->file == NULL && c->addr0 == addr0 && c->addr1 == addr1) {
+            assert(c->magic == LINE_NUMBERS_CACHE_MAGIC);
+            entry = c;
+            break;
+        }
+    }
+
+    if (entry == NULL) {
+        Channel * c = cache_channel();
+        if (c == NULL || is_channel_closed(c)) exception(ERR_UNSUPPORTED);
+        entry = (LineNumbersCacheEntry *)loc_alloc_zero(sizeof(LineNumbersCacheEntry));
+        list_add_first(&entry->link_cache, cache->link_entries + h);
+        entry->magic = LINE_NUMBERS_CACHE_MAGIC;
+        context_lock(entry->ctx = ctx);
+        entry->addr0 = addr0;
+        entry->addr1 = addr1;
+        entry->pending = protocol_send_command(c, "LineNumbers", "mapToSource", validate_cache_entry, entry);
+        json_write_string(&c->out, ctx->id);
+        write_stream(&c->out, 0);
+        json_write_uint64(&c->out, addr0);
+        write_stream(&c->out, 0);
+        json_write_uint64(&c->out, addr1);
+        write_stream(&c->out, 0);
+        write_stream(&c->out, MARKER_EOM);
+        cache_wait(&entry->cache);
+    }
+    else if (entry->pending != NULL) {
+        cache_wait(&entry->cache);
+    }
+    else if (entry->error != NULL) {
+        exception(set_fmt_errno(set_error_report_errno(entry->error),
+            "Text position not found for address 0x%" PRIX64"..0x%" PRIX64, (uint64_t)addr0, (uint64_t)addr1));
+    }
+    else {
+        unsigned i;
+        for (i = 0; i < entry->areas_cnt; i++) {
+            client(entry->areas + i, args);
         }
     }
     clear_trap(&trap);
@@ -270,11 +332,11 @@ static void flush_cache(Context * ctx) {
     for (m = root.next; m != &root; m = m->next) {
         LineNumbersCache * cache = root2cache(m);
         for (i = 0; i < HASH_SIZE; i++) {
-            l = cache->link_addr[i].next;
-            while (l != cache->link_addr + i) {
-                LineAddressCache * c = cache2addr(l);
+            l = cache->link_entries[i].next;
+            while (l != cache->link_entries + i) {
+                LineNumbersCacheEntry * c = cache2entry(l);
                 l = l->next;
-                if (c->ctx == ctx) free_line_address_cache(c);
+                if (c->ctx == ctx) free_cache_entry(c);
             }
         }
     }
