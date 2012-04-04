@@ -95,7 +95,7 @@ extern void add_context_query_comparator(const char * attr_name, ContextQueryCom
 
 /* Parse context query string. Parsing results are stored in an internal buffer and
  * and used by run_context_query() and run_context_query_ext() */
-extern void parse_context_query(const char * query);
+extern int parse_context_query(const char * query);
 
 /* Compare context 'ctx' with parsed context query, return 1 if they match, return 0 othewise. */
 extern int run_context_query(Context * ctx);

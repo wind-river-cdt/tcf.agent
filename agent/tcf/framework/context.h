@@ -170,7 +170,7 @@ struct MemoryRegionAttribute {
 /* Mode flags for context_attach() */
 #define CONTEXT_ATTACH_SELF      0x01 /* The process is forked child - it will attach itself */
 #define CONTEXT_ATTACH_CHILDREN  0x02 /* Enable auto-attaching of children of the process */
-#define CONTEXT_ATTACH_NO_STOP   0x04 /* Don't stop after attch */
+#define CONTEXT_ATTACH_NO_STOP   0x04 /* Don't stop after attach */
 #define CONTEXT_ATTACH_NO_MAIN   0x08 /* Don't stop at main() */
 
 /*

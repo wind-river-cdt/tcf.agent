@@ -64,13 +64,13 @@ static void add_char(char ch) {
 }
 
 /* TODO: parse_context_query() should check for syntax errors and set errno */
-void parse_context_query(const char * q) {
+int parse_context_query(const char * q) {
     str_pos = 0;
     str_buf = NULL;
     attrs = NULL;
     abs_path = 0;
 
-    if (q == NULL) return;
+    if (q == NULL) return 0;
 
     str_max = 64;
     str_buf = (char *)tmp_alloc(str_max);
@@ -131,6 +131,7 @@ void parse_context_query(const char * q) {
         attr->parent = attrs;
         attrs = attr;
     }
+    return 0;
 }
 
 static int match_attribute(Context * ctx, const char * key, const char * val) {
