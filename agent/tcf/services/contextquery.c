@@ -282,7 +282,7 @@ void ini_context_query_service(Protocol * proto) {
 #include <tcf/services/contextquery.h>
 
 void add_context_query_comparator(const char * attr_name, ContextQueryComparator * callback) {}
-void parse_context_query(const char * query) {}
+int parse_context_query(const char * query) { return 0; }
 int run_context_query(Context * ctx) { return 0; }
 int run_context_query_ext(Context * ctx, GetContextParent * get_parent) { return 0; }
 int context_query(Context * ctx, const char * query) { return query == NULL || *query == 0; }
