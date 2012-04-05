@@ -75,7 +75,7 @@ int parse_context_query(const char * q) {
     str_buf = (char *)tmp_alloc(str_max);
     if ((abs_path = *q == '/') != 0) q++;
     if (*q == 0) {
-        set_errno(ERR_OTHER, "Invalid context query syntax");
+        set_errno(ERR_OTHER, "Invalid context query syntax: missing context name, property or wildcard");
         return -1;
     }
     while (*q) {
@@ -89,7 +89,7 @@ int parse_context_query(const char * q) {
                         add_char(*q++);
                     }
                     if ((*q != 0) && (*q != '/')) {
-                        set_errno(ERR_OTHER, "Invalid context query syntax");
+                        set_errno(ERR_OTHER, "Invalid context query syntax: * and ** are the only wildcards available");
                         return -1;
                     }
                 }
@@ -99,7 +99,7 @@ int parse_context_query(const char * q) {
                             (((*q < '0') || (*q > '9')) &&
                              ((*q < 'a') || (*q > 'z')) &&
                              ((*q < 'A') || (*q > 'Z')))) {
-                            set_errno(ERR_OTHER, "Invalid context query syntax");
+                            set_errno(ERR_OTHER, "Invalid context query syntax: unquoted strings must only contain alphanumerical characters or '_'");
                             return -1;
                         }
 
@@ -119,7 +119,7 @@ int parse_context_query(const char * q) {
                                 add_char(*q++);
                             }
                             else {
-                                set_errno(ERR_OTHER, "Invalid context query syntax");
+                                set_errno(ERR_OTHER, "Invalid context query syntax: \" and \\ are the only characters that can be escaped");
                                 return -1;
                             }
                         }
