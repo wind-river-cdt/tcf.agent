@@ -816,7 +816,17 @@ const char * get_user_home(void) {
 }
 
 const char * get_user_name(void) {
-    return getlogin();
+    static const char * login = NULL;
+    if (login == NULL) {
+        login = getlogin();
+        if (login == NULL) {
+            struct passwd * pwd = getpwuid(getuid());
+            if (pwd == NULL) return NULL;
+            login = pwd->pw_name;
+        }
+        login = loc_strdup(login);
+    }
+    return login;
 }
 
 int tkill(pid_t pid, int signal) {
