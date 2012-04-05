@@ -563,13 +563,32 @@ static void next_sy(void) {
                     value = (value * 10) + next_dec();
                 }
                 memset(&text_val, 0, sizeof(text_val));
-                if (text_ch == '.') {
+                if (text_ch == '.' || text_ch == 'e' || text_ch == 'E') {
                     char * end = NULL;
                     double x = strtod(text + pos, &end);
                     text_pos = end - text;
                     next_ch();
                     text_val.type_class = TYPE_CLASS_REAL;
-                    set_fp_value(&text_val, sizeof(double), x);
+                    if (text_ch == 'f' || text_ch == 'F') {
+                        next_ch();
+                        set_fp_value(&text_val, sizeof(float), x);
+                        find_symbol_by_name(expression_context, expression_frame,
+                            expression_addr, "float", &text_val.type);
+                    }
+                    else {
+                        if (text_ch == 'l' || text_ch == 'L') next_ch();
+                        set_fp_value(&text_val, sizeof(double), x);
+                        find_symbol_by_name(expression_context, expression_frame,
+                            expression_addr, "double", &text_val.type);
+                    }
+                    if (text_val.type != NULL) {
+                        int sym_class = 0;
+                        int type_class = 0;
+                        if (get_symbol_class(text_val.type, &sym_class) < 0 || sym_class != SYM_CLASS_TYPE ||
+                            get_symbol_type_class(text_val.type, &type_class) < 0 || type_class != TYPE_CLASS_REAL) {
+                            text_val.type = NULL;
+                        }
+                    }
                 }
                 else {
                     text_val.type_class = TYPE_CLASS_INTEGER;
