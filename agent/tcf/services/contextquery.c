@@ -63,7 +63,6 @@ static void add_char(char ch) {
     str_buf[str_pos++] = ch;
 }
 
-/* TODO: parse_context_query() should check for syntax errors and set errno */
 int parse_context_query(const char * q) {
     str_pos = 0;
     str_buf = NULL;
@@ -75,41 +74,61 @@ int parse_context_query(const char * q) {
     str_max = 64;
     str_buf = (char *)tmp_alloc(str_max);
     if ((abs_path = *q == '/') != 0) q++;
+    if (*q == 0) {
+        set_errno(ERR_OTHER, "Invalid context query syntax");
+        return -1;
+    }
     while (*q) {
         Attribute * attr = (Attribute *)tmp_alloc_zero(sizeof(Attribute));
         for (;;) {
             str_pos = 0;
             while (*q) {
-                if (*q == '/') {
-                    q++;
-                    break;
+                if (*q == '*'){
+                    add_char(*q++);
+                    if (*q == '*'){
+                        add_char(*q++);
+                    }
+                    if ((*q != 0) && (*q != '/')) {
+                        set_errno(ERR_OTHER, "Invalid context query syntax");
+                        return -1;
+                    }
                 }
-                else if (*q == '=' || *q == ',') {
-                    break;
-                }
-                else if (*q == '"') {
+                else if (*q != '"') {
                     while (*q) {
-                        if (*q == '"') {
-                            q++;
+                        if ((*q != '_') &&
+                            (((*q < '0') || (*q > '9')) &&
+                             ((*q < 'a') || (*q > 'z')) &&
+                             ((*q < 'A') || (*q > 'Z')))) {
+                            set_errno(ERR_OTHER, "Invalid context query syntax");
+                            return -1;
+                        }
+
+                        add_char(*q++);
+
+                        if ((*q == '/') || (*q == '=') || (*q == ',')) {
                             break;
                         }
-                        else if (*q == '\\') {
+                    }
+                }
+                else {
+                    q++;
+                    while (*q != '"') {
+                        if (*q == '\\') {
                             q++;
                             if (*q == '\\' || *q == '"') {
                                 add_char(*q++);
                             }
                             else {
-                                add_char('\\');
+                                set_errno(ERR_OTHER, "Invalid context query syntax");
+                                return -1;
                             }
                         }
-                        else {
-                            add_char(*q++);
-                        }
+                        add_char(*q++);
                     }
+                    q++;
                 }
-                else {
-                    add_char(*q++);
-                }
+                if ((*q == '/') ||  (*q == '=') || (*q == ','))
+                    break;
             }
             add_char(0);
             if (*q == ',') {
@@ -125,6 +144,7 @@ int parse_context_query(const char * q) {
             }
             else {
                 attr->value = tmp_strdup(str_buf);
+                if (*q != 0) q++;
                 break;
             }
         }
@@ -211,23 +231,29 @@ int context_query(Context * ctx, const char * query) {
 static void command_query(char * token, Channel * c) {
     LINK * l;
     unsigned cnt = 0;
+    int err      = 0;
     char * query = json_read_alloc_string(&c->inp);
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
+    parse_context_query(query);
+
+    err=errno;
+
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
-    write_errno(&c->out, 0);
+    write_errno(&c->out, err);
     write_stream(&c->out, '[');
 
-    parse_context_query(query);
-    for (l = context_root.next; l != &context_root; l = l->next) {
-        Context * ctx = ctxl2ctxp(l);
-        if (ctx->exited) continue;
-        if (run_context_query(ctx)) {
-            if (cnt > 0) write_stream(&c->out, ',');
-            json_write_string(&c->out, ctx->id);
-            cnt++;
+    if (!err) {
+        for (l = context_root.next; l != &context_root; l = l->next) {
+            Context * ctx = ctxl2ctxp(l);
+            if (ctx->exited) continue;
+            if (run_context_query(ctx)) {
+                if (cnt > 0) write_stream(&c->out, ',');
+                json_write_string(&c->out, ctx->id);
+                cnt++;
+            }
         }
     }
 
