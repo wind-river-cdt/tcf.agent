@@ -109,7 +109,7 @@ extern void delete_path_mapping(PathMapRule * rule);
 /*
  * Translate debug file name to local or target file name using file path mapping table of given channel.
  * If channel = NULL, search all maps until translation is found.
- * Return pointer to static buffer that contains translated file name.
+ * Return pointer to tmp_alloc()-ed buffer that contains translated file name.
  */
 extern char * apply_path_map(Channel * channel, Context * ctx, char * file_name, int mode);
 
