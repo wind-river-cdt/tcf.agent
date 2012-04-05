@@ -229,16 +229,12 @@ int context_query(Context * ctx, const char * query) {
 }
 
 static void command_query(char * token, Channel * c) {
-    LINK * l;
-    unsigned cnt = 0;
-    int err      = 0;
+    int err = 0;
     char * query = json_read_alloc_string(&c->inp);
     if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
 
-    parse_context_query(query);
-
-    err=errno;
+    if (parse_context_query(query) < 0) err = errno;
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -246,6 +242,8 @@ static void command_query(char * token, Channel * c) {
     write_stream(&c->out, '[');
 
     if (!err) {
+        LINK * l;
+        unsigned cnt = 0;
         for (l = context_root.next; l != &context_root; l = l->next) {
             Context * ctx = ctxl2ctxp(l);
             if (ctx->exited) continue;
