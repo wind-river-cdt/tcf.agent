@@ -127,9 +127,11 @@ char * tmp_strdup(const char * s) {
 }
 
 char * tmp_strdup2(const char * s1, const char * s2) {
-    char * rval = (char *)tmp_alloc(strlen(s1) + strlen(s2) + 1);
-    strcpy(rval, s1);
-    strcat(rval, s2);
+    size_t l1 = strlen(s1);
+    size_t l2 = strlen(s2);
+    char * rval = (char *)tmp_alloc(l1 + l2 + 1);
+    memcpy(rval, s1, l1);
+    memcpy(rval + l1, s2, l2 + 1);
     return rval;
 }
 
@@ -192,9 +194,11 @@ char * loc_strdup(const char * s) {
  * strdup2() with concatenation and  end-of-memory checking.
  */
 char * loc_strdup2(const char * s1, const char * s2) {
-    char * rval = (char *)loc_alloc(strlen(s1) + strlen(s2) + 1);
-    strcpy(rval, s1);
-    strcat(rval, s2);
+    size_t l1 = strlen(s1);
+    size_t l2 = strlen(s2);
+    char * rval = (char *)loc_alloc(l1 + l2 + 1);
+    memcpy(rval, s1, l1);
+    memcpy(rval + l1, s2, l2 + 1);
     return rval;
 }
 
