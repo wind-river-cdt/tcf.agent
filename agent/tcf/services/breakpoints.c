@@ -77,9 +77,7 @@ struct BreakpointInfo {
     char * condition;
     char * context_query;
     char ** context_ids;
-    char ** context_ids_prev;
     char ** context_names;
-    char ** context_names_prev;
     char ** stop_group;
     char * file;
     char * client_data;
@@ -906,9 +904,7 @@ static void free_bp(BreakpointInfo * bp) {
     loc_free(bp->type);
     loc_free(bp->location);
     loc_free(bp->context_ids);
-    loc_free(bp->context_ids_prev);
     loc_free(bp->context_names);
-    loc_free(bp->context_names_prev);
     loc_free(bp->context_query);
     loc_free(bp->stop_group);
     loc_free(bp->file);
@@ -1210,8 +1206,8 @@ static int check_context_ids_location(BreakpointInfo * bp, Context * ctx) {
                 l = l->next;
                 if (c->exited) continue;
                 if (c->name == NULL) continue;
-                if (strcmp(c->name, name)) continue;
-                ok = context_get_group(c, CONTEXT_GROUP_BREAKPOINT) == ctx;
+                if (context_get_group(c, CONTEXT_GROUP_BREAKPOINT) != ctx) continue;
+                ok = strcmp(c->name, name) == 0;
             }
         }
         if (!ok) return 0;
@@ -1227,8 +1223,8 @@ static int check_context_ids_location(BreakpointInfo * bp, Context * ctx) {
             Context * c = ctxl2ctxp(l);
             l = l->next;
             if (c->exited) continue;
-            if (!run_context_query(c)) continue;
-            ok = context_get_group(c, CONTEXT_GROUP_BREAKPOINT) == ctx;
+            if (context_get_group(c, CONTEXT_GROUP_BREAKPOINT) != ctx) continue;
+            ok = run_context_query(c);
         }
         if (!ok) return 0;
     }
@@ -1401,44 +1397,15 @@ static void event_replant_breakpoints(void * arg) {
     done_evaluation();
 }
 
-static char ** str_arr_dup(char ** x) {
-    int n = 0;
-    int l = 0;
-    int i = 0;
-    int offs = 0;
-    char ** y = NULL;
-    if (x == NULL) return NULL;
-    while (x[n] != NULL) l += strlen(x[n++]) + 1;
-    offs = sizeof(char *) * (n + 1);
-    l += offs;
-    y = (char **)loc_alloc_zero(l);
-    while (i < n) {
-        y[i] = strcpy((char *)y + offs, x[i]);
-        offs += strlen(x[i++]) + 1;
-    }
-    assert(offs == l);
-    return y;
-}
-
-static int str_arr_equ(char ** x, char ** y) {
-    if (x == y) return 1;
-    if (x == NULL || y == NULL) return 0;
-    while (*x != NULL && *y != NULL) {
-        if (strcmp(*x++, *y++) != 0) return 0;
-    }
-    return *x == *y;
-}
-
 static void replant_breakpoint(BreakpointInfo * bp) {
-    if (bp->instruction_cnt == 0) {
-        if (bp->client_cnt == 0) return;
-        if (list_is_empty(&context_root)) return;
-        if (bp->ctx != NULL && bp->ctx->exited) return;
+    int check_intsructions = 0;
+    if (bp->client_cnt == 0) {
+        check_intsructions = 1;
     }
-    if (bp->ctx != NULL) {
+    else if (bp->ctx != NULL) {
         post_location_evaluation_request(bp->ctx, bp);
     }
-    else if (bp->context_ids && bp->context_ids_prev) {
+    else if (bp->context_ids) {
         char ** ids = bp->context_ids;
         while (*ids != NULL) {
             Context * ctx = id2ctx(*ids++);
@@ -1446,18 +1413,9 @@ static void replant_breakpoint(BreakpointInfo * bp) {
             if (ctx->exited) continue;
             post_location_evaluation_request(ctx, bp);
         }
-        if (!str_arr_equ(bp->context_ids, bp->context_ids_prev)) {
-            ids = bp->context_ids_prev;
-            while (*ids != NULL) {
-                Context * ctx = id2ctx(*ids++);
-                if (ctx == NULL) continue;
-                if (ctx->exited) continue;
-                post_location_evaluation_request(ctx, bp);
-            }
-            bp->context_ids_prev = str_arr_dup(bp->context_ids);
-        }
+        check_intsructions = 1;
     }
-    else if (bp->context_names && bp->context_names_prev) {
+    else if (bp->context_names) {
         char ** names = bp->context_names;
         while (*names != NULL) {
             char * name = *names++;
@@ -1471,22 +1429,18 @@ static void replant_breakpoint(BreakpointInfo * bp) {
                 post_location_evaluation_request(ctx, bp);
             }
         }
-        if (!str_arr_equ(bp->context_names, bp->context_names_prev)) {
-            names = bp->context_names_prev;
-            while (*names != NULL) {
-                char * name = *names++;
-                LINK * l = context_root.next;
-                while (l != &context_root) {
-                    Context * ctx = ctxl2ctxp(l);
-                    l = l->next;
-                    if (ctx->exited) continue;
-                    if (ctx->name == NULL) continue;
-                    if (strcmp(ctx->name, name)) continue;
-                    post_location_evaluation_request(ctx, bp);
-                }
-            }
-            bp->context_names_prev = str_arr_dup(bp->context_names);
+        check_intsructions = 1;
+    }
+    else if (bp->context_query && parse_context_query(bp->context_query) == 0) {
+        LINK * l = context_root.next;
+        while (l != &context_root) {
+            Context * ctx = ctxl2ctxp(l);
+            l = l->next;
+            if (ctx->exited) continue;
+            if (!run_context_query(ctx)) continue;
+            post_location_evaluation_request(ctx, bp);
         }
+        check_intsructions = 1;
     }
     else {
         LINK * l = context_root.next;
@@ -1496,7 +1450,19 @@ static void replant_breakpoint(BreakpointInfo * bp) {
             if (ctx->exited) continue;
             post_location_evaluation_request(ctx, bp);
         }
-        bp->context_ids_prev = str_arr_dup(bp->context_ids);
+    }
+    if (check_intsructions && bp->instruction_cnt > 0) {
+        LINK * l = instructions.next;
+        while (l != &instructions) {
+            int i;
+            BreakInstruction * bi = link_all2bi(l);
+            for (i = 0; i < bi->ref_cnt; i++) {
+                InstructionRef * ref = bi->refs + i;
+                if (ref->bp != bp) continue;
+                post_location_evaluation_request(ref->ctx, bp);
+            }
+            l = l->next;
+        }
     }
 }
 
