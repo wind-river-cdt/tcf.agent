@@ -134,7 +134,7 @@ static const char * help_text[] = {
     "  -P<dir>          set agent plugins directory name",
 #endif
 #if ENABLE_SSL
-    "  -g               generate SSL certificate and exit",
+    "  -c               generate SSL certificate and exit",
 #endif
     NULL
 };
