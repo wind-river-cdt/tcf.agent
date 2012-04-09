@@ -140,7 +140,7 @@ static char * system_strerror(DWORD error_code, HMODULE module) {
     }
     if (msg_len == 0) {
         realloc_msg_buf();
-        msg_len = snprintf(msg_buf, msg_max, "System error code 0x%lx", (unsigned long)error_code);
+        msg_len = snprintf(msg_buf, msg_max, "System error code 0x%08I32x", error_code);
     }
     if (buf != NULL) LocalFree(buf);
     while (msg_len > 0 && msg_buf[msg_len - 1] <= ' ') msg_len--;
@@ -151,12 +151,16 @@ static char * system_strerror(DWORD error_code, HMODULE module) {
 
 int set_win32_errno(DWORD win32_error_code) {
     if (win32_error_code == 0) return errno = 0;
-    if (win32_error_code >= ERR_WINDOWS_CNT) return errno = ERR_OTHER;
+    if (win32_error_code >= ERR_WINDOWS_CNT) {
+        if (!is_dispatch_thread()) return errno = ERR_OTHER;
+        return set_errno(ERR_OTHER, system_strerror(win32_error_code, NULL));
+    }
     return errno = ERR_WINDOWS_MIN + win32_error_code;
 }
 
 int set_nt_status_errno(DWORD status) {
     int error = 0;
+    assert(is_dispatch_thread());
     if (status != 0) {
         HMODULE module = LoadLibrary("NTDLL.DLL");
         char * msg = system_strerror(status, module);

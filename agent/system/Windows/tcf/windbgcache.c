@@ -121,8 +121,8 @@ static void event_module_unloaded(Context * ctx, void * client_data) {
          * No proper fix is found for this issue. */
         if (err != 0x57) {
             int n = set_win32_errno(err);
-            trace(LOG_ALWAYS, "SymUnloadModule64(0x%Ix,0x%I64x) (unload DLL) error: %s",
-                handle, get_context_module_address(ctx), errno_to_str(n));
+            trace(LOG_ALWAYS, "SymUnloadModule64(0x%Ix,0x%I64x) (unload DLL) error: 0x%08I32x %s",
+                handle, get_context_module_address(ctx), err, errno_to_str(n));
         }
     }
 }

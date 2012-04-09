@@ -67,6 +67,7 @@ static void channel_close_listener(Channel * c) {
     while (l != &context_root) {
         Context * ctx = ctxl2ctxp(l);
         l = l->next;
+        if (ctx->exited) continue;
         if (EXT(ctx)->channel == c || (ctx->creator != NULL && EXT(ctx->creator)->channel == c)) {
             terminate_debug_context(ctx);
         }
