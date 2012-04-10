@@ -572,15 +572,14 @@ static void next_sy(void) {
                     if (text_ch == 'f' || text_ch == 'F') {
                         next_ch();
                         set_fp_value(&text_val, sizeof(float), x);
-                        find_symbol_by_name(expression_context, expression_frame,
-                            expression_addr, "float", &text_val.type);
                     }
                     else {
                         if (text_ch == 'l' || text_ch == 'L') next_ch();
                         set_fp_value(&text_val, sizeof(double), x);
-                        find_symbol_by_name(expression_context, expression_frame,
-                            expression_addr, "double", &text_val.type);
                     }
+#if ENABLE_Symbols
+                    find_symbol_by_name(expression_context, expression_frame,
+                        expression_addr, text_val.size == sizeof(float) ? "float" : "double", &text_val.type);
                     if (text_val.type != NULL) {
                         int sym_class = 0;
                         int type_class = 0;
@@ -589,6 +588,7 @@ static void next_sy(void) {
                             text_val.type = NULL;
                         }
                     }
+#endif
                 }
                 else {
                     text_val.type_class = TYPE_CLASS_INTEGER;

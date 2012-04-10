@@ -140,7 +140,7 @@ static char * system_strerror(DWORD error_code, HMODULE module) {
     }
     if (msg_len == 0) {
         realloc_msg_buf();
-        msg_len = snprintf(msg_buf, msg_max, "System error code 0x%08I32x", error_code);
+        msg_len = snprintf(msg_buf, msg_max, "System error code 0x%08x", (unsigned)error_code);
     }
     if (buf != NULL) LocalFree(buf);
     while (msg_len > 0 && msg_buf[msg_len - 1] <= ' ') msg_len--;
