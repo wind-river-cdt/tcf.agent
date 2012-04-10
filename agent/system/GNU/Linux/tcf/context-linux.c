@@ -473,6 +473,10 @@ int context_continue(Context * ctx) {
         Context * prs = ctx->parent;
         assert(ctx->exiting);
         assert(ext->waitpid_posted == 0);
+        if (ext->pid == EXT(prs)->pid && (EXT(prs)->attach_mode & CONTEXT_ATTACH_SELF) != 0) {
+            /* The inferior process was started by the agent, post waitpid to wait until the inferior exits */
+            add_waitpid_process(ext->pid);
+        }
         free_regs(ctx);
         send_context_exited_event(ctx);
         send_process_exited_event(prs);
@@ -1289,9 +1293,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
 
     if (ext->detach_req && !ext->sigstop_posted && !ctx->pending_signals) {
         ext->waitpid_posted = 0;
-        if (ext->pid != EXT(ctx->parent)->pid || (EXT(ctx->parent)->attach_mode & CONTEXT_ATTACH_SELF) == 0) {
-            detach_waitpid_process();
-        }
+        detach_waitpid_process();
     }
 }
 
