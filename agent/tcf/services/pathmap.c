@@ -27,12 +27,11 @@
 #include <tcf/services/pathmap.h>
 
 char * canonic_path_map_file_name(const char * fnm) {
-    static char * buf = NULL;
-    static size_t buf_pos = 0;
-    static size_t buf_max = 0;
+    char * buf = NULL;
+    size_t buf_pos = 0;
+    size_t buf_max = 0;
 
-    buf_pos = 0;
-    if (buf_max == 0) buf = (char *)loc_alloc(buf_max = 0x100);
+    buf = (char *)tmp_alloc(buf_max = 0x100);
     for (;;) {
         char ch = *fnm++;
         if (ch == 0) break;
@@ -62,7 +61,7 @@ char * canonic_path_map_file_name(const char * fnm) {
         }
         if (buf_pos + 1 >= buf_max) {
             buf_max += 0x100;
-            buf = (char *)loc_realloc(buf, buf_max);
+            buf = (char *)tmp_realloc(buf, buf_max);
         }
         buf[buf_pos++] = ch;
     }

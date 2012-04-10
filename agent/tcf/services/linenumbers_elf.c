@@ -60,6 +60,13 @@ static int compare_path(Channel * chnl, Context * ctx, const char * file, const 
     if (file == NULL) return 0;
     if (name == NULL) return 0;
 
+    while (file[0] == '.') {
+        if (file[1] == '.' && file[2] == '/') file += 3;
+        else if (file[1] == '/') file += 2;
+        else break;
+    }
+    i = strlen(file);
+
     if (is_absolute_path(name)) {
         full_name = (char *)name;
     }
@@ -76,19 +83,19 @@ static int compare_path(Channel * chnl, Context * ctx, const char * file, const 
         full_name = (char *)name;
     }
     full_name = canonic_path_map_file_name(full_name);
-#if SERVICE_PathMap
-    if (full_name != buf) strlcpy(buf, full_name, sizeof(buf));
-    full_name = apply_path_map(chnl, ctx, buf, PATH_MAP_TO_CLIENT);
-    if (full_name != buf) full_name = canonic_path_map_file_name(full_name);
-#endif
-    while (file[0] == '.') {
-        if (file[1] == '.' && file[2] == '/') file += 3;
-        else if (file[1] == '/') file += 2;
-        else break;
-    }
-    i = strlen(file);
     j = strlen(full_name);
-    return i <= j && strcmp(file, full_name + j - i) == 0;
+    if (i <= j && strcmp(file, full_name + j - i) == 0) return 1;
+#if SERVICE_PathMap
+    {
+        char * s = apply_path_map(chnl, ctx, full_name, PATH_MAP_TO_CLIENT);
+        if (s != full_name) {
+            full_name = canonic_path_map_file_name(s);
+            j = strlen(full_name);
+            if (i <= j && strcmp(file, full_name + j - i) == 0) return 1;
+        }
+    }
+#endif
+    return 0;
 }
 
 static LineNumbersState * get_next_in_text(CompUnit * unit, unsigned index) {
@@ -237,8 +244,7 @@ int line_to_address(Context * ctx, char * file_name, int line, int column,
         if (file == NULL) err = errno;
         if (err == 0) {
             unsigned h;
-            char fnm[FILE_PATH_SIZE];
-            strlcpy(fnm, canonic_path_map_file_name(file_name), sizeof(fnm));
+            char * fnm = canonic_path_map_file_name(file_name);
             h = calc_file_name_hash(fnm);
             while (file != NULL) {
                 Trap trap;

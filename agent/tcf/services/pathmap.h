@@ -28,7 +28,7 @@
 /*
  * Convert a file name to canonic form that is suitable for file name comparisons.
  * Unlike canonicalize_file_name() or realpath(), the function can be used for remote files.
- * Return pointer to a static array with converted name.
+ * Return pointer to a tmp_alloc()-ed array with converted name.
  */
 extern char * canonic_path_map_file_name(const char * fnm);
 

@@ -30,9 +30,41 @@
 #include <tcf/framework/protocol.h>
 #include <tcf/framework/context.h>
 #include <tcf/framework/exceptions.h>
+#include <tcf/framework/cache.h>
+#include <tcf/services/pathmap.h>
 #include <tcf/services/linenumbers.h>
 #include <system/Windows/tcf/windbgcache.h>
 #include <system/Windows/tcf/context-win32.h>
+
+static int compare_path(Channel * chnl, Context * ctx, const char * file, const char * name) {
+    int i, j;
+    char * full_name = NULL;
+
+    if (file == NULL) return 0;
+    if (name == NULL) return 0;
+
+    while (file[0] == '.') {
+        if (file[1] == '.' && file[2] == '/') file += 3;
+        else if (file[1] == '/') file += 2;
+        else break;
+    }
+    i = strlen(file);
+
+    full_name = canonic_path_map_file_name(name);
+    j = strlen(full_name);
+    if (i <= j && strcmp(file, full_name + j - i) == 0) return 1;
+#if SERVICE_PathMap
+    {
+        char * s = apply_path_map(chnl, ctx, full_name, PATH_MAP_TO_CLIENT);
+        if (s != full_name) {
+            full_name = canonic_path_map_file_name(s);
+            j = strlen(full_name);
+            if (i <= j && strcmp(file, full_name + j - i) == 0) return 1;
+        }
+    }
+#endif
+    return 0;
+}
 
 int line_to_address(Context * ctx, char * file, int line, int column,
                     LineNumbersCallBack * callback, void * user_args) {
@@ -44,12 +76,15 @@ int line_to_address(Context * ctx, char * file, int line, int column,
     if (err == 0 && ctx->parent != NULL) ctx = ctx->parent;
 
     if (err == 0) {
+        CodeArea area;
         LONG offset = 0;
         IMAGEHLP_LINE img_line;
-        CodeArea area;
-        memset(&img_line, 0, sizeof(img_line));
+        Channel * chnl = cache_channel();
+
         memset(&area, 0, sizeof(area));
+        memset(&img_line, 0, sizeof(img_line));
         img_line.SizeOfStruct = sizeof(IMAGEHLP_LINE);
+        file = canonic_path_map_file_name(file);
 
         if (!SymGetLineFromName(get_context_handle(ctx), NULL, file, line, &offset, &img_line)) {
             DWORD win_err = GetLastError();
@@ -60,10 +95,11 @@ int line_to_address(Context * ctx, char * file, int line, int column,
         else {
             IMAGEHLP_LINE img_next;
             memcpy(&img_next, &img_line, sizeof(img_next));
+            img_next.SizeOfStruct = sizeof(IMAGEHLP_LINE);
             if (!SymGetLineNext(get_context_handle(ctx), &img_next)) {
                 err = set_win32_errno(GetLastError());
             }
-            else {
+            else if (compare_path(chnl, ctx, file, img_line.FileName)) {
                 area.file = img_line.FileName;
                 area.start_line = img_line.LineNumber;
                 area.start_address = img_line.Address;
