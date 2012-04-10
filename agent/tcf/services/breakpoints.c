@@ -1807,6 +1807,7 @@ static BreakpointInfo * add_breakpoint(Channel * c, BreakpointAttribute * attrs)
     char id[256];
     BreakpointRef * r = NULL;
     BreakpointInfo * bp = NULL;
+    int ref_added = 0;
     int added = 0;
     int chng = 0;
 
@@ -1831,10 +1832,11 @@ static BreakpointInfo * add_breakpoint(Channel * c, BreakpointAttribute * attrs)
         r->channel = c;
         r->bp = bp;
         bp->client_cnt++;
+        ref_added = 1;
     }
     assert(r->bp == bp);
     assert(!list_is_empty(&bp->link_clients));
-    if (chng || added) replant_breakpoint(bp);
+    if (chng || added || ref_added) replant_breakpoint(bp);
     if (added) send_event_context_added(NULL, bp);
     else if (chng) send_event_context_changed(bp);
     return bp;
@@ -1846,9 +1848,9 @@ static void remove_ref(BreakpointRef * br) {
     list_remove(&br->link_inp);
     list_remove(&br->link_bp);
     loc_free(br);
+    replant_breakpoint(bp);
     if (list_is_empty(&bp->link_clients)) {
         assert(bp->client_cnt == 0);
-        replant_breakpoint(bp);
         if (generation_done == generation_posted) notify_breakpoints_status();
     }
 }
