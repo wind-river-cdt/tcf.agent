@@ -493,6 +493,7 @@ ReplyHandlerInfo * send_redirect_command(Channel * c, const char * peerId, Reply
 
 static void connect_done(Channel * c) {
     assert(c->state == ChannelStateConnected);
+    notify_channel_opened(c);
     if (c->connected) {
         c->connected(c);
     }

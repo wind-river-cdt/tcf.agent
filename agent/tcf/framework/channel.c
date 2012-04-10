@@ -52,6 +52,12 @@ LINK channel_server_root = TCF_LIST_INIT(channel_server_root);
 #define bclink2channel(A) ((Channel *)((char *)(A) - offsetof(Channel, bclink)))
 #define susplink2channel(A) ((Channel *)((char *)(A) - offsetof(Channel, susplink)))
 
+static ChannelCreateListener create_listeners[16];
+static int create_listeners_cnt = 0;
+
+static ChannelOpenListener open_listeners[16];
+static int open_listeners_cnt = 0;
+
 static ChannelCloseListener close_listeners[16];
 static int close_listeners_cnt = 0;
 
@@ -101,9 +107,33 @@ static ssize_t splice_block_all(OutputStream * out, int fd, size_t size, int64_t
     return rd;
 }
 
+void add_channel_create_listener(ChannelCreateListener listener) {
+    assert(create_listeners_cnt < (int)(sizeof(create_listeners) / sizeof(ChannelCreateListener)));
+    create_listeners[create_listeners_cnt++] = listener;
+}
+
+void add_channel_open_listener(ChannelOpenListener listener) {
+    assert(open_listeners_cnt < (int)(sizeof(open_listeners) / sizeof(ChannelOpenListener)));
+    open_listeners[open_listeners_cnt++] = listener;
+}
+
 void add_channel_close_listener(ChannelCloseListener listener) {
     assert(close_listeners_cnt < (int)(sizeof(close_listeners) / sizeof(ChannelCloseListener)));
     close_listeners[close_listeners_cnt++] = listener;
+}
+
+void notify_channel_created(Channel * c) {
+    int i;
+    for (i = 0; i < create_listeners_cnt; i++) {
+        create_listeners[i](c);
+    }
+}
+
+void notify_channel_opened(Channel * c) {
+    int i;
+    for (i = 0; i < open_listeners_cnt; i++) {
+        open_listeners[i](c);
+    }
 }
 
 void notify_channel_closed(Channel * c) {

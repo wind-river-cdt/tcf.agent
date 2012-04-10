@@ -738,6 +738,7 @@ static void start_channel(Channel * channel) {
     assert(is_dispatch_thread());
     assert(c->magic == CHANNEL_MAGIC);
     assert(c->socket >= 0);
+    notify_channel_created(&c->chan);
     if (c->chan.connecting) {
         c->chan.connecting(&c->chan);
     }
@@ -862,6 +863,7 @@ static ChannelTCP * create_channel(int sock, int en_ssl, int server, int unix_do
     c->chan.out.splice_block = tcp_splice_block_stream;
     list_add_last(&c->chan.chanlink, &channel_root);
     c->chan.state = ChannelStateStartWait;
+    c->chan.incoming = server;
     c->chan.start_comm = start_channel;
     c->chan.check_pending = channel_check_pending;
     c->chan.message_count = channel_get_message_count;

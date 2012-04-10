@@ -67,6 +67,7 @@ struct Channel {
     int congestion_level;               /* Congestion level */
     int state;                          /* Current state */
     int disable_zero_copy;              /* Don't send ZeroCopy in Hello message even if we support it */
+    int incoming;                       /* Created by an incoming connect */
 
     /* Populated by channel implementation */
     void (*start_comm)(Channel *);      /* Start communication */
@@ -93,12 +94,42 @@ struct ChannelServer {
 };
 
 /*
+ * Register channel create callback.  
+ * Listener can use the callback to register command and event
+ * handlers.
+ */
+typedef void (*ChannelCreateListener)(Channel *);
+extern void add_channel_create_listener(ChannelCreateListener listener);
+
+/*
+ * Register channel open callback.
+ * Listener can use the callback to inspect the peer_service_list and
+ * send commands.
+ */
+typedef void (*ChannelOpenListener)(Channel *);
+extern void add_channel_open_listener(ChannelOpenListener listener);
+
+/*
  * Register channel close callback.
  * Service implementation can use the callback to deallocate resources
  * after a client disconnects.
  */
 typedef void (*ChannelCloseListener)(Channel *);
 extern void add_channel_close_listener(ChannelCloseListener listener);
+
+/*
+ * Notify listeners about channel being created.
+ * The function is called from channel implementation code,
+ * it is not intended to be called by clients.
+ */
+extern void notify_channel_created(Channel *);
+
+/*
+ * Notify listeners about channel being opened.
+ * The function is called from channel implementation code,
+ * it is not intended to be called by clients.
+ */
+extern void notify_channel_opened(Channel *);
 
 /*
  * Notify listeners about channel being closed.

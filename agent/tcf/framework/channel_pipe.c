@@ -439,6 +439,7 @@ static void start_channel(Channel * channel) {
     assert(c->magic == CHANNEL_MAGIC);
     assert(c->fd_inp >= 0);
     assert(c->fd_out >= 0);
+    notify_channel_created(&c->chan);
     if (c->chan.connecting) {
         c->chan.connecting(&c->chan);
     }
@@ -466,6 +467,7 @@ static ChannelPIPE * create_channel(int fd_inp, int fd_out, ServerInstance * ser
     c->chan.out.splice_block = pipe_splice_block_stream;
     list_add_last(&c->chan.chanlink, &channel_root);
     c->chan.state = ChannelStateStartWait;
+    c->chan.incoming = server ? 1 : 0;
     c->chan.start_comm = start_channel;
     c->chan.check_pending = channel_check_pending;
     c->chan.message_count = channel_get_message_count;
