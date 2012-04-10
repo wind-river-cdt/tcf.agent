@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2010, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -467,7 +467,7 @@ static ChannelPIPE * create_channel(int fd_inp, int fd_out, ServerInstance * ser
     c->chan.out.splice_block = pipe_splice_block_stream;
     list_add_last(&c->chan.chanlink, &channel_root);
     c->chan.state = ChannelStateStartWait;
-    c->chan.incoming = server ? 1 : 0;
+    c->chan.incoming = server != NULL;
     c->chan.start_comm = start_channel;
     c->chan.check_pending = channel_check_pending;
     c->chan.message_count = channel_get_message_count;
@@ -513,7 +513,7 @@ static void channel_pipe_connect_done(void * args) {
         info->callback(info->callback_args, info->error, NULL);
     }
     else {
-        ChannelPIPE * c = create_channel(info->fd_inp, info->fd_out, 0);
+        ChannelPIPE * c = create_channel(info->fd_inp, info->fd_out, NULL);
         set_peer_name(c);
         info->callback(info->callback_args, 0, &c->chan);
     }
