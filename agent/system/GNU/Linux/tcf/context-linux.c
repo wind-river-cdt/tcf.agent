@@ -481,10 +481,12 @@ int context_continue(Context * ctx) {
         send_context_exited_event(ctx);
         send_process_exited_event(prs);
     }
-    else if (ext->detach_req && !ext->sigstop_posted) {
-        assert(ctx->exiting);
+    else {
         assert(ext->waitpid_posted);
-        if (tkill(ext->pid, SIGSTOP) >= 0) ext->sigstop_posted = 1;
+        if (ext->detach_req && !ext->sigstop_posted) {
+            assert(ctx->exiting);
+            if (tkill(ext->pid, SIGSTOP) >= 0) ext->sigstop_posted = 1;
+        }
     }
     return 0;
 }
@@ -1017,6 +1019,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         Context * prs = find_pending_attach(pid);
         if (prs != NULL) {
             assert(prs->ref_count == 0);
+            assert(!EXT(prs)->detach_req);
             ctx = create_context(pid2id(pid, pid));
             EXT(ctx)->pid = pid;
             alloc_regs(ctx);
@@ -1153,7 +1156,11 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             ctx2->sig_dont_pass = ctx->sig_dont_pass;
             (ctx2->creator = ctx)->ref_count++;
             (ctx2->parent = prs2)->ref_count++;
-            if (prs2 != ctx->parent && (EXT(prs2)->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
+            if (EXT(prs2)->detach_req) {
+                ctx2->exiting = 1;
+                EXT(ctx2)->detach_req = 1;
+            }
+            else if (prs2 != ctx->parent && (EXT(prs2)->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
                 ctx2->pending_intercept = 1;
             }
             list_add_last(&ctx2->cldl, &prs2->children);
@@ -1177,6 +1184,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                     Context * ctx2 = create_context(pid2id(child_pid, EXT(prs)->pid));
                     EXT(ctx2)->pid = child_pid;
                     EXT(ctx2)->attach_mode = EXT(prs)->attach_mode;
+                    EXT(ctx2)->detach_req = EXT(prs)->detach_req;
                     EXT(ctx2)->sigstop_posted = 1;
                     EXT(ctx2)->waitpid_posted = 1;
                     alloc_regs(ctx2);
