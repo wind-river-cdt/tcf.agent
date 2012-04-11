@@ -870,9 +870,11 @@ ELF_File * elf_open_memory_region_file(MemoryRegion * r, int * error) {
     }
     if (file == NULL) file = find_open_file_by_name(r->file_name);
     if (file == NULL) file = create_elf_cache(r->file_name);
-    if (r->dev != 0 && file->dev != r->dev) return NULL;
-    if (r->ino != 0 && file->ino != r->ino) return NULL;
-    if (file->error == NULL) return file;
+    if (file->error == NULL) {
+        if (r->dev != 0 && file->dev != r->dev) return NULL;
+        if (r->ino != 0 && file->ino != r->ino) return NULL;
+        return file;
+    }
     if (error != NULL && *error == 0) {
         int no = set_error_report_errno(file->error);
         if (get_error_code(no) != ERR_INV_FORMAT) *error = no;
