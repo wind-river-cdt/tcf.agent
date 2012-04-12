@@ -1588,7 +1588,19 @@ static void compute_reverse_lookup_indices(DWARFCache * Cache, CompUnit * Unit) 
     U4_T i;
     qsort(Unit->mStates, Unit->mStatesCnt, sizeof(LineNumbersState), state_address_comparator);
     Unit->mStatesIndex = (LineNumbersState **)loc_alloc(sizeof(LineNumbersState *) * Unit->mStatesCnt);
-    for (i = 0; i < Unit->mStatesCnt; i++) Unit->mStatesIndex[i] = Unit->mStates + i;
+    for (i = 0; i < Unit->mStatesCnt; i++) {
+        LineNumbersState * s1 = Unit->mStates + i;
+        while (i + 1 < Unit->mStatesCnt) {
+            LineNumbersState * s2 = s1 + 1;
+            if (s1->mFile != s2->mFile ||
+                s1->mLine != s2->mLine || s1->mColumn != s2->mColumn ||
+                s1->mFlags != s2->mFlags || s1->mISA != s2->mISA ||
+                s1->mOpIndex != s2->mOpIndex || s1->mDiscriminator != s2->mDiscriminator) break;
+            memmove(s2, s2 + 1, sizeof(LineNumbersState) * (Unit->mStatesCnt - i - 2));
+            Unit->mStatesCnt--;
+        }
+        Unit->mStatesIndex[i] = s1;
+    }
     qsort(Unit->mStatesIndex, Unit->mStatesCnt, sizeof(LineNumbersState *), state_text_pos_comparator);
     if (Cache->mFileInfoHash == NULL) {
         Cache->mFileInfoHashSize = 251;

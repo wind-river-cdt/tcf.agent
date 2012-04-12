@@ -961,7 +961,7 @@ static void next_pc(void) {
         }
         next_pc = area.end_address;
         if (next_pc > 0) next_pc += test_cnt % 6;
-        else next_pc = pc + 16;
+        else next_pc = pc + 8;
         if (area.start_line > 0) {
             char * elf_file_name = tmp_strdup(area.file);
             if (area.start_address > pc || area.end_address <= pc) {
