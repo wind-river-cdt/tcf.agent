@@ -115,10 +115,7 @@ int parse_context_query(const char * q) {
                     while (*q != '"') {
                         if (*q == '\\') {
                             q++;
-                            if (*q == '\\' || *q == '"') {
-                                add_char(*q++);
-                            }
-                            else {
+                            if (*q != '\\' && *q != '"') {
                                 set_errno(ERR_OTHER, "Invalid context query syntax: \" and \\ are the only characters that can be escaped");
                                 return -1;
                             }
