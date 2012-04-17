@@ -1206,6 +1206,10 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                   ProcessStartParams * params, int * selfattach, ChildProcess ** prs) {
     int err = 0;
     int pid = 0;
+    int p_log[2];
+
+    if (pipe(p_log) < 0) return -1;
+
     if (!params->use_terminal) {
         int p_inp[2];
         int p_out[2];
@@ -1230,27 +1234,27 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
             if (pid < 0) err = errno;
             if (pid == 0) {
                 int fd = -1;
-                int err = 0;
+                int fd_flags = 0;
+
+                if (close(p_log[0]) < 0 && !err) err = errno;
+                if (!err && (fd_flags = fcntl(p_log[1], F_GETFD)) < 0) err = errno;
+                fd_flags |= FD_CLOEXEC;
+                if (!err && fcntl(p_log[1], F_SETFD, fd_flags) < 0) err = errno;
 
                 if (!err && (fd = sysconf(_SC_OPEN_MAX)) < 0) err = errno;
                 if (!err && dup2(p_inp[0], 0) < 0) err = errno;
                 if (!err && dup2(p_out[1], 1) < 0) err = errno;
                 if (!err && dup2(p_err[1], 2) < 0) err = errno;
-                while (!err && fd > 3) close(--fd);
+                while (!err && fd > 3 && fd - 1 != p_log[1]) close(--fd);
                 if (!err && params->attach && context_attach_self() < 0) err = errno;
                 if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
                 if (!err) {
                     execve(exe, args, envp);
                     err = errno;
                 }
-                if (!params->attach) err = 1;
-                else if (err < 1) err = EINVAL;
-                else if (err > 0xff) err = EINVAL;
-                exit(err);
+                write(p_log[1], &err, sizeof(err));
+                exit(1);
             }
-        }
-        if (!err) {
-            if (close(p_inp[0]) < 0 || close(p_out[1]) < 0 || close(p_err[1]) < 0) err = errno;
         }
         if (!err) {
             *prs = (ChildProcess *)loc_alloc_zero(sizeof(ChildProcess));
@@ -1263,6 +1267,12 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
             (*prs)->err_struct = read_process_output(*prs, p_err[0]);
             list_add_first(&(*prs)->link, &prs_list);
         }
+        else {
+            if (p_inp[1] >= 0) close(p_inp[1]);
+            if (p_out[0] >= 0) close(p_out[0]);
+            if (p_err[0] >= 0) close(p_err[0]);
+        }
+        if ((close(p_inp[0]) < 0 || close(p_out[1]) < 0 || close(p_err[1]) < 0) && !err) err = errno;
     }
     else {
         int fd_tty_master = -1;
@@ -1274,12 +1284,19 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         if (fd_tty_master < 0 || grantpt(fd_tty_master) < 0 || unlockpt(fd_tty_master) < 0) err = errno;
         if (!err && (tty_slave_name = ptsname(fd_tty_master)) == NULL) err = EINVAL;
         if (!err && (fd_tty_slave = open(tty_slave_name, O_RDWR | O_NOCTTY)) < 0) err = errno;
+        if (!err && (fd_tty_out = dup(fd_tty_master)) < 0) err = errno;
 
         if (!err) {
             pid = fork();
             if (pid < 0) err = errno;
             if (pid == 0) {
                 int fd = -1;
+                int fd_flags = 0;
+
+                if (close(p_log[0]) < 0 && !err) err = errno;
+                if (!err && (fd_flags = fcntl(p_log[1], F_GETFD)) < 0) err = errno;
+                fd_flags |= FD_CLOEXEC;
+                if (!err && fcntl(p_log[1], F_SETFD, fd_flags) < 0) err = errno;
 
                 if (!err && setsid() < 0) err = errno;;
                 if (!err && (fd = open(tty_slave_name, O_RDWR)) < 0) err = errno;
@@ -1294,20 +1311,17 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                 if (!err && dup2(fd, 1) < 0) err = errno;
                 if (!err && dup2(fd, 2) < 0) err = errno;
                 if (!err && (fd = sysconf(_SC_OPEN_MAX)) < 0) err = errno;
-                while (!err && fd > 3) close(--fd);
+                while (!err && fd > 3 && fd - 1 != p_log[1]) close(--fd);
                 if (!err && params->attach && context_attach_self() < 0) err = errno;
                 if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
                 if (!err) {
                     execve(exe, args, envp);
                     err = errno;
                 }
-                if (!params->attach) err = 1;
-                else if (err < 1) err = EINVAL;
-                else if (err > 0xff) err = EINVAL;
-                exit(err);
+                write(p_log[1], &err, sizeof(err));
+                exit(1);
             }
         }
-        if (!err && (fd_tty_out = dup(fd_tty_master)) < 0) err = errno;
         if (!err) {
             *prs = (ChildProcess *)loc_alloc_zero(sizeof(ChildProcess));
             (*prs)->pid = pid;
@@ -1324,6 +1338,15 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         }
         if (fd_tty_slave >= 0) close(fd_tty_slave);
     }
+
+    if (close(p_log[1]) < 0 && !err) err = errno;
+    if (!err) {
+        int e = 0;
+        int n = read(p_log[0], &e, sizeof(e));
+        if (n < 0) err = errno;
+        else if (n == sizeof(e)) err = e;
+    }
+    if (close(p_log[0]) < 0 && !err) err = errno;
 
     *selfattach = 1;
     if (!err) return 0;
@@ -1357,16 +1380,19 @@ static void init(void) {
 }
 
 int start_process(Channel * c, ProcessStartParams * params, int * selfattach, ChildProcess ** prs) {
-    int res = 0;
+    int err = 0;
     init();
-    res = start_process_imp(c, params->envp, params->dir, params->exe, params->args, params, selfattach, prs);
+    if (start_process_imp(c, params->envp, params->dir, params->exe,
+        params->args, params, selfattach, prs) < 0) err = errno;
     if (*prs != NULL) {
-        if (!params->attach) add_waitpid_process((*prs)->pid);
+        if (!params->attach || err) add_waitpid_process((*prs)->pid);
         strlcpy((*prs)->name, params->exe, sizeof((*prs)->name));
         (*prs)->exit_args = params->exit_args;
         (*prs)->exit_cb = params->exit_cb;
     }
-    return res;
+    if (!err) return 0;
+    errno = err;
+    return -1;
 }
 
 const char * get_process_stream_id(ChildProcess * prs, int stream) {
