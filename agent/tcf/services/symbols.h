@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -88,12 +88,20 @@ typedef void EnumerateSymbolsCallBack(void *, Symbol *);
 
 #if ENABLE_DebugContext
 
-typedef struct LocationInfo {
-    ContextAddress addr;
-    ContextAddress size;
+typedef struct LocationCommands {
     LocationExpressionCommand * cmds;
-    unsigned cmds_cnt;
-    unsigned cmds_max;
+    unsigned cnt;
+    unsigned max;
+} LocationCommands;
+
+typedef struct LocationInfo {
+    ContextAddress code_addr;
+    ContextAddress code_size;
+    unsigned args_cnt;
+    LocationCommands value_cmds;
+    LocationCommands length_cmds;
+    ContextAddress length_size;
+    unsigned length_bits;
 } LocationInfo;
 
 /* Stack tracing command sequence */
@@ -238,6 +246,9 @@ extern int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, 
 /* Get symbol flags, see SYM_FLAG_* */
 extern int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags);
 
+/* Get symbol stack frame */
+extern int get_symbol_frame(const Symbol * sym, Context ** ctx, int * frame);
+
 /* Get a type that represents an array of elements of given base type.
  * If 'length' is zero, returned type represents pointer to given type */
 extern int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr);
@@ -250,7 +261,7 @@ extern int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol **
  */
 extern ContextAddress is_plt_section(Context * ctx, ContextAddress addr);
 
-/* Get object location expression */
+/* Get object location information */
 extern int get_location_info(const Symbol * sym, LocationInfo ** info);
 
 /* Get information about function call injection */

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -43,6 +43,65 @@ static void list_add(Symbol * sym) {
     list_buf[list_cnt++] = sym;
 }
 
+static LocationExpressionState * evaluate_symbol_location(const Symbol * sym, unsigned args_cnt) {
+    Trap trap;
+    Context * ctx = NULL;
+    int frame = STACK_NO_FRAME;
+    LocationInfo * loc_info = NULL;
+    StackFrame * frame_info = NULL;
+    LocationExpressionState * state = NULL;
+
+    if (get_symbol_frame(sym, &ctx, &frame) < 0) return NULL;
+    if (get_location_info(sym, &loc_info) < 0) return NULL;
+    if (loc_info->args_cnt != args_cnt) {
+        set_errno(ERR_OTHER, "Wrong object kind");
+        return NULL;
+    }
+    if (frame != STACK_NO_FRAME && get_frame_info(ctx, frame, &frame_info) < 0) return NULL;
+    if (!set_trap(&trap)) return NULL;
+    state = evaluate_location_expression(ctx, frame_info, loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, NULL, 0);
+    clear_trap(&trap);
+    return state;
+}
+
+int get_symbol_address(const Symbol * sym, ContextAddress * address) {
+    LocationExpressionState * state = evaluate_symbol_location(sym, 0);
+    if (state == NULL) return -1;
+    if (state->stk_pos == 1) {
+        *address = (ContextAddress)state->stk[0];
+        return 0;
+    }
+    set_errno(ERR_OTHER, "Symbol does not have a memory address");
+    return -1;
+}
+
+int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, RegisterDefinition ** reg) {
+    LocationExpressionState * state = evaluate_symbol_location(sym, 0);
+    if (state == NULL) return -1;
+    if (state->pieces_cnt == 1 && state->pieces->reg != NULL && state->pieces->reg->size == state->pieces->size) {
+        if (get_symbol_frame(sym, ctx, frame) < 0) return -1;
+        *reg = state->pieces->reg;
+        return 0;
+    }
+    set_errno(ERR_OTHER, "Symbol is not located in a register");
+    return -1;
+}
+
+int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
+    LocationExpressionState * state = evaluate_symbol_location(sym, 1);
+    if (state == NULL) return -1;
+    if (state->pieces_cnt > 0) {
+        set_errno(ERR_OTHER, "Cannot get member offset: the symbol is a bit field");
+        return -1;
+    }
+    if (state->stk_pos == 1) {
+        *offset = (ContextAddress)state->stk[0];
+        return 0;
+    }
+    set_errno(ERR_OTHER, "Symbol does not have a member offset");
+    return -1;
+}
+
 typedef struct CommandGetContextArgs {
     char token[256];
     char id[256];
@@ -79,6 +138,8 @@ static void command_get_context_cache_client(void * x) {
     SYM_FLAGS flags = 0;
     void * value = NULL;
     size_t value_size = 0;
+    Context * ctx = NULL;
+    int frame = STACK_NO_FRAME;
 
     if (id2symbol(args->id, &sym) < 0) err = errno;
 
@@ -100,8 +161,17 @@ static void command_get_context_cache_client(void * x) {
             has_offset = get_symbol_offset(sym, &offset) == 0;
         }
         if (sym_class == SYM_CLASS_REFERENCE || sym_class == SYM_CLASS_FUNCTION) {
-            has_address = get_symbol_address(sym, &address) == 0;
-            get_symbol_register(sym, &reg_ctx, &reg_frame, &reg);
+            LocationExpressionState * state = evaluate_symbol_location(sym, 0);
+            if (state != NULL) {
+                if (state->stk_pos == 1) {
+                    address = (ContextAddress)state->stk[0];
+                    has_address = 1;
+                }
+                if (state->pieces_cnt == 1 && state->pieces->reg != NULL &&
+                        state->pieces->reg->size == state->pieces->size) {
+                    reg = state->pieces->reg;
+                }
+            }
         }
         if (sym_class == SYM_CLASS_VALUE) {
             get_symbol_value(sym, &value, &value_size, &big_endian);
@@ -111,6 +181,7 @@ static void command_get_context_cache_client(void * x) {
             assert(value == NULL || update_policy == UPDATE_ON_EXE_STATE_CHANGES);
         }
         get_symbol_flags(sym, &flags);
+        get_symbol_frame(sym, &ctx, &frame);
     }
 
     cache_exit();
@@ -248,6 +319,13 @@ static void command_get_context_cache_client(void * x) {
                 json_write_boolean(&c->out, 1);
                 write_stream(&c->out, ',');
             }
+        }
+
+        if (frame != STACK_NO_FRAME) {
+            json_write_string(&c->out, "Frame");
+            write_stream(&c->out, ':');
+            json_write_long(&c->out, frame);
+            write_stream(&c->out, ',');
         }
 
         json_write_string(&c->out, "Class");
@@ -625,24 +703,22 @@ static void command_get_array_type(char * token, Channel * c) {
     cache_enter(command_get_array_type_cache_client, c, &args, sizeof(args));
 }
 
-typedef struct CommandFindFrameInfo {
-    char token[256];
-    char id[256];
-    ContextAddress addr;
-} CommandFindFrameInfo;
-
-static void write_commands(OutputStream * out, Context * ctx, StackFrameRegisterLocation * seq) {
-    if (seq != NULL) {
+static void write_commands(OutputStream * out, Context * ctx, LocationExpressionCommand * cmds, unsigned cnt) {
+    if (cmds != NULL) {
         unsigned i;
         write_stream(out, '[');
-        for (i = 0; i < seq->cmds_cnt; i++) {
-            LocationExpressionCommand * cmd = seq->cmds + i;
+        for (i = 0; i < cnt; i++) {
+            LocationExpressionCommand * cmd = cmds + i;
             if (i > 0) write_stream(out, ',');
             json_write_long(out, cmd->cmd);
             switch (cmd->cmd) {
             case SFT_CMD_NUMBER:
                 write_stream(out, ',');
                 json_write_int64(out, cmd->args.num);
+                break;
+            case SFT_CMD_ARG:
+                write_stream(out, ',');
+                json_write_ulong(out, cmd->args.arg_no);
                 break;
             case SFT_CMD_RD_REG:
             case SFT_CMD_WR_REG:
@@ -694,6 +770,18 @@ static void write_commands(OutputStream * out, Context * ctx, StackFrameRegister
                 json_write_boolean(out, cmd->args.loc.reg_id_scope.big_endian);
                 write_stream(out, '}');
                 break;
+            case SFT_CMD_PIECE:
+                write_stream(out, ',');
+                json_write_ulong(out, cmd->args.piece.bit_offs);
+                write_stream(out, ',');
+                json_write_ulong(out, cmd->args.piece.bit_size);
+                write_stream(out, ',');
+                if (cmd->args.piece.reg == NULL) write_string(out, "null");
+                else json_write_string(out, register2id(ctx, STACK_NO_FRAME, cmd->args.piece.reg));
+                write_stream(out, ',');
+                if (cmd->args.piece.value != NULL) write_string(out, "null");
+                else json_write_binary(out, cmd->args.piece.value, (cmd->args.piece.bit_size + 7) / 8);
+                break;
             }
         }
         write_stream(out, ']');
@@ -702,6 +790,96 @@ static void write_commands(OutputStream * out, Context * ctx, StackFrameRegister
         write_string(out, "null");
     }
 }
+
+typedef struct CommandGetLocationInfo {
+    char token[256];
+    char id[256];
+} CommandGetLocationInfo;
+
+static void command_get_location_info_cache_client(void * x) {
+    CommandGetLocationInfo * args = (CommandGetLocationInfo *)x;
+    Channel * c = cache_channel();
+    LocationInfo * info = NULL;
+    Context * ctx = NULL;
+    int frame = STACK_NO_FRAME;
+    Symbol * sym = NULL;
+    int err = 0;
+
+    if (id2symbol(args->id, &sym) < 0) err = errno;
+    else if (get_location_info(sym, &info) < 0) err = errno;
+    else if (get_symbol_frame(sym, &ctx, &frame) < 0) err = errno;
+
+    cache_exit();
+
+    write_stringz(&c->out, "R");
+    write_stringz(&c->out, args->token);
+    write_errno(&c->out, err);
+
+    if (info == NULL) {
+        write_stringz(&c->out, "null");
+        write_stringz(&c->out, "null");
+    }
+    else {
+        write_stream(&c->out, '{');
+        json_write_string(&c->out, "ValueCmds");
+        write_stream(&c->out, ':');
+        write_commands(&c->out, ctx, info->value_cmds.cmds, info->value_cmds.cnt);
+        if (info->length_cmds.cnt > 0) {
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "LengthCmds");
+            write_stream(&c->out, ':');
+            write_commands(&c->out, ctx, info->length_cmds.cmds, info->length_cmds.cnt);
+            if (info->length_size > 0) {
+                write_stream(&c->out, ',');
+                json_write_string(&c->out, "LengthSize");
+                write_stream(&c->out, ':');
+                json_write_uint64(&c->out, info->length_size);
+            }
+            if (info->length_bits > 0) {
+                write_stream(&c->out, ',');
+                json_write_string(&c->out, "LengthBits");
+                write_stream(&c->out, ':');
+                json_write_ulong(&c->out, info->length_bits);
+            }
+        }
+        if (info->args_cnt) {
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "ArgCnt");
+            write_stream(&c->out, ':');
+            json_write_ulong(&c->out, info->args_cnt);
+        }
+        if (info->code_size) {
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "CodeAddr");
+            write_stream(&c->out, ':');
+            json_write_uint64(&c->out, info->code_addr);
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "CodeSize");
+            write_stream(&c->out, ':');
+            json_write_uint64(&c->out, info->code_size);
+        }
+        write_stream(&c->out, '}');
+        write_stream(&c->out, 0);
+    }
+    write_stream(&c->out, MARKER_EOM);
+}
+
+static void command_get_location_info(char * token, Channel * c) {
+    CommandGetLocationInfo args;
+
+    json_read_string(&c->inp, args.id, sizeof(args.id));
+    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+
+    strlcpy(args.token, token, sizeof(args.token));
+    cache_enter(command_get_location_info_cache_client, c, &args, sizeof(args));
+}
+
+typedef struct CommandFindFrameInfo {
+    char token[256];
+    char id[256];
+    ContextAddress addr;
+} CommandFindFrameInfo;
 
 static void command_find_frame_info_cache_client(void * x) {
     CommandFindFrameInfo * args = (CommandFindFrameInfo *)x;
@@ -725,7 +903,8 @@ static void command_find_frame_info_cache_client(void * x) {
     json_write_uint64(&c->out, info ? info->size : 0);
     write_stream(&c->out, 0);
 
-    write_commands(&c->out, ctx, info ? info->fp : NULL);
+    if (info == NULL || info->fp == NULL) write_string(&c->out, "null");
+    else write_commands(&c->out, ctx, info->fp->cmds, info->fp->cmds_cnt);
     write_stream(&c->out, 0);
 
     if (info != NULL && info->regs != NULL) {
@@ -735,7 +914,8 @@ static void command_find_frame_info_cache_client(void * x) {
             if (i > 0) write_stream(&c->out, ',');
             json_write_string(&c->out, register2id(ctx, STACK_NO_FRAME, info->regs[i]->reg));
             write_stream(&c->out, ':');
-            write_commands(&c->out, ctx, info->regs[i]);
+            if (info->regs[i] == NULL) write_string(&c->out, "null");
+            else write_commands(&c->out, ctx, info->regs[i]->cmds, info->regs[i]->cmds_cnt);
         }
         write_stream(&c->out, '}');
     }
@@ -860,6 +1040,7 @@ void ini_symbols_service(Protocol * proto) {
     add_command_handler(proto, SYMBOLS, "findInScope", command_find_in_scope);
     add_command_handler(proto, SYMBOLS, "list", command_list);
     add_command_handler(proto, SYMBOLS, "getArrayType", command_get_array_type);
+    add_command_handler(proto, SYMBOLS, "getLocationInfo", command_get_location_info);
     add_command_handler(proto, SYMBOLS, "findFrameInfo", command_find_frame_info);
     add_command_handler(proto, SYMBOLS, "getSymFileInfo", command_get_sym_file_info);
 }

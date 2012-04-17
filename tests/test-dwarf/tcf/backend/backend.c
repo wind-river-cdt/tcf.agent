@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2010, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -477,10 +477,11 @@ static void loc_var_func(void * args, Symbol * sym) {
     }
     else {
         Trap trap;
-        assert(loc_info->cmds_cnt > 0);
-        assert(loc_info->size == 0 || (loc_info->addr <= pc && loc_info->addr + loc_info->size > pc));
+        assert(loc_info->value_cmds.cnt > 0);
+        assert(loc_info->code_size == 0 || (loc_info->code_addr <= pc && loc_info->code_addr + loc_info->code_size > pc));
         if (set_trap(&trap)) {
-            LocationExpressionState * state = evaluate_location_expression(elf_ctx, frame_info, loc_info->cmds, loc_info->cmds_cnt, NULL, 0);
+            LocationExpressionState * state = evaluate_location_expression(elf_ctx, frame_info,
+                loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, NULL, 0);
             if (state->stk_pos != 1) str_exception(ERR_OTHER, "invalid location expression stack");
             if (state->stk[0] != addr) str_fmt_exception(ERR_OTHER,
                 "ID 0x%" PRIX64 ": invalid location expression result 0x%" PRIX64 " != 0x%" PRIX64,
@@ -489,6 +490,16 @@ static void loc_var_func(void * args, Symbol * sym) {
         }
         else {
             error("evaluate_location_expression");
+        }
+        if (loc_info->length_cmds.cnt > 0) {
+            if (set_trap(&trap)) {
+                evaluate_location_expression(elf_ctx, frame_info,
+                    loc_info->length_cmds.cmds, loc_info->length_cmds.cnt, NULL, 0);
+                clear_trap(&trap);
+            }
+            else {
+                error("evaluate_location_expression");
+            }
         }
     }
     if (get_symbol_class(sym, &symbol_class) < 0) {

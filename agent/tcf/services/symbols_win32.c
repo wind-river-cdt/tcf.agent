@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -122,7 +122,7 @@ static size_t context_extension_offset = 0;
 
 static char * tmp_buf = NULL;
 static int tmp_buf_size = 0;
-static LocationInfo * location_info = NULL;
+static LocationCommands * location_cmds = NULL;
 
 #define SYMBOL_MAGIC 0x34875234
 
@@ -709,19 +709,6 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     return 0;
 }
 
-int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
-    DWORD dword = 0;
-
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || sym->info) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
-    }
-    if (get_type_info(sym, TI_GET_OFFSET, &dword) < 0) return -1;
-    *offset = dword;
-    return 0;
-}
-
 int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big_endian) {
     static VARIANT data;
     VARTYPE vt;
@@ -775,37 +762,6 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
     return 0;
 }
 
-int get_symbol_address(const Symbol * sym, ContextAddress * addr) {
-    SYMBOL_INFO * info = NULL;
-
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->address != 0) {
-        *addr = sym->address;
-        return 0;
-    }
-    if (sym->base || sym->info) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
-    }
-    if (get_sym_info(sym, sym->index, &info) < 0) return -1;
-
-    if (is_register(info)) {
-        set_errno(ERR_INV_CONTEXT, "Register variable");
-        return -1;
-    }
-
-    *addr = (ContextAddress)info->Address;
-
-    if (is_frame_relative(info)) {
-        StackFrame * frame_info;
-        int frame = sym->frame + STACK_NO_FRAME;
-        if (get_frame_info(sym->ctx, frame, &frame_info) < 0) return -1;
-        *addr += frame_info->fp - sizeof(ContextAddress) * 2;
-    }
-
-    return 0;
-}
-
 static RegisterDefinition * find_register(Context * ctx, const char * name) {
     RegisterDefinition * defs = get_reg_definitions(ctx);
     if (defs == NULL) return NULL;
@@ -814,47 +770,6 @@ static RegisterDefinition * find_register(Context * ctx, const char * name) {
         defs++;
     }
     return NULL;
-}
-
-int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, RegisterDefinition ** reg) {
-    RegisterDefinition * def = NULL;
-    SYMBOL_INFO * info = NULL;
-
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->address != 0 || sym->base || sym->info) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
-    }
-    if (get_sym_info(sym, sym->index, &info) < 0) return -1;
-    if (!is_register(info)) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
-    }
-    /* Register numbers are defined in cvconst.h */
-    if (info->Register < 40) {
-        static const char * reg_names[] = {
-            NULL, "AL", "CL", "DL", "BL", "AH", "CH", "DH", "BH", "AX",
-            "CX", "DX", "BX", "SP", "BP", "SI", "DI", "EAX", "ECX", "EDX",
-            "EBX", "ESP", "EBP", "ESI", "EDI", "ES", "CS", "SS", "DS", "FS",
-            "GS", "IP", "FLAGS", "EIP", "EFLAGS", NULL, NULL, NULL, NULL, NULL,
-        };
-        def = find_register(sym->ctx, reg_names[info->Register]);
-    }
-    else if (info->Register >= 328 && info->Register <= 343) {
-        static const char * reg_names[] = {
-            "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP",
-            "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"
-        };
-        def = find_register(sym->ctx, reg_names[info->Register - 328]);
-    }
-    if (def != NULL) {
-        *ctx = sym->ctx;
-        *frame = sym->frame + STACK_NO_FRAME;
-        *reg = def;
-        return 0;
-    }
-    errno = ERR_INV_CONTEXT;
-    return -1;
 }
 
 int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
@@ -873,6 +788,17 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
     if (tag == SymTagTypedef) *flags |= SYM_FLAG_TYPEDEF;
     if (tag == SymTagEnum) *flags |= SYM_FLAG_ENUM_TYPE;
 
+    return 0;
+}
+
+int get_symbol_frame(const Symbol * sym, Context ** ctx, int * frame) {
+    int n = sym->frame + STACK_NO_FRAME;
+    if (n == STACK_TOP_FRAME) {
+        n = get_top_frame(sym->ctx);
+        if (n < 0) return -1;
+    }
+    *ctx = sym->ctx;
+    *frame = n;
     return 0;
 }
 
@@ -1178,12 +1104,12 @@ ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
 
 static LocationExpressionCommand * add_location_command(int op) {
     LocationExpressionCommand * cmd = NULL;
-    if (location_info->cmds_cnt >= location_info->cmds_max) {
-        location_info->cmds_max += 4;
-        location_info->cmds = (LocationExpressionCommand *)tmp_realloc(location_info->cmds,
-            sizeof(LocationExpressionCommand) * location_info->cmds_max);
+    if (location_cmds->cnt >= location_cmds->max) {
+        location_cmds->max += 4;
+        location_cmds->cmds = (LocationExpressionCommand *)tmp_realloc(location_cmds->cmds,
+            sizeof(LocationExpressionCommand) * location_cmds->max);
     }
-    cmd = location_info->cmds + location_info->cmds_cnt++;
+    cmd = location_cmds->cmds + location_cmds->cnt++;
     memset(cmd, 0, sizeof(LocationExpressionCommand));
     cmd->cmd = op;
     return cmd;
@@ -1194,7 +1120,8 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     SYMBOL_INFO * info = NULL;
 
     assert(sym->magic == SYMBOL_MAGIC);
-    *loc = location_info = (LocationInfo *)tmp_alloc_zero(sizeof(LocationInfo));
+    *loc = (LocationInfo *)tmp_alloc_zero(sizeof(LocationInfo));
+    location_cmds = &(*loc)->value_cmds;
 
     if (sym->address != 0) {
         add_location_command(SFT_CMD_NUMBER)->args.num = sym->address;
@@ -1206,23 +1133,47 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
         return -1;
     }
 
-    if (get_type_info(sym, TI_GET_OFFSET, &dword) == 0) {
-        add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
-        add_location_command(SFT_CMD_NUMBER)->args.num = dword;
-        add_location_command(SFT_CMD_ADD);
-        return 0;
-    }
-
     if (get_sym_info(sym, sym->index, &info) < 0) return -1;
-
-    if (is_register(info)) {
-        set_errno(ERR_INV_CONTEXT, "Register variable");
-        return -1;
-    }
 
     if (is_frame_relative(info)) {
         add_location_command(SFT_CMD_FP);
         add_location_command(SFT_CMD_NUMBER)->args.num = info->Address - sizeof(ContextAddress) * 2;
+        add_location_command(SFT_CMD_ADD);
+        return 0;
+    }
+
+    if (is_register(info)) {
+        RegisterDefinition * def = NULL;
+        /* Register numbers are defined in cvconst.h */
+        if (info->Register < 40) {
+            static const char * reg_names[] = {
+                NULL, "AL", "CL", "DL", "BL", "AH", "CH", "DH", "BH", "AX",
+                "CX", "DX", "BX", "SP", "BP", "SI", "DI", "EAX", "ECX", "EDX",
+                "EBX", "ESP", "EBP", "ESI", "EDI", "ES", "CS", "SS", "DS", "FS",
+                "GS", "IP", "FLAGS", "EIP", "EFLAGS", NULL, NULL, NULL, NULL, NULL,
+            };
+            def = find_register(sym->ctx, reg_names[info->Register]);
+        }
+        else if (info->Register >= 328 && info->Register <= 343) {
+            static const char * reg_names[] = {
+                "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP",
+                "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"
+            };
+            def = find_register(sym->ctx, reg_names[info->Register - 328]);
+        }
+        if (def != NULL) {
+            LocationExpressionCommand * cmd = add_location_command(SFT_CMD_PIECE);
+            cmd->args.piece.reg = def;
+            cmd->args.piece.bit_size = def->size * 8;
+            return 0;
+        }
+        set_errno(ERR_OTHER, "Unknown register index");
+        return -1;
+    }
+
+    if (get_type_info(sym, TI_GET_OFFSET, &dword) == 0) {
+        add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
+        add_location_command(SFT_CMD_NUMBER)->args.num = dword;
         add_location_command(SFT_CMD_ADD);
         return 0;
     }

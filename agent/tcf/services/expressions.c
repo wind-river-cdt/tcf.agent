@@ -711,29 +711,39 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
         }
         break;
     case SYM_CLASS_REFERENCE:
-        if (mode == MODE_NORMAL && get_symbol_address(sym, &v->address) < 0) {
-            int endianness = 0;
-            size_t size = 0;
-            void * value = NULL;
-            int frame = 0;
-            Context * ctx = NULL;
-            RegisterDefinition * reg = NULL;
-            if (get_symbol_value(sym, &value, &size, &endianness) < 0) {
-                error(errno, "Cannot retrieve symbol value");
+        set_value_endianness(v, sym, v->type);
+        if (mode == MODE_NORMAL) {
+            LocationExpressionState * state = NULL;
+            LocationInfo * loc_info = NULL;
+            StackFrame * frame_info = NULL;
+            if (get_location_info(sym, &loc_info) < 0) {
+                error(errno, "Cannot get symbol location information");
             }
-            if (get_symbol_register(sym, &ctx, &frame, &reg) == 0 &&
-                    ctx == expression_context && frame == expression_frame) {
-                v->reg = reg;
+            if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &frame_info) < 0) {
+                error(errno, "Cannot get stack frame info");
             }
-            v->big_endian = endianness;
-            v->size = size;
-            if (value != NULL) {
-                v->value = tmp_alloc(size);
-                memcpy(v->value, value, size);
+            state = evaluate_location_expression(expression_context, frame_info,
+                loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, NULL, 0);
+            if (state->stk_pos == 1) {
+                v->address = (ContextAddress)state->stk[0];
+                v->remote = 1;
+            }
+            else {
+                size_t size = 0;
+                void * value = NULL;
+                read_location_peices(expression_context, frame_info,
+                    state->pieces, state->pieces_cnt, v->big_endian, &value, &size);
+                if (state->pieces_cnt == 1 && state->pieces->reg != NULL && state->pieces->reg->size == state->pieces->size) {
+                    v->reg = state->pieces->reg;
+                }
+                v->size = size;
+                if (value != NULL) {
+                    v->value = tmp_alloc(size);
+                    memcpy(v->value, value, size);
+                }
             }
         }
         else {
-            set_value_endianness(v, sym, v->type);
             v->remote = 1;
         }
         v->sym = sym;
@@ -1382,12 +1392,13 @@ static void evaluate_symbol_address(Symbol * sym, ContextAddress obj_addr, Conte
         args[0] = obj_addr;
         args[1] = index;
         if (get_location_info(sym, &loc_info) < 0) {
-            error(errno, "Cannot get symbol location expression");
+            error(errno, "Cannot get symbol location information");
         }
         if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &frame_info) < 0) {
             error(errno, "Cannot get stack frame info");
         }
-        state = evaluate_location_expression(expression_context, frame_info, loc_info->cmds, loc_info->cmds_cnt, args, 2);
+        state = evaluate_location_expression(expression_context, frame_info,
+            loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, args, 2);
         if (state->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
         *addr = (ContextAddress)state->stk[0];
     }

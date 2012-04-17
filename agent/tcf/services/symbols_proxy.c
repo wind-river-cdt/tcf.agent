@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -33,6 +33,7 @@
 #include <tcf/framework/exceptions.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/symbols.h>
+#include <tcf/services/vm.h>
 #if ENABLE_RCBP_TEST
 #  include <tcf/main/test.h>
 #endif
@@ -49,6 +50,7 @@ typedef struct SymbolsCache {
     LINK link_find_in_scope[HASH_SIZE];
     LINK link_list[HASH_SIZE];
     LINK link_frame[HASH_SIZE];
+    LINK link_location[HASH_SIZE];
     int service_available;
 } SymbolsCache;
 
@@ -74,6 +76,7 @@ typedef struct SymInfoCache {
     int has_length;
     int has_lower_bound;
     int has_upper_bound;
+    int frame;
     SYM_FLAGS flags;
     ContextAddress address;
     ContextAddress size;
@@ -141,6 +144,20 @@ typedef struct StackFrameCache {
     int disposed;
 } StackFrameCache;
 
+typedef struct LocationInfoCache {
+    LINK link_syms;
+    AbstractCache cache;
+    ReplyHandlerInfo * pending;
+    ErrorReport * error;
+    char * sym_id;
+    Context * ctx;
+    uint64_t ip;
+
+    LocationInfo info;
+
+    int disposed;
+} LocationInfoCache;
+
 #define SYM_CACHE_MAGIC 0x38254865
 
 #define root2syms(A) ((SymbolsCache *)((char *)(A) - offsetof(SymbolsCache, link_root)))
@@ -148,6 +165,7 @@ typedef struct StackFrameCache {
 #define syms2find(A) ((FindSymCache *)((char *)(A) - offsetof(FindSymCache, link_syms)))
 #define sym2arr(A)   ((ArraySymCache *)((char *)(A) - offsetof(ArraySymCache, link_sym)))
 #define syms2frame(A)((StackFrameCache *)((char *)(A) - offsetof(StackFrameCache, link_syms)))
+#define syms2location(A)((LocationInfoCache *)((char *)(A) - offsetof(LocationInfoCache, link_syms)))
 
 struct Symbol {
     unsigned magic;
@@ -216,6 +234,7 @@ static SymbolsCache * get_symbols_cache(void) {
             list_init(syms->link_find_in_scope + i);
             list_init(syms->link_list + i);
             list_init(syms->link_frame + i);
+            list_init(syms->link_location + i);
         }
         channel_lock(c);
         for (i = 0; i < c->peer_service_cnt; i++) {
@@ -307,6 +326,29 @@ static void free_stack_frame_cache(StackFrameCache * c) {
     }
 }
 
+static void free_location_commands(LocationCommands * cmds) {
+    unsigned i = 0;
+    while (i < cmds->cnt) {
+        LocationExpressionCommand * cmd = cmds->cmds + i++;
+        if (cmd->cmd == SFT_CMD_LOCATION) loc_free(cmd->args.loc.code_addr);
+    }
+    loc_free(cmds->cmds);
+}
+
+static void free_location_info_cache(LocationInfoCache * c) {
+    list_remove(&c->link_syms);
+    c->disposed = 1;
+    if (c->pending == NULL) {
+        cache_dispose(&c->cache);
+        release_error_report(c->error);
+        context_unlock(c->ctx);
+        loc_free(c->sym_id);
+        free_location_commands(&c->info.value_cmds);
+        free_location_commands(&c->info.length_cmds);
+        loc_free(c);
+    }
+}
+
 static void free_symbols_cache(SymbolsCache * syms) {
     int i;
     for (i = 0; i < HASH_SIZE; i++) {
@@ -363,6 +405,7 @@ static void read_context_data(InputStream * inp, const char * name, void * args)
     else if (strcmp(name, "Flags") == 0) s->flags = json_read_ulong(inp);
     else if (strcmp(name, "Value") == 0) s->value = json_read_alloc_binary(inp, &s->value_size);
     else if (strcmp(name, "BigEndian") == 0) s->big_endian = json_read_boolean(inp);
+    else if (strcmp(name, "Frame") == 0) s->frame = (int)json_read_long(inp);
     else json_skip_object(inp);
 }
 
@@ -819,6 +862,7 @@ int id2symbol(const char * id, Symbol ** sym) {
         s = (SymInfoCache *)loc_alloc_zero(sizeof(SymInfoCache));
         s->magic = SYM_CACHE_MAGIC;
         s->id = loc_strdup(id);
+        s->frame = STACK_NO_FRAME;
         list_add_first(&s->link_syms, syms->link_sym + h);
         list_init(&s->array_syms);
 #if ENABLE_RCBP_TEST
@@ -1012,6 +1056,14 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
     return 0;
 }
 
+int get_symbol_frame(const Symbol * sym, Context ** ctx, int * frame) {
+    SymInfoCache * c = get_sym_info_cache(sym);
+    if (c == NULL) return -1;
+    *ctx = c->update_owner;
+    *frame = c->frame;
+    return 0;
+}
+
 static void validate_children(Channel * c, void * args, int error) {
     Trap trap;
     SymInfoCache * s = (SymInfoCache *)args;
@@ -1139,52 +1191,17 @@ int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
 
 /*************************************************************************************************/
 
-static int location_cmds_cnt = 0;
-static int location_cmds_max = 0;
-static LocationExpressionCommand * location_cmds = NULL;
+static LocationCommands location_cmds = { NULL, 0, 0};
 
 static int trace_regs_cnt = 0;
 static int trace_regs_max = 0;
 static StackFrameRegisterLocation ** trace_regs = NULL;
 
-static int trace_error = 0;
-
-static LocationInfo * location_info = NULL;
+static int id2register_error = 0;
 
 ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
     /* TODO: is_plt_section() in symbols proxy */
     return 0;
-}
-
-static LocationExpressionCommand * add_location_command(int op) {
-    LocationExpressionCommand * cmd = NULL;
-    if (location_info->cmds_cnt >= location_info->cmds_max) {
-        location_info->cmds_max += 4;
-        location_info->cmds = (LocationExpressionCommand *)tmp_realloc(location_info->cmds,
-            sizeof(LocationExpressionCommand) * location_info->cmds_max);
-    }
-    cmd = location_info->cmds + location_info->cmds_cnt++;
-    memset(cmd, 0, sizeof(LocationExpressionCommand));
-    cmd->cmd = op;
-    return cmd;
-}
-
-int get_location_info(const Symbol * sym, LocationInfo ** loc) {
-    SymInfoCache * c = get_sym_info_cache(sym);
-    if (c == NULL) return -1;
-    *loc = location_info = (LocationInfo *)tmp_alloc_zero(sizeof(LocationInfo));
-    if (c->has_address) {
-        add_location_command(SFT_CMD_NUMBER)->args.num = c->address;
-        return 0;
-    }
-    if (c->has_offset) {
-        add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
-        add_location_command(SFT_CMD_NUMBER)->args.num = c->offset;
-        add_location_command(SFT_CMD_ADD);
-        return 0;
-    }
-    set_errno(ERR_OTHER, "No object location info found");
-    return -1;
 }
 
 static void read_dwarf_location_params(InputStream * inp, const char * nm, void * arg) {
@@ -1192,7 +1209,7 @@ static void read_dwarf_location_params(InputStream * inp, const char * nm, void 
     if (strcmp(nm, "Machine") == 0) cmd->args.loc.reg_id_scope.machine = (uint16_t)json_read_long(inp);
     else if (strcmp(nm, "ABI") == 0) cmd->args.loc.reg_id_scope.os_abi = (uint8_t)json_read_long(inp);
     else if (strcmp(nm, "FPABI") == 0) cmd->args.loc.reg_id_scope.fp_abi = (uint8_t)json_read_long(inp);
-    else if (strcmp(nm, "ELF64") == 0) cmd->args.loc.reg_id_scope.elf64 = json_read_boolean(inp);
+    else if (strcmp(nm, "ELF64") == 0) cmd->args.loc.reg_id_scope.elf64 = (uint8_t)json_read_boolean(inp);
     else if (strcmp(nm, "RegIdType") == 0) cmd->args.loc.reg_id_scope.id_type = (uint8_t)json_read_long(inp);
     else if (strcmp(nm, "AddrSize") == 0) cmd->args.loc.addr_size = (size_t)json_read_long(inp);
     else if (strcmp(nm, "BigEndian") == 0) cmd->args.loc.reg_id_scope.big_endian = (uint8_t)json_read_boolean(inp);
@@ -1200,14 +1217,16 @@ static void read_dwarf_location_params(InputStream * inp, const char * nm, void 
 
 static void read_location_command(InputStream * inp, void * args) {
     char id[256];
+    size_t val_size = 0;
     Context * ctx = NULL;
     int frame = STACK_NO_FRAME;
     LocationExpressionCommand * cmd = NULL;
-    if (location_cmds_cnt >= location_cmds_max) {
-        location_cmds_max += 16;
-        location_cmds = (LocationExpressionCommand *)loc_realloc(location_cmds, location_cmds_max * sizeof(LocationExpressionCommand));
+    if (location_cmds.cnt >= location_cmds.max) {
+        location_cmds.max += 16;
+        location_cmds.cmds = (LocationExpressionCommand *)loc_realloc(location_cmds.cmds,
+            location_cmds.max * sizeof(LocationExpressionCommand));
     }
-    cmd = location_cmds + location_cmds_cnt++;
+    cmd = location_cmds.cmds + location_cmds.cnt++;
     memset(cmd, 0, sizeof(*cmd));
     cmd->cmd = json_read_long(inp);
     switch (cmd->cmd) {
@@ -1215,11 +1234,15 @@ static void read_location_command(InputStream * inp, void * args) {
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         cmd->args.num = json_read_int64(inp);
         break;
+    case SFT_CMD_ARG:
+        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        cmd->args.num = (unsigned)json_read_ulong(inp);
+        break;
     case SFT_CMD_RD_REG:
     case SFT_CMD_WR_REG:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         json_read_string(inp, id, sizeof(id));
-        if (id2register(id, &ctx, &frame, &cmd->args.reg) < 0) trace_error = errno;
+        if (id2register(id, &ctx, &frame, &cmd->args.reg) < 0) id2register_error = errno;
         break;
     case SFT_CMD_RD_MEM:
     case SFT_CMD_WR_MEM:
@@ -1233,8 +1256,138 @@ static void read_location_command(InputStream * inp, void * args) {
         cmd->args.loc.code_addr = (uint8_t *)json_read_alloc_binary(inp, &cmd->args.loc.code_size);
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         json_read_struct(inp, read_dwarf_location_params, cmd);
+        cmd->args.loc.func = evaluate_vm_expression;
+        break;
+    case SFT_CMD_PIECE:
+        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        cmd->args.piece.bit_offs = (unsigned)json_read_ulong(inp);
+        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        cmd->args.piece.bit_size = (unsigned)json_read_ulong(inp);
+        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        if (json_read_string(inp, id, sizeof(id))) {
+            if (id2register(id, &ctx, &frame, &cmd->args.piece.reg) < 0) id2register_error = errno;
+        }
+        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        cmd->args.piece.value = json_read_alloc_binary(inp, &val_size);
+        if (cmd->args.piece.value != NULL && val_size < (cmd->args.piece.bit_size + 7) / 8) {
+            exception(ERR_JSON_SYNTAX);
+        }
         break;
     }
+}
+
+static void read_location_command_array(InputStream * inp, LocationCommands * cmds) {
+    location_cmds.cnt = 0;
+    if (json_read_array(inp, read_location_command, NULL)) {
+        cmds->cmds = (LocationExpressionCommand *)loc_alloc(location_cmds.cnt * sizeof(LocationExpressionCommand));
+        memcpy(cmds->cmds, location_cmds.cmds, location_cmds.cnt * sizeof(LocationExpressionCommand));
+        cmds->cnt = cmds->max = location_cmds.cnt;
+    }
+}
+
+static void read_location_attrs(InputStream * inp, const char * name, void * x) {
+    LocationInfoCache * f = (LocationInfoCache *)x;
+    if (strcmp(name, "ArgCnt") == 0) f->info.args_cnt = (unsigned)json_read_ulong(inp);
+    else if (strcmp(name, "CodeAddr") == 0) f->info.code_addr = (ContextAddress)json_read_uint64(inp);
+    else if (strcmp(name, "CodeSize") == 0) f->info.code_size = (ContextAddress)json_read_uint64(inp);
+    else if (strcmp(name, "ValueCmds") == 0) read_location_command_array(inp, &f->info.value_cmds);
+    else if (strcmp(name, "LengthCmds") == 0) read_location_command_array(inp, &f->info.length_cmds);
+    else if (strcmp(name, "LengthSize") == 0) f->info.length_size = (ContextAddress)json_read_uint64(inp);
+    else if (strcmp(name, "LengthBits") == 0) f->info.length_bits = (unsigned)json_read_ulong(inp);
+    else json_skip_object(inp);
+}
+
+static void validate_location_info(Channel * c, void * args, int error) {
+    Trap trap;
+    LocationInfoCache * f = (LocationInfoCache *)args;
+    assert(f->pending != NULL);
+    assert(f->error == NULL);
+    if (set_trap(&trap)) {
+        f->pending = NULL;
+        if (!error) {
+            id2register_error = 0;
+            error = read_errno(&c->inp);
+            json_read_struct(&c->inp, read_location_attrs, f);
+            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            if (!error && id2register_error) error = id2register_error;
+        }
+        clear_trap(&trap);
+    }
+    else {
+        error = trap.error;
+    }
+    f->error = get_error_report(error);
+    cache_notify(&f->cache);
+    if (f->disposed) free_location_info_cache(f);
+}
+
+int get_location_info(const Symbol * sym, LocationInfo ** loc) {
+    Trap trap;
+    unsigned h;
+    LINK * l;
+    SymbolsCache * syms = NULL;
+    LocationInfoCache * f = NULL;
+    SymInfoCache * sym_cache = NULL;
+    Context * ctx = NULL;
+    Context * prs = NULL;
+    uint64_t ip = 0;
+
+    sym_cache = get_sym_info_cache(sym);
+    if (sym_cache == NULL) return -1;
+
+    /* Here we assume that symbol location info is valid for all threads in same memory space */
+    ctx = sym_cache->update_owner;
+    prs = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
+
+    if (!set_trap(&trap)) return -1;
+
+    if (sym_cache->frame != STACK_NO_FRAME) {
+        StackFrame * frame = NULL;
+        if (get_frame_info(ctx, sym_cache->frame, &frame) < 0) exception(errno);
+        if (read_reg_value(frame, get_PC_definition(ctx), &ip) < 0) exception(errno);
+    }
+
+    h = hash_sym_id(sym_cache->id);
+    syms = get_symbols_cache();
+    for (l = syms->link_location[h].next; l != syms->link_location + h; l = l->next) {
+        LocationInfoCache * c = syms2location(l);
+        if (c->ctx == prs && strcmp(sym_cache->id, c->sym_id) == 0) {
+            if (c->pending != NULL) {
+                cache_wait(&c->cache);
+            }
+            else if (c->info.code_size == 0 ||
+                    (c->info.code_addr <= ip && c->info.code_addr + c->info.code_size > ip)) {
+                f = c;
+                break;
+            }
+        }
+    }
+
+    assert(f == NULL || f->pending == NULL);
+
+    if (f == NULL) {
+        Channel * c = get_channel(syms);
+        f = (LocationInfoCache *)loc_alloc_zero(sizeof(LocationInfoCache));
+        list_add_first(&f->link_syms, syms->link_location + h);
+        context_lock(f->ctx = prs);
+        f->ip = ip;
+        f->sym_id = loc_strdup(sym_cache->id);
+        f->pending = protocol_send_command(c, SYMBOLS, "getLocationInfo", validate_location_info, f);
+        json_write_string(&c->out, f->sym_id);
+        write_stream(&c->out, 0);
+        write_stream(&c->out, MARKER_EOM);
+        cache_wait(&f->cache);
+    }
+    else if (f->error != NULL) {
+        exception(set_error_report_errno(f->error));
+    }
+    else {
+        *loc = &f->info;
+    }
+
+    clear_trap(&trap);
+    return 0;
 }
 
 static void read_stack_trace_register(InputStream * inp, const char * id, void * args) {
@@ -1242,20 +1395,20 @@ static void read_stack_trace_register(InputStream * inp, const char * id, void *
         trace_regs_max += 16;
         trace_regs = (StackFrameRegisterLocation **)loc_realloc(trace_regs, trace_regs_max * sizeof(StackFrameRegisterLocation *));
     }
-    location_cmds_cnt = 0;
+    location_cmds.cnt = 0;
     if (json_read_array(inp, read_location_command, NULL)) {
         Context * ctx = NULL;
         int frame = STACK_NO_FRAME;
         StackFrameRegisterLocation * reg = (StackFrameRegisterLocation *)loc_alloc(
-            sizeof(StackFrameRegisterLocation) + (location_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
+            sizeof(StackFrameRegisterLocation) + (location_cmds.cnt - 1) * sizeof(LocationExpressionCommand));
         if (id2register(id, &ctx, &frame, &reg->reg) < 0) {
-            trace_error = errno;
+            id2register_error = errno;
             loc_free(reg);
         }
         else {
-            reg->cmds_cnt = location_cmds_cnt;
-            reg->cmds_max = location_cmds_cnt;
-            memcpy(reg->cmds, location_cmds, location_cmds_cnt * sizeof(LocationExpressionCommand));
+            reg->cmds_cnt = location_cmds.cnt;
+            reg->cmds_max = location_cmds.cnt;
+            memcpy(reg->cmds, location_cmds.cmds, location_cmds.cnt * sizeof(LocationExpressionCommand));
             trace_regs[trace_regs_cnt++] = reg;
         }
     }
@@ -1270,7 +1423,7 @@ static void validate_frame(Channel * c, void * args, int error) {
         f->pending = NULL;
         if (!error) {
             uint64_t addr, size;
-            trace_error = 0;
+            id2register_error = 0;
             error = read_errno(&c->inp);
             addr = json_read_uint64(&c->inp);
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
@@ -1286,13 +1439,14 @@ static void validate_frame(Channel * c, void * args, int error) {
                 f->address = addr;
                 f->size = size;
             }
-            location_cmds_cnt = 0;
+            location_cmds.cnt = 0;
             if (json_read_array(&c->inp, read_location_command, NULL)) {
-                f->fp = (StackFrameRegisterLocation *)loc_alloc(sizeof(StackFrameRegisterLocation) + (location_cmds_cnt - 1) * sizeof(LocationExpressionCommand));
+                f->fp = (StackFrameRegisterLocation *)loc_alloc(sizeof(StackFrameRegisterLocation) +
+                    (location_cmds.cnt - 1) * sizeof(LocationExpressionCommand));
                 f->fp->reg = NULL;
-                f->fp->cmds_cnt = location_cmds_cnt;
-                f->fp->cmds_max = location_cmds_cnt;
-                memcpy(f->fp->cmds, location_cmds, location_cmds_cnt * sizeof(LocationExpressionCommand));
+                f->fp->cmds_cnt = location_cmds.cnt;
+                f->fp->cmds_max = location_cmds.cnt;
+                memcpy(f->fp->cmds, location_cmds.cmds, location_cmds.cnt * sizeof(LocationExpressionCommand));
             }
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             trace_regs_cnt = 0;
@@ -1303,7 +1457,7 @@ static void validate_frame(Channel * c, void * args, int error) {
             }
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
             if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
-            if (!error && trace_error) error = trace_error;
+            if (!error && id2register_error) error = id2register_error;
         }
         clear_trap(&trap);
     }
@@ -1473,6 +1627,12 @@ static void flush_syms(Context * ctx, int mode) {
                     StackFrameCache * c = syms2frame(l);
                     l = l->next;
                     if (c->ctx == prs) free_stack_frame_cache(c);
+                }
+                l = syms->link_location[i].next;
+                while (l != syms->link_location + i) {
+                    LocationInfoCache * c = syms2location(l);
+                    l = l->next;
+                    if (c->ctx == prs) free_location_info_cache(c);
                 }
             }
         }

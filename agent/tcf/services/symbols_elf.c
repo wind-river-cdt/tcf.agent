@@ -251,6 +251,8 @@ static int is_frame_based_object(Symbol * sym) {
         int org_frame = sym_frame;
         ContextAddress org_ip = sym_ip;
 
+        assert(sym->frame == STACK_NO_FRAME);
+
         if (sym->sym_class == SYM_CLASS_REFERENCE) {
             if (sym->obj->mTag == TAG_member || sym->obj->mTag == TAG_inheritance) {
                 if (get_symbol_offset(sym, &addr) < 0) res = 1;
@@ -2380,35 +2382,6 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     return 0;
 }
 
-int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
-    ObjectInfo * obj = sym->obj;
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (is_array_type_pseudo_symbol(sym) ||
-        is_cardinal_type_pseudo_symbol(sym) ||
-        is_constant_pseudo_symbol(sym)) {
-        return err_wrong_obj();
-    }
-    if (unpack(sym) < 0) return -1;
-    if (obj != NULL && (obj->mTag == TAG_member || obj->mTag == TAG_inheritance)) {
-        U8_T v;
-        dwarf_expression_obj_addr = 0;
-        if (get_num_prop(obj, AT_data_member_location, &v)) {
-            *offset = (ContextAddress)v;
-            return 0;
-        }
-        if (get_num_prop(obj, AT_bit_offset, &v)) {
-            set_errno(ERR_OTHER, "Cannot get member offset: the symbol is a bit field");
-            return -1;
-        }
-        if (obj->mFlags & DOIF_declaration) {
-            set_errno(ERR_OTHER, "Cannot get member offset: the symbol is a declaration");
-            return -1;
-        }
-    }
-    set_errno(ERR_OTHER, "Symbol does not have a member offset");
-    return -1;
-}
-
 int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big_endian) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
@@ -2580,7 +2553,7 @@ static int get_elf_symbol_address(const Symbol * sym, ContextAddress * address) 
     return syminfo2address(sym_ctx, &info, address);
 }
 
-static LocationInfo * location_info = NULL;
+static LocationCommands * location_cmds = NULL;
 static LocationExpressionState * location_command_state = NULL;
 
 static void dwarf_location_operation(uint8_t op) {
@@ -2595,38 +2568,51 @@ static int dwarf_location_callback(LocationExpressionState * state) {
 
 static LocationExpressionCommand * add_location_command(int op) {
     LocationExpressionCommand * cmd = NULL;
-    if (location_info->cmds_cnt >= location_info->cmds_max) {
-        location_info->cmds_max += 4;
-        location_info->cmds = (LocationExpressionCommand *)tmp_realloc(location_info->cmds,
-            sizeof(LocationExpressionCommand) * location_info->cmds_max);
+    if (location_cmds->cnt >= location_cmds->max) {
+        location_cmds->max += 4;
+        location_cmds->cmds = (LocationExpressionCommand *)tmp_realloc(location_cmds->cmds,
+            sizeof(LocationExpressionCommand) * location_cmds->max);
     }
-    cmd = location_info->cmds + location_info->cmds_cnt++;
+    cmd = location_cmds->cmds + location_cmds->cnt++;
     memset(cmd, 0, sizeof(LocationExpressionCommand));
     cmd->cmd = op;
     return cmd;
 }
 
-static LocationExpressionCommand * add_dwarf_location_command(PropertyValue * v) {
+static void add_dwarf_location_command(LocationInfo * l, PropertyValue * v) {
     DWARFExpressionInfo info;
     LocationExpressionCommand * cmd = add_location_command(SFT_CMD_LOCATION);
 
     dwarf_find_expression(v, sym_ip, &info);
     dwarf_transform_expression(sym_ctx, sym_ip, &info);
-    location_info->addr = info.code_addr;
-    location_info->size = info.code_size;
+    if (l->code_size == 0) {
+        l->code_addr = info.code_addr;
+        l->code_size = info.code_size;
+    }
+    else {
+        if (l->code_addr < info.code_addr) {
+            assert(l->code_addr + l->code_size > info.code_addr);
+            l->code_size = l->code_addr + l->code_size - info.code_addr;
+            l->code_addr = info.code_addr;
+        }
+        if (l->code_addr + l->code_size > info.code_addr + info.code_size) {
+            assert(l->code_addr < info.code_addr + info.code_size);
+            l->code_size = info.code_addr + info.code_size - l->code_addr;
+        }
+    }
     cmd->args.loc.code_addr = info.expr_addr;
     cmd->args.loc.code_size = info.expr_size;
     cmd->args.loc.reg_id_scope = v->mObject->mCompUnit->mRegIdScope;
     cmd->args.loc.addr_size = v->mObject->mCompUnit->mDesc.mAddressSize;
     cmd->args.loc.func = dwarf_location_callback;
-    return cmd;
 }
 
-int get_location_info(const Symbol * sym, LocationInfo ** info) {
+int get_location_info(const Symbol * sym, LocationInfo ** res) {
     ObjectInfo * obj = sym->obj;
+    LocationInfo * info = *res = (LocationInfo *)tmp_alloc_zero(sizeof(LocationInfo));
 
     assert(sym->magic == SYMBOL_MAGIC);
-    *info = location_info = (LocationInfo *)tmp_alloc_zero(sizeof(LocationInfo));
+    location_cmds = &info->value_cmds;
 
     if (sym->has_address) {
         add_location_command(SFT_CMD_NUMBER)->args.num = sym->address;
@@ -2644,17 +2630,56 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
     if (obj != NULL) {
         Trap trap;
         PropertyValue v;
+
+        if (obj->mType != NULL && obj->mType->mTag == TAG_string_type) {
+            if (set_trap(&trap)) {
+                U8_T n = 0;
+                location_cmds = &info->length_cmds;
+                read_dwarf_object_property(sym_ctx, sym_frame, obj->mType, AT_string_length, &v);
+                add_dwarf_location_command(info, &v);
+                clear_trap(&trap);
+                if (get_num_prop(obj->mType, AT_byte_size, &n)) info->length_size = (ContextAddress)n;
+                else if (get_num_prop(obj->mType, AT_bit_size, &n)) info->length_bits = (unsigned)n;
+            }
+            else if (errno != ERR_SYM_NOT_FOUND) {
+                set_errno(errno, "Cannot read location expression");
+                return -1;
+            }
+        }
+
+        location_cmds = &info->value_cmds;
+        if ((obj->mFlags & DOIF_external) == 0 && sym->var != NULL) {
+            /* The symbol represents a member of a class instance */
+            ContextAddress offs = 0;
+            ObjectInfo * type = get_original_type(sym->var);
+            if (!set_trap(&trap)) {
+                if (errno == ERR_SYM_NOT_FOUND) set_errno(ERR_OTHER, "Location attribute not found");
+                set_errno(errno, "Cannot evaluate location of 'this' pointer");
+                return -1;
+            }
+            if ((type->mTag != TAG_pointer_type && type->mTag != TAG_mod_pointer) || type->mType == NULL) exception(ERR_INV_CONTEXT);
+            read_dwarf_object_property(sym_ctx, sym_frame, sym->var, AT_location, &v);
+            add_dwarf_location_command(info, &v);
+            type = get_original_type(type->mType);
+            /* TODO: bit-fields in 'this' */
+            if (!calc_member_offset(type, obj, &offs)) exception(ERR_INV_CONTEXT);
+            add_location_command(SFT_CMD_NUMBER)->args.num = offs;
+            add_location_command(SFT_CMD_ADD);
+            clear_trap(&trap);
+            return 0;
+        }
         if (obj->mTag == TAG_ptr_to_member_type) {
             if (set_trap(&trap)) {
                 read_dwarf_object_property(sym_ctx, sym_frame, obj, AT_use_location, &v);
                 add_location_command(SFT_CMD_ARG)->args.arg_no = 1;
                 add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
-                add_dwarf_location_command(&v);
+                add_dwarf_location_command(info, &v);
+                info->args_cnt = 2;
                 clear_trap(&trap);
                 return 0;
             }
             else {
-                if (errno != ERR_SYM_NOT_FOUND) set_errno(errno, "Cannot evaluate member location expression");
+                if (errno != ERR_SYM_NOT_FOUND) set_errno(errno, "Cannot read member location expression");
                 else set_errno(ERR_OTHER, "Member location info not avaiable");
                 return -1;
             }
@@ -2677,14 +2702,15 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
                 case FORM_BLOCK4    :
                 case FORM_BLOCK     :
                     add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
-                    add_dwarf_location_command(&v);
+                    add_dwarf_location_command(info, &v);
                     break;
                 }
+                info->args_cnt = 1;
                 clear_trap(&trap);
                 return 0;
             }
             else {
-                if (errno != ERR_SYM_NOT_FOUND) set_errno(errno, "Cannot evaluate member location expression");
+                if (errno != ERR_SYM_NOT_FOUND) set_errno(errno, "Cannot read member location expression");
                 else set_errno(ERR_OTHER, "Member location info not avaiable");
                 return -1;
             }
@@ -2694,12 +2720,12 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
             Symbol * s = NULL;
             if (set_trap(&trap)) {
                 read_dwarf_object_property(sym_ctx, sym_frame, obj, AT_location, &v);
-                add_dwarf_location_command(&v);
+                add_dwarf_location_command(info, &v);
                 clear_trap(&trap);
                 return 0;
             }
             else if (errno != ERR_SYM_NOT_FOUND) {
-                set_errno(errno, "Cannot evaluate location expression");
+                set_errno(errno, "Cannot read location expression");
                 return -1;
             }
             if (get_num_prop(obj, AT_low_pc, &addr)) {
@@ -2707,7 +2733,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
                 return 0;
             }
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) return -1;
-            if (map_to_sym_table(obj, &s)) return get_location_info(s, info);
+            if (map_to_sym_table(obj, &s)) return get_location_info(s, res);
             set_errno(ERR_OTHER, "No object location info found in DWARF data");
             return -1;
         }
@@ -2721,91 +2747,6 @@ int get_location_info(const Symbol * sym, LocationInfo ** info) {
     }
 
     set_errno(ERR_OTHER, "Symbol does not have a memory address");
-    return -1;
-}
-
-int get_symbol_address(const Symbol * sym, ContextAddress * address) {
-    ObjectInfo * obj = sym->obj;
-
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->has_address) {
-        *address = sym->address;
-        return 0;
-    }
-    if (is_array_type_pseudo_symbol(sym) ||
-        is_cardinal_type_pseudo_symbol(sym) ||
-        is_constant_pseudo_symbol(sym)) {
-        return err_wrong_obj();
-    }
-    if (unpack(sym) < 0) return -1;
-    if (obj != NULL && (obj->mFlags & DOIF_external) == 0 && sym->var != NULL) {
-        /* The symbol represents a member of a class instance */
-        Trap trap;
-        PropertyValue v;
-        ContextAddress base = 0;
-        ContextAddress offs = 0;
-        ObjectInfo * type = get_original_type(sym->var);
-        if (!set_trap(&trap)) {
-            if (errno == ERR_SYM_NOT_FOUND) set_errno(ERR_OTHER, "Location attribute not found");
-            set_errno(errno, "Cannot evaluate location of 'this' pointer");
-            return -1;
-        }
-        if ((type->mTag != TAG_pointer_type && type->mTag != TAG_mod_pointer) || type->mType == NULL) exception(ERR_INV_CONTEXT);
-        read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, sym->var, AT_location, &v);
-        base = (ContextAddress)read_cardinal_object_value(&v);
-        type = get_original_type(type->mType);
-        if (!calc_member_offset(type, obj, &offs)) exception(ERR_INV_CONTEXT);
-        clear_trap(&trap);
-        *address = base + offs;
-        return 0;
-    }
-    if (obj != NULL && obj->mTag != TAG_member && obj->mTag != TAG_inheritance) {
-        U8_T v;
-        Symbol * s = NULL;
-        if (get_num_prop(obj, AT_location, &v)) {
-            *address = (ContextAddress)v;
-            return 0;
-        }
-        if (get_error_code(errno) != ERR_SYM_NOT_FOUND) return -1;
-        if (get_num_prop(obj, AT_low_pc, &v)) {
-            *address = (ContextAddress)v;
-            return 0;
-        }
-        if (get_error_code(errno) != ERR_SYM_NOT_FOUND) return -1;
-        if (map_to_sym_table(obj, &s)) return get_symbol_address(s, address);
-        set_errno(ERR_OTHER, "No object location info found in DWARF data");
-        return -1;
-    }
-    if (sym->tbl != NULL) return get_elf_symbol_address(sym, address);
-
-    set_errno(ERR_OTHER, "Symbol does not have a memory address");
-    return -1;
-}
-
-int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, RegisterDefinition ** reg) {
-    ObjectInfo * obj = sym->obj;
-
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (!sym->has_address && obj != NULL && obj->mTag != TAG_member && obj->mTag != TAG_inheritance) {
-        Trap trap;
-        if (unpack(sym) < 0) return -1;
-        if (set_trap(&trap)) {
-            PropertyValue v;
-            read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_location, &v);
-            *ctx = sym_ctx;
-            *frame = sym_frame;
-            if (v.mPieceCnt == 1 && v.mPieces[0].reg != NULL && v.mPieces[0].bit_size == 0) {
-                *reg = v.mPieces[0].reg;
-            }
-            else {
-                *reg = NULL;
-            }
-            clear_trap(&trap);
-            return 0;
-        }
-    }
-
-    set_errno(ERR_OTHER, "Symbol is not located in a register");
     return -1;
 }
 
@@ -2891,6 +2832,17 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
     if (obj != NULL && sym->sym_class == SYM_CLASS_TYPE && !(*flags & (SYM_FLAG_BIG_ENDIAN|SYM_FLAG_LITTLE_ENDIAN))) {
         *flags |= obj->mCompUnit->mFile->big_endian ? SYM_FLAG_BIG_ENDIAN : SYM_FLAG_LITTLE_ENDIAN;
     }
+    return 0;
+}
+
+int get_symbol_frame(const Symbol * sym, Context ** ctx, int * frame) {
+    int n = sym->frame;
+    if (n == STACK_TOP_FRAME) {
+        n = get_top_frame(sym->ctx);
+        if (n < 0) return -1;
+    }
+    *ctx = sym->ctx;
+    *frame = n;
     return 0;
 }
 
