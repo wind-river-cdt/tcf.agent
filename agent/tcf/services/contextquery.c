@@ -94,19 +94,34 @@ int parse_context_query(const char * q) {
                     }
                 }
                 else if (*q != '"') {
-                    while (*q) {
-                        if ((*q != '_') &&
-                            (((*q < '0') || (*q > '9')) &&
-                             ((*q < 'a') || (*q > 'z')) &&
-                             ((*q < 'A') || (*q > 'Z')))) {
-                            set_errno(ERR_OTHER, "Invalid context query syntax: unquoted strings must only contain alphanumerical characters or '_'");
-                            return -1;
+                    if ((*q >= '0') && (*q <= '9')) {
+                        while (*q) {
+                            if ((*q < '0') || (*q > '9')) {
+                                set_errno(ERR_OTHER, "Invalid context query syntax: symbols must begin by a letter: a-z, A-Z or _");
+                                return -1;
+                            }
+
+                            add_char(*q++);
+
+                            if ((*q == '/') || (*q == '=') || (*q == ',')) {
+                                break;
+                            }
                         }
+                    } else {
+                        while (*q) {
+                            if ((*q != '_') &&
+                                (((*q < '0') || (*q > '9')) &&
+                                 ((*q < 'a') || (*q > 'z')) &&
+                                 ((*q < 'A') || (*q > 'Z')))) {
+                                set_errno(ERR_OTHER, "Invalid context query syntax: unquoted strings must only contain alphanumerical characters or '_'");
+                                return -1;
+                            }
 
-                        add_char(*q++);
+                            add_char(*q++);
 
-                        if ((*q == '/') || (*q == '=') || (*q == ',')) {
-                            break;
+                            if ((*q == '/') || (*q == '=') || (*q == ',')) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -142,12 +157,27 @@ int parse_context_query(const char * q) {
             else {
                 attr->value = tmp_strdup(str_buf);
                 if (*q != 0) q++;
+                else {
+                    if (*(q-1) == '=') {
+                        set_errno(ERR_OTHER, "Invalid context query syntax: missing value");
+                        return -1;
+                    }
+                    if (*(q-1) == ',') {
+                        set_errno(ERR_OTHER, "Invalid context query syntax: missing property");
+                        return -1;
+                    }
+                }
                 break;
             }
         }
         attr->parent = attrs;
         attrs = attr;
     }
+    if (*(q-1) == '/') {
+        set_errno(ERR_OTHER, "Invalid context query syntax: missing context name, property or wildcard");
+        return -1;
+    }
+
     return 0;
 }
 
