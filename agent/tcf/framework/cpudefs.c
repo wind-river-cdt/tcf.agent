@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -378,6 +378,35 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
             break;
         case SFT_CMD_FCALL:
             state->sft_cmd = cmd;
+            break;
+        case SFT_CMD_PIECE:
+            {
+                LocationPiece * piece = NULL;
+                if (state->pieces_cnt >= state->pieces_max) {
+                    state->pieces_max += 4;
+                    state->pieces = (LocationPiece *)tmp_realloc(state->pieces, state->pieces_max * sizeof(LocationPiece));
+                }
+                piece = state->pieces + state->pieces_cnt++;
+                memset(piece, 0, sizeof(LocationPiece));
+                if (cmd->args.piece.bit_offs == 0 && cmd->args.piece.bit_size % 8 == 0) {
+                    piece->size = cmd->args.piece.bit_size / 8;
+                }
+                else {
+                    piece->bit_offs = cmd->args.piece.bit_offs;
+                    piece->bit_size = cmd->args.piece.bit_size;
+                }
+                if (cmd->args.piece.reg != NULL || cmd->args.piece.value != NULL) {
+                    piece->reg = cmd->args.piece.reg;
+                    piece->value = cmd->args.piece.value;
+                }
+                else if (state->stk_pos == 0) {
+                    location_expression_error();
+                }
+                else {
+                    state->stk_pos--;
+                    piece->addr = (ContextAddress)state->stk[state->stk_pos];
+                }
+            }
             break;
         default:
             location_expression_error();

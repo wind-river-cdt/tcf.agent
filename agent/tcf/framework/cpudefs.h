@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -105,6 +105,7 @@ typedef struct RegisterIdScope {
 #define SFT_CMD_FCALL          21
 #define SFT_CMD_WR_REG         22
 #define SFT_CMD_WR_MEM         23
+#define SFT_CMD_PIECE          24
 
 #define SFT_CMD_REGISTER        2 /* Deprecated, use SFT_CMD_RD_REG */
 #define SFT_CMD_DEREF           4 /* Deprecated, use SFT_CMD_RD_MEM */
@@ -172,6 +173,12 @@ struct LocationExpressionCommand {
             size_t code_size;
             size_t addr_size;
         } loc;
+        struct {
+            void * value;
+            RegisterDefinition * reg;
+            unsigned bit_offs;
+            unsigned bit_size;
+        } piece;
         unsigned arg_no;
     } args;
 };
@@ -271,7 +278,6 @@ extern int cpu_bp_on_resume(Context * ctx, int * single_step);
 
 /* Chcek breakpoint registers for a context that has stopped */
 extern int cpu_bp_on_suspend(Context * ctx, int * triggered);
-
 
 
 extern void ini_cpudefs(void);
