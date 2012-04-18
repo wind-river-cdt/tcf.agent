@@ -847,6 +847,7 @@ int context_get_memory_map(Context * ctx, MemoryMap * map) {
             case 'x': flags |= MM_FLAG_X; break;
             }
         }
+        if (flags == 0) continue;
 
         if (map->region_cnt > 0) prev = map->regions + (map->region_cnt - 1);
 
