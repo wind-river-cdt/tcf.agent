@@ -1252,7 +1252,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                     execve(exe, args, envp);
                     err = errno;
                 }
-                write(p_log[1], &err, sizeof(err));
+                if (write(p_log[1], &err, sizeof(err)) != sizeof(err)) exit(2);
                 exit(1);
             }
         }
@@ -1318,7 +1318,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                     execve(exe, args, envp);
                     err = errno;
                 }
-                write(p_log[1], &err, sizeof(err));
+                if (write(p_log[1], &err, sizeof(err)) != sizeof(err)) exit(2);
                 exit(1);
             }
         }
