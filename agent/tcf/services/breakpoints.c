@@ -397,7 +397,7 @@ static void flush_instructions(void) {
         l = l->next;
         if (bi->valid) continue;
         while (i < bi->ref_cnt) {
-            if (bi->refs[i].cnt == 0) {
+            if (bi->refs[i].cnt == 0 || bi->refs[i].ctx->exiting) {
                 bi->refs[i].bp->instruction_cnt--;
                 bi->refs[i].bp->status_changed = 1;
                 context_unlock(bi->refs[i].ctx);
