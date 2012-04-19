@@ -423,6 +423,8 @@ struct ELF_File {
     int listed;
     int debug_info_file; /* 1 means this file contains debug info only - no code */
     char * debug_info_file_name;
+
+    int vxworks_got;
 };
 
 struct ELF_SecSymbol {
@@ -609,6 +611,11 @@ extern int elf_find_got_entry(ELF_File * file, const char * name, ContextAddress
  */
 extern int elf_find_plt_dynsym(ELF_Section * plt, unsigned entry,
                                ELF_SymbolInfo * sym_info, ContextAddress * offs);
+
+/*
+ * Get size of PLT enries.
+ */
+extern int elf_get_plt_entry_size(ELF_File * file, unsigned * first_size, unsigned * entry_size);
 
 /*
  * Initialize ELF support module.

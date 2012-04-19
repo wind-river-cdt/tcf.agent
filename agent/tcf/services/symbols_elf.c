@@ -693,24 +693,6 @@ static int find_in_dwarf(const char * name, Symbol ** sym) {
     return 1;
 }
 
-static void create_symbol_names_hash(ELF_Section * tbl) {
-    unsigned i;
-    unsigned sym_size = tbl->file->elf64 ? sizeof(Elf64_Sym) : sizeof(Elf32_Sym);
-    unsigned sym_cnt = (unsigned)(tbl->size / sym_size);
-    tbl->sym_names_hash_size = sym_cnt;
-    tbl->sym_names_hash = (unsigned *)loc_alloc_zero(sym_cnt * sizeof(unsigned));
-    tbl->sym_names_next = (unsigned *)loc_alloc_zero(sym_cnt * sizeof(unsigned));
-    for (i = 0; i < sym_cnt; i++) {
-        ELF_SymbolInfo sym;
-        unpack_elf_symbol_info(tbl, i, &sym);
-        if (sym.bind == STB_GLOBAL && sym.name != NULL && sym.section_index != SHN_UNDEF) {
-            unsigned h = calc_symbol_name_hash(sym.name) % sym_cnt;
-            tbl->sym_names_next[i] = tbl->sym_names_hash[h];
-            tbl->sym_names_hash[h] = i;
-        }
-    }
-}
-
 static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol ** res) {
     unsigned m = 0;
     unsigned h = calc_symbol_name_hash(name);
@@ -719,8 +701,7 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol 
     for (m = 1; m < file->section_cnt; m++) {
         unsigned n;
         ELF_Section * tbl = file->sections + m;
-        if (tbl->sym_count == 0) continue;
-        if (tbl->sym_names_hash == NULL) create_symbol_names_hash(tbl);
+        if (tbl->sym_names_hash == NULL) continue;
         n = tbl->sym_names_hash[h % tbl->sym_names_hash_size];
         while (n) {
             ELF_SymbolInfo sym_info;
@@ -1108,24 +1089,10 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
     }
     if (section->name != NULL && strcmp(section->name, ".plt") == 0) {
         /* Create synthetic symbol for PLT section entry */
-        unsigned first_size = section->entsize;
-        unsigned entry_size = section->entsize;
-        switch (file->machine) {
-        case EM_386:
-        case EM_X86_64:
-            if (entry_size > 0) break;
-            first_size = 16;
-            entry_size = 16;
-            break;
-        case EM_PPC:
-            first_size = 72;
-            break;
-        case EM_ARM:
-            first_size = 20;
-            entry_size = 12;
-            break;
-        }
-        if (lt_addr >= section->addr + first_size && entry_size > 0) {
+        unsigned first_size = 0;
+        unsigned entry_size = 0;
+        if (elf_get_plt_entry_size(file, &first_size, &entry_size) == 0 &&
+                lt_addr >= section->addr + first_size && entry_size > 0) {
             Symbol * sym = alloc_symbol();
             sym->sym_class = SYM_CLASS_FUNCTION;
             sym->frame = STACK_NO_FRAME;

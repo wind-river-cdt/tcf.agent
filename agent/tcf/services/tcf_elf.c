@@ -410,6 +410,8 @@ static int is_debug_info_file(ELF_File * file) {
     return 0;
 }
 
+static void create_symbol_names_hash(ELF_Section * tbl);
+
 static ELF_File * create_elf_cache(const char * file_name) {
     struct stat st;
     int error = 0;
@@ -725,6 +727,14 @@ static ELF_File * create_elf_cache(const char * file_name) {
         }
 
         if (dynsym_section != NULL && symtab_found) dynsym_section->sym_count = 0;
+    }
+    if (error == 0) {
+        unsigned m = 0;
+        for (m = 1; m < file->section_cnt; m++) {
+            ELF_Section * tbl = file->sections + m;
+            if (tbl->sym_count == 0) continue;
+            create_symbol_names_hash(tbl);
+        }
     }
     file->debug_info_file = is_debug_info_file(file);
     if (error == 0 && !file->debug_info_file) {
@@ -1381,6 +1391,30 @@ void unpack_elf_symbol_info(ELF_Section * sym_sec, U4_T index, ELF_SymbolInfo * 
     }
 }
 
+static void create_symbol_names_hash(ELF_Section * tbl) {
+    unsigned i;
+    unsigned sym_size = tbl->file->elf64 ? sizeof(Elf64_Sym) : sizeof(Elf32_Sym);
+    unsigned sym_cnt = (unsigned)(tbl->size / sym_size);
+    tbl->sym_names_hash_size = sym_cnt;
+    tbl->sym_names_hash = (unsigned *)loc_alloc_zero(sym_cnt * sizeof(unsigned));
+    tbl->sym_names_next = (unsigned *)loc_alloc_zero(sym_cnt * sizeof(unsigned));
+    for (i = 0; i < sym_cnt; i++) {
+        ELF_SymbolInfo sym;
+        unpack_elf_symbol_info(tbl, i, &sym);
+        if (sym.bind == STB_GLOBAL && sym.name != NULL) {
+            if (sym.name[0] == '_' && sym.name[1] == '_') {
+                if (strcmp(sym.name, "__GOTT_BASE__") == 0) tbl->file->vxworks_got = 1;
+                else if (strcmp(sym.name, "__GOTT_INDEX__") == 0) tbl->file->vxworks_got = 1;
+            }
+            if (sym.section_index != SHN_UNDEF) {
+                unsigned h = calc_symbol_name_hash(sym.name) % sym_cnt;
+                tbl->sym_names_next[i] = tbl->sym_names_hash[h];
+                tbl->sym_names_hash[h] = i;
+            }
+        }
+    }
+}
+
 static int section_symbol_comparator(const void * x, const void * y) {
     ELF_SecSymbol * rx = (ELF_SecSymbol *)x;
     ELF_SecSymbol * ry = (ELF_SecSymbol *)y;
@@ -1552,35 +1586,54 @@ int elf_find_plt_dynsym(ELF_Section * plt, unsigned entry, ELF_SymbolInfo * sym_
     Trap trap;
     unsigned idx;
     ELF_File * file = plt->file;
+
     if (!set_trap(&trap)) return -1;
     for (idx = 1; idx < file->section_cnt; idx++) {
         U4_T sym_index = 0;
         U8_T sym_offset = 0;
         ELF_Section * sec = file->sections + idx;
-        if (sec->type != SHT_RELA) continue;
+        if (sec->name == NULL || sec->entsize == 0) continue;
+        if (sec->type != SHT_REL && sec->type != SHT_RELA) continue;
         if (sec->link == 0 || sec->link >= file->section_cnt) continue;
         if ((file->sections + sec->link)->type != SHT_DYNSYM) continue;
-        if (sec->name == NULL) continue;
-        if (strcmp(sec->name, ".rela.plt") != 0) continue;
+        if (strcmp(sec->name, ".rel.plt") != 0 && strcmp(sec->name, ".rela.plt") != 0) continue;
         if (entry >= sec->size / sec->entsize) break;
         if (elf_load(sec) < 0) exception(errno);
-        if (!file->elf64) {
-            Elf32_Rela bf = *(Elf32_Rela *)((U1_T *)sec->data + entry * sec->entsize);
-            if (file->byte_swap) {
-                SWAP(bf.r_addend);
-                SWAP(bf.r_info);
+        if (sec->type == SHT_REL) {
+            if (!file->elf64) {
+                Elf32_Rel bf = *(Elf32_Rel *)((U1_T *)sec->data + entry * sec->entsize);
+                if (file->byte_swap) {
+                    SWAP(bf.r_info);
+                }
+                sym_index = ELF32_R_SYM(bf.r_info);
             }
-            sym_index = ELF32_R_SYM(bf.r_info);
-            sym_offset = bf.r_addend;
+            else {
+                Elf64_Rel bf = *(Elf64_Rel *)((U1_T *)sec->data + entry * sec->entsize);
+                if (file->byte_swap) {
+                    SWAP(bf.r_info);
+                }
+                sym_index = ELF64_R_SYM(bf.r_info);
+            }
         }
         else {
-            Elf64_Rela bf = *(Elf64_Rela *)((U1_T *)sec->data + entry * sec->entsize);
-            if (file->byte_swap) {
-                SWAP(bf.r_addend);
-                SWAP(bf.r_info);
+            if (!file->elf64) {
+                Elf32_Rela bf = *(Elf32_Rela *)((U1_T *)sec->data + entry * sec->entsize);
+                if (file->byte_swap) {
+                    SWAP(bf.r_addend);
+                    SWAP(bf.r_info);
+                }
+                sym_index = ELF32_R_SYM(bf.r_info);
+                sym_offset = bf.r_addend;
             }
-            sym_index = ELF64_R_SYM(bf.r_info);
-            sym_offset = bf.r_addend;
+            else {
+                Elf64_Rela bf = *(Elf64_Rela *)((U1_T *)sec->data + entry * sec->entsize);
+                if (file->byte_swap) {
+                    SWAP(bf.r_addend);
+                    SWAP(bf.r_info);
+                }
+                sym_index = ELF64_R_SYM(bf.r_info);
+                sym_offset = bf.r_addend;
+            }
         }
         *offs = (ContextAddress)sym_offset;
         unpack_elf_symbol_info(file->sections + sec->link, sym_index, sym_info);
@@ -1590,6 +1643,40 @@ int elf_find_plt_dynsym(ELF_Section * plt, unsigned entry, ELF_SymbolInfo * sym_
     clear_trap(&trap);
     memset(sym_info, 0, sizeof(ELF_SymbolInfo));
     return 0;
+}
+
+int elf_get_plt_entry_size(ELF_File * file, unsigned * first_size, unsigned * entry_size) {
+    switch (file->machine) {
+    case EM_386:
+    case EM_X86_64:
+        *first_size = 16;
+        *entry_size = 16;
+        return 0;
+    case EM_PPC:
+        if (file->vxworks_got) {
+            *first_size = 32;
+            *entry_size = 32;
+            return 0;
+        }
+        *first_size = 72;
+        *entry_size = 12;
+        return 0;
+    case EM_ARM:
+        *first_size = 20;
+        *entry_size = 12;
+        return 0;
+    case EM_MIPS:
+        if (file->vxworks_got) {
+            *first_size = 24;
+            *entry_size = 8;
+            return 0;
+        }
+        *first_size = 32;
+        *entry_size = 16;
+        return 0;
+    }
+    errno = set_errno(ERR_OTHER, "Unknown PLT entry size");
+    return -1;
 }
 
 void ini_elf(void) {
