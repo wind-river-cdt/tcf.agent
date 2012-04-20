@@ -738,6 +738,7 @@ int cpu_bp_plant(ContextBreakpoint * bp) {
                 if (bps->hw_bps[i] == NULL) {
                     bps->hw_bps[i] = bp;
                     bps->hw_idx[i] = m++;
+                    bp->id = i;
                 }
             }
             if (m == n) {

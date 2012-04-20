@@ -505,6 +505,16 @@ extern int context_get_breakpoint_capabilities(Context * ctx, const char *** nam
 #endif
 
 /*
+ * Get extended breakpoint status properties.
+ * 'values' are JSON objects.
+ * Return -1 and set errno if cannot access the status.
+ * Return 0 on success.
+ */
+#if ENABLE_ExtendedBreakpointStatus
+extern int context_get_breakpoint_status(ContextBreakpoint * bp, const char *** names, const char *** values, int * cnt);
+#endif
+
+/*
  * Functions that notify listeners of various context event.
  * They are not supposed to be called by clients.
  */

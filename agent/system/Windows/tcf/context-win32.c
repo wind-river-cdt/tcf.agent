@@ -1301,6 +1301,21 @@ int context_get_breakpoint_capabilities(Context * ctx, const char *** names, con
 }
 #endif
 
+#if ENABLE_ExtendedBreakpointStatus
+int context_get_breakpoint_status(ContextBreakpoint * bp, const char *** names, const char *** values, int * cnt) {
+    static const char * n[1];
+    static const char * v[1];
+    char * tmp = (char *)tmp_alloc(32);
+    snprintf(tmp, 32, "\"dr%u\"", bp->id);
+    n[0] = "Register";
+    v[0] = tmp;
+    *names = n;
+    *values = v;
+    *cnt = 1;
+    return 0;
+}
+#endif
+
 HANDLE get_context_handle(Context * ctx) {
     ContextExtensionWin32 * ext = EXT(ctx);
     return ext->handle;

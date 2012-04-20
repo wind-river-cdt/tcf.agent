@@ -604,6 +604,27 @@ static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
                         json_write_string(out, "BreakpointType");
                         write_stream(out, ':');
                         json_write_string(out, bi->saved_size ? "Software" : "Hardware");
+#if ENABLE_ExtendedBreakpointStatus
+                        if (bi->saved_size == 0) {
+                            /* Back-end context breakpoint status */
+                            int cnt = 0;
+                            const char ** names = NULL;
+                            const char ** values = NULL;
+                            if (context_get_breakpoint_status(&bi->cb, &names, &values, &cnt) == 0) {
+                                while (cnt > 0) {
+                                    if (*values != NULL) {
+                                        write_stream(out, ',');
+                                        json_write_string(out, *names);
+                                        write_stream(out, ':');
+                                        write_string(out, *values);
+                                    }
+                                    names++;
+                                    values++;
+                                    cnt--;
+                                }
+                            }
+                        }
+#endif
                     }
                 }
                 write_stream(out, '}');

@@ -254,6 +254,10 @@
 #  define ENABLE_ContextBreakpointCapabilities (TARGET_WINDOWS && ENABLE_DebugContext && !ENABLE_ContextProxy)
 #endif
 
+#if !defined(ENABLE_ExtendedBreakpointStatus)
+#  define ENABLE_ExtendedBreakpointStatus (TARGET_WINDOWS && ENABLE_DebugContext && !ENABLE_ContextProxy)
+#endif
+
 #if !defined(ENABLE_ExtendedMemoryErrorReports)
 #  define ENABLE_ExtendedMemoryErrorReports 1
 #endif
