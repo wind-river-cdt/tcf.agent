@@ -50,6 +50,7 @@ static LocationExpressionState * evaluate_symbol_location(const Symbol * sym, un
     LocationInfo * loc_info = NULL;
     StackFrame * frame_info = NULL;
     LocationExpressionState * state = NULL;
+    static uint64_t args[] = { 0, 0 };
 
     if (get_symbol_frame(sym, &ctx, &frame) < 0) return NULL;
     if (get_location_info(sym, &loc_info) < 0) return NULL;
@@ -59,7 +60,8 @@ static LocationExpressionState * evaluate_symbol_location(const Symbol * sym, un
     }
     if (frame != STACK_NO_FRAME && get_frame_info(ctx, frame, &frame_info) < 0) return NULL;
     if (!set_trap(&trap)) return NULL;
-    state = evaluate_location_expression(ctx, frame_info, loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, NULL, 0);
+    state = evaluate_location_expression(ctx, frame_info,
+        loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, args, args_cnt);
     clear_trap(&trap);
     return state;
 }
