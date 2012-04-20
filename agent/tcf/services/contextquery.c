@@ -69,15 +69,11 @@ int parse_context_query(const char * q) {
     attrs = NULL;
     abs_path = 0;
 
-    if (q == NULL) return 0;
+    if ((q == NULL) || (*q == 0)) return 0;
 
     str_max = 64;
     str_buf = (char *)tmp_alloc(str_max);
     if ((abs_path = *q == '/') != 0) q++;
-    if (*q == 0) {
-        set_errno(ERR_OTHER, "Invalid context query syntax: missing context name, property or wildcard");
-        return -1;
-    }
     while (*q) {
         Attribute * attr = (Attribute *)tmp_alloc_zero(sizeof(Attribute));
         for (;;) {
