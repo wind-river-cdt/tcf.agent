@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2011, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -616,6 +616,44 @@ static void evaluate_expression(void) {
                     p[i] = p[j];
                     p[j] = x;
                 }
+            }
+            break;
+        case OP_TCF_offset:
+            if (reg_def != NULL || value_addr != NULL) add_piece();
+            if (state->pieces) {
+                unsigned cnt = 0;
+                uint32_t bit_offs = 0;
+                uint32_t offs = read_u4leb128();
+                LocationPiece * pieces = state->pieces;
+                unsigned pieces_cnt = state->pieces_cnt;
+                state->pieces = NULL;
+                state->pieces_cnt = state->pieces_max = 0;
+                while (cnt < pieces_cnt) {
+                    LocationPiece * org_piece = pieces + cnt++;
+                    if (org_piece->bit_size == 0) org_piece->bit_size = org_piece->size * 8;
+                    if (bit_offs + org_piece->bit_size > offs * 8) {
+                        LocationPiece * piece = NULL;
+                        if (state->pieces_cnt >= state->pieces_max) {
+                            state->pieces_max += 4;
+                            state->pieces = (LocationPiece *)tmp_realloc(state->pieces, state->pieces_max * sizeof(LocationPiece));
+                        }
+                        piece = state->pieces + state->pieces_cnt++;
+                        *piece = *org_piece;
+                        if (bit_offs < offs * 8) {
+                            piece->bit_offs += offs * 8 - bit_offs;
+                            piece->bit_size -= offs * 8 - bit_offs;
+                        }
+                        if (piece->bit_offs == 0 && piece->bit_size % 8 == 0) {
+                            piece->size = piece->bit_size / 8;
+                            piece->bit_size = 0;
+                        }
+                    }
+                    bit_offs += org_piece->bit_size;
+                }
+            }
+            else {
+                check_e_stack(1);
+                state->stk[state->stk_pos - 1] += read_u8leb128();
             }
             break;
         case OP_call2:
