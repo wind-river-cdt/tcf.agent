@@ -855,6 +855,16 @@ static void skip_object(InputStream * inp) {
         }
         return;
     }
+    if (ch == '(') {
+        unsigned long size = json_read_ulong(inp);
+        ch = skip_char(inp);
+        if (ch != ')') exception(ERR_JSON_SYNTAX);
+        while (size) {
+            skip_char(inp);
+            size--;
+        }
+        return;
+    }
     exception(ERR_JSON_SYNTAX);
 }
 
