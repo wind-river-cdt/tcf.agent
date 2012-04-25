@@ -694,24 +694,7 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
     }
     switch (sym_class) {
     case SYM_CLASS_VALUE:
-        {
-            int endianness = 0;
-            size_t size = 0;
-            void * value = NULL;
-            if (get_symbol_value(sym, &value, &size, &endianness) < 0) {
-                error(errno, "Cannot retrieve symbol value");
-            }
-            v->big_endian = endianness;
-            v->constant = 1;
-            v->size = size;
-            if (value != NULL) {
-                v->value = tmp_alloc(size);
-                memcpy(v->value, value, size);
-            }
-        }
-        break;
     case SYM_CLASS_REFERENCE:
-        set_value_endianness(v, sym, v->type);
         if (mode == MODE_NORMAL) {
             LocationExpressionState * state = NULL;
             LocationInfo * loc_info = NULL;
@@ -732,20 +715,19 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
                 size_t size = 0;
                 void * value = NULL;
                 read_location_peices(expression_context, frame_info,
-                    state->pieces, state->pieces_cnt, v->big_endian, &value, &size);
+                    state->pieces, state->pieces_cnt, loc_info->big_endian, &value, &size);
                 if (state->pieces_cnt == 1 && state->pieces->reg != NULL && state->pieces->reg->size == state->pieces->size) {
                     v->reg = state->pieces->reg;
                 }
                 v->size = size;
-                if (value != NULL) {
-                    v->value = tmp_alloc(size);
-                    memcpy(v->value, value, size);
-                }
+                v->value = value;
             }
+            v->big_endian = loc_info->big_endian;
         }
         else {
             v->remote = 1;
         }
+        v->constant = sym_class == SYM_CLASS_VALUE;
         v->sym = sym;
         break;
     case SYM_CLASS_FUNCTION:

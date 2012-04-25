@@ -709,59 +709,6 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     return 0;
 }
 
-int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big_endian) {
-    static VARIANT data;
-    VARTYPE vt;
-    void * data_addr = &data.bVal;
-    size_t data_size = 0;
-
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || sym->info) {
-        errno = ERR_INV_CONTEXT;
-        return -1;
-    }
-    assert(data_addr == &data.lVal);
-    if (get_type_info(sym, TI_GET_VALUE, &data) < 0) return -1;
-
-    vt = data.vt;
-    if (vt & VT_BYREF) {
-        data_addr = *(void **)data_addr;
-        vt &= ~VT_BYREF;
-    }
-
-    switch (vt) {
-    /*    VOID           */ case 0:             break;
-    /*    CHAR           */ case VT_I1:         data_size = 1; break;
-    /*    SHORT          */ case VT_I2:         data_size = 2; break;
-    /*    LONG           */ case VT_I4:         data_size = 4; break;
-    /*    LONGLONG       */ case VT_I8:         data_size = 8; break;
-    /*    INT            */ case VT_INT:        data_size = sizeof(int); break;
-    /*    BYTE           */ case VT_UI1:        data_size = 1; break;
-    /*    USHORT         */ case VT_UI2:        data_size = 2; break;
-    /*    ULONG          */ case VT_UI4:        data_size = 4; break;
-    /*    ULONGLONG      */ case VT_UI8:        data_size = 8; break;
-    /*    UINT           */ case VT_UINT:       data_size = sizeof(unsigned int); break;
-    /*    FLOAT          */ case VT_R4:         data_size = 4; break;
-    /*    DOUBLE         */ case VT_R8:         data_size = 8; break;
-    /*    VARIANT_BOOL   */ case VT_BOOL:       data_size = sizeof(BOOL); break;
-    /*    SCODE          */ case VT_ERROR:      data_size = sizeof(ERROR); break;
-    /*    CY             */ case VT_CY:         data_size = sizeof(CY); break;
-    /*    DATE           */ case VT_DATE:       data_size = sizeof(DATE); break;
-    /*    BSTR           */ case VT_BSTR:       data_size = sizeof(BSTR); break;
-    /*    IUnknown *     */ case VT_UNKNOWN:    data_size = sizeof(IUnknown *); break;
-    /*    IDispatch *    */ case VT_DISPATCH:   data_size = sizeof(IDispatch *); break;
-    /*    SAFEARRAY *    */ case VT_ARRAY:      data_size = sizeof(SAFEARRAY *); break;
-    /*    VARIANT        */ case VT_VARIANT:    data_size = sizeof(VARIANT); break;
-    /*    DECIMAL        */ case VT_DECIMAL:    data_size = sizeof(DECIMAL); break;
-    }
-
-    *size = data_size;
-    *value = data_addr;
-    *big_endian = 0;
-
-    return 0;
-}
-
 static RegisterDefinition * find_register(Context * ctx, const char * name) {
     RegisterDefinition * defs = get_reg_definitions(ctx);
     if (defs == NULL) return NULL;
@@ -1117,6 +1064,7 @@ static LocationExpressionCommand * add_location_command(int op) {
 
 int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     DWORD dword = 0;
+    static VARIANT data;
     SYMBOL_INFO * info = NULL;
 
     assert(sym->magic == SYMBOL_MAGIC);
@@ -1175,6 +1123,53 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
         add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
         add_location_command(SFT_CMD_NUMBER)->args.num = dword;
         add_location_command(SFT_CMD_ADD);
+        return 0;
+    }
+
+    if (get_type_info(sym, TI_GET_VALUE, &data) == 0) {
+        VARTYPE vt;
+        void * data_addr = &data.bVal;
+        size_t data_size = 0;
+        LocationExpressionCommand * cmd = NULL;
+
+        assert(data_addr == &data.lVal);
+
+        vt = data.vt;
+        if (vt & VT_BYREF) {
+            data_addr = *(void **)data_addr;
+            vt &= ~VT_BYREF;
+        }
+
+        switch (vt) {
+        /*    VOID           */ case 0:             break;
+        /*    CHAR           */ case VT_I1:         data_size = 1; break;
+        /*    SHORT          */ case VT_I2:         data_size = 2; break;
+        /*    LONG           */ case VT_I4:         data_size = 4; break;
+        /*    LONGLONG       */ case VT_I8:         data_size = 8; break;
+        /*    INT            */ case VT_INT:        data_size = sizeof(int); break;
+        /*    BYTE           */ case VT_UI1:        data_size = 1; break;
+        /*    USHORT         */ case VT_UI2:        data_size = 2; break;
+        /*    ULONG          */ case VT_UI4:        data_size = 4; break;
+        /*    ULONGLONG      */ case VT_UI8:        data_size = 8; break;
+        /*    UINT           */ case VT_UINT:       data_size = sizeof(unsigned int); break;
+        /*    FLOAT          */ case VT_R4:         data_size = 4; break;
+        /*    DOUBLE         */ case VT_R8:         data_size = 8; break;
+        /*    VARIANT_BOOL   */ case VT_BOOL:       data_size = sizeof(BOOL); break;
+        /*    SCODE          */ case VT_ERROR:      data_size = sizeof(ERROR); break;
+        /*    CY             */ case VT_CY:         data_size = sizeof(CY); break;
+        /*    DATE           */ case VT_DATE:       data_size = sizeof(DATE); break;
+        /*    BSTR           */ case VT_BSTR:       data_size = sizeof(BSTR); break;
+        /*    IUnknown *     */ case VT_UNKNOWN:    data_size = sizeof(IUnknown *); break;
+        /*    IDispatch *    */ case VT_DISPATCH:   data_size = sizeof(IDispatch *); break;
+        /*    SAFEARRAY *    */ case VT_ARRAY:      data_size = sizeof(SAFEARRAY *); break;
+        /*    VARIANT        */ case VT_VARIANT:    data_size = sizeof(VARIANT); break;
+        /*    DECIMAL        */ case VT_DECIMAL:    data_size = sizeof(DECIMAL); break;
+        }
+
+        cmd = add_location_command(SFT_CMD_PIECE);
+        cmd->args.piece.bit_size = data_size * 8;
+        cmd->args.piece.value = tmp_alloc(data_size);
+        memcpy(cmd->args.piece.value, data_addr, data_size);
         return 0;
     }
 

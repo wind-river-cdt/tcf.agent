@@ -350,6 +350,148 @@ static int errcmp(int err, const char * msg) {
 }
 
 static void test(void * args);
+static void loc_var_func(void * args, Symbol * sym);
+
+static void test_enumeration_type(Symbol * type) {
+    int i;
+    int count = 0;
+    Symbol ** children = NULL;
+    Symbol * enum_type = type;
+    ContextAddress enum_type_size = 0;
+    for (i = 0;; i++) {
+        SYM_FLAGS enum_flags = 0;
+        if (get_symbol_flags(enum_type, &enum_flags) < 0) {
+            error_sym("get_symbol_flags", enum_type);
+        }
+        if ((enum_flags & SYM_FLAG_ENUM_TYPE) != 0) break;
+        if (get_symbol_type(enum_type, &enum_type) < 0) {
+            error_sym("get_symbol_type", enum_type);
+        }
+        if (i >= 1000) {
+            errno = ERR_OTHER;
+            error("Invalid original type for enumeration type class");
+        }
+    }
+    if (get_symbol_size(enum_type, &enum_type_size) < 0) {
+        error_sym("get_symbol_size", enum_type);
+    }
+    if (get_symbol_children(type, &children, &count) < 0) {
+        error_sym("get_symbol_children", type);
+    }
+    for (i = 0; i < count; i++) {
+        Symbol * child_type = NULL;
+        void * value = NULL;
+        size_t value_size = 0;
+        int big_endian = 0;
+        ContextAddress child_size = 0;
+        if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
+            error_sym("get_symbol_value", children[i]);
+        }
+        if (get_symbol_type(children[i], &child_type) < 0) {
+            error_sym("get_symbol_type", children[i]);
+        }
+        if (symcmp(enum_type, child_type) != 0) {
+            errno = ERR_OTHER;
+            error("Invalid type of enum element");
+        }
+        if (get_symbol_size(children[i], &child_size) < 0) {
+            error_sym("get_symbol_size", children[i]);
+        }
+        if (enum_type_size != child_size) {
+            errno = ERR_OTHER;
+            error("Invalid size of enumeration constant");
+        }
+        if (value_size != child_size) {
+            errno = ERR_OTHER;
+            error("Invalid size of enumeration constant");
+        }
+    }
+}
+
+static void test_composite_type(Symbol * type) {
+    int i;
+    int count = 0;
+    Symbol ** children = NULL;
+    if (get_symbol_children(type, &children, &count) < 0) {
+        error_sym("get_symbol_children", type);
+    }
+    for (i = 0; i < count; i++) {
+        int member_class = 0;
+        ContextAddress offs = 0;
+        if (get_symbol_class(children[i], &member_class) < 0) {
+            error_sym("get_symbol_class", children[i]);
+        }
+        if (member_class == SYM_CLASS_REFERENCE) {
+            if (get_symbol_address(children[i], &offs) < 0) {
+                if (get_symbol_offset(children[i], &offs) < 0) {
+#if 0
+                    int ok = 0;
+                    int err = errno;
+                    unsigned type_flags;
+                    if (get_symbol_flags(children[i], &type_flags) < 0) {
+                        error("get_symbol_flags");
+                    }
+                    if (type_flags & SYM_FLAG_EXTERNAL) ok = 1;
+                    if (!ok) {
+                        errno = err;
+                        error("get_symbol_offset");
+                    }
+#endif
+                }
+                else {
+                    Value v;
+                    uint64_t n = 0;
+                    char * expr = (char *)tmp_alloc(512);
+                    sprintf(expr, "&(((${%s} *)0)->${%s})", tmp_strdup(symbol2id(type)), tmp_strdup(symbol2id(children[i])));
+                    if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
+                        error("evaluate_expression");
+                    }
+                    if (value_to_unsigned(&v, &n) < 0) {
+                        error("value_to_unsigned");
+                    }
+                    if (n != offs) {
+                        errno = ERR_OTHER;
+                        error("invalid result of evaluate_expression");
+                    }
+                }
+            }
+        }
+        else if (member_class == SYM_CLASS_VALUE) {
+            void * value = NULL;
+            size_t value_size = 0;
+            int big_endian = 0;
+            if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
+                error_sym("get_symbol_value", children[i]);
+            }
+        }
+    }
+}
+
+static void test_this_pointer(Symbol * base_type) {
+    int i;
+    int count = 0;
+    Symbol ** children = NULL;
+    if (get_symbol_children(base_type, &children, &count) < 0) {
+        error_sym("get_symbol_children", base_type);
+    }
+    for (i = 0; i < count; i++) {
+        int member_class = 0;
+        char * member_name = NULL;
+        if (get_symbol_class(children[i], &member_class) < 0) {
+            error_sym("get_symbol_class", children[i]);
+        }
+        if (get_symbol_name(children[i], &member_name) < 0) {
+            error_sym("get_symbol_name", children[i]);
+        }
+        if (member_name != NULL) {
+            Symbol * impl_this = NULL;
+            if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, pc, member_name, &impl_this) < 0) {
+                error_sym("find_symbol_by_name", children[i]);
+            }
+            loc_var_func(NULL, impl_this);
+        }
+    }
+}
 
 static void loc_var_func(void * args, Symbol * sym) {
     int frame = 0;
@@ -455,19 +597,18 @@ static void loc_var_func(void * args, Symbol * sym) {
             }
         }
     }
-    if (get_symbol_address(sym, &addr) < 0) {
-        if ((get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
+    if (get_symbol_address(sym, &addr) < 0 &&
+            (get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
             (get_symbol_value(sym, &value, &value_size, &value_big_endian) < 0 || value == NULL)) {
-            int err = errno;
-            if (errcmp(err, "No object location or value info found") == 0) return;
-            if (errcmp(err, "No object location info found") == 0) return;
-            if (errcmp(err, "Object is not available at this location") == 0) return;
-            if (errcmp(err, "Division by zero in location") == 0) return;
-            if (errcmp(err, "Cannot find loader debug") == 0) return;
-            if (errcmp(err, "Cannot get TLS module ID") == 0) return;
-            errno = err;
-            error_sym("get_symbol_value", sym);
-        }
+        int err = errno;
+        if (errcmp(err, "No object location or value info found") == 0) return;
+        if (errcmp(err, "No object location info found") == 0) return;
+        if (errcmp(err, "Object is not available at this location") == 0) return;
+        if (errcmp(err, "Division by zero in location") == 0) return;
+        if (errcmp(err, "Cannot find loader debug") == 0) return;
+        if (errcmp(err, "Cannot get TLS module ID") == 0) return;
+        errno = err;
+        error_sym("get_symbol_value", sym);
     }
     else if (get_location_info(sym, &loc_info) < 0) {
         error_sym("get_location_info", sym);
@@ -482,24 +623,15 @@ static void loc_var_func(void * args, Symbol * sym) {
         if (set_trap(&trap)) {
             LocationExpressionState * state = evaluate_location_expression(elf_ctx, frame_info,
                 loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, NULL, 0);
-            if (state->stk_pos != 1) str_exception(ERR_OTHER, "invalid location expression stack");
-            if (state->stk[0] != addr) str_fmt_exception(ERR_OTHER,
-                "ID 0x%" PRIX64 ": invalid location expression result 0x%" PRIX64 " != 0x%" PRIX64,
-                get_symbol_object(sym)->mID, state->stk[0], addr);
+            if (state->stk_pos == 1) {
+                if (state->stk[0] != addr) str_fmt_exception(ERR_OTHER,
+                    "ID 0x%" PRIX64 ": invalid location expression result 0x%" PRIX64 " != 0x%" PRIX64,
+                    get_symbol_object(sym)->mID, state->stk[0], addr);
+            }
             clear_trap(&trap);
         }
         else {
             error("evaluate_location_expression");
-        }
-        if (loc_info->length_cmds.cnt > 0) {
-            if (set_trap(&trap)) {
-                evaluate_location_expression(elf_ctx, frame_info,
-                    loc_info->length_cmds.cmds, loc_info->length_cmds.cnt, NULL, 0);
-                clear_trap(&trap);
-            }
-            else {
-                error("evaluate_location_expression");
-            }
         }
     }
     if (get_symbol_class(sym, &symbol_class) < 0) {
@@ -538,6 +670,7 @@ static void loc_var_func(void * args, Symbol * sym) {
         Symbol * org_type = NULL;
         Symbol * container = NULL;
         int container_class = 0;
+        int base_type_class = 0;
         if (get_symbol_class(type, &type_sym_class) < 0) {
             error_sym("get_symbol_class", type);
         }
@@ -621,14 +754,19 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error_sym("get_symbol_base_type", type);
             }
         }
-        else if (org_type != NULL) {
-            Symbol * org_base_type = NULL;
-            if (get_symbol_base_type(org_type, &org_base_type) < 0) {
-                error_sym("get_symbol_base_type", org_type);
+        else {
+            if (get_symbol_type_class(base_type, &base_type_class) < 0) {
+                error_sym("get_symbol_type_class", base_type);
             }
-            if (symcmp(base_type, org_base_type) != 0) {
-                errno = ERR_OTHER;
-                error("Invalid base type of typedef");
+            if (org_type != NULL) {
+                Symbol * org_base_type = NULL;
+                if (get_symbol_base_type(org_type, &org_base_type) < 0) {
+                    error_sym("get_symbol_base_type", org_type);
+                }
+                if (symcmp(base_type, org_base_type) != 0) {
+                    errno = ERR_OTHER;
+                    error("Invalid base type of typedef");
+                }
             }
         }
         if (get_symbol_container(type, &container) < 0) {
@@ -715,111 +853,33 @@ static void loc_var_func(void * args, Symbol * sym) {
                 error("Invalid length of typedef");
             }
         }
-        if (type_class == TYPE_CLASS_ARRAY) {
-            if (get_symbol_lower_bound(type, &lower_bound) < 0) {
+        if (get_symbol_lower_bound(type, &lower_bound) < 0) {
+            if (type_class == TYPE_CLASS_ARRAY) {
                 error_sym("get_symbol_lower_bound", type);
             }
         }
-        else if (type_class == TYPE_CLASS_ENUMERATION) {
-            int i;
-            int count = 0;
-            Symbol ** children = NULL;
-            Symbol * enum_type = type;
-            for (i = 0;; i++) {
-                SYM_FLAGS enum_flags = 0;
-                if (get_symbol_flags(enum_type, &enum_flags) < 0) {
-                    error_sym("get_symbol_flags", enum_type);
-                }
-                if ((enum_flags & SYM_FLAG_ENUM_TYPE) != 0) break;
-                if (get_symbol_type(enum_type, &enum_type) < 0) {
-                    error_sym("get_symbol_type", enum_type);
-                }
-                if (i >= 1000) {
-                    errno = ERR_OTHER;
-                    error("Invalid original type for enumeration type class");
-                }
+        else if (org_type != NULL) {
+            ContextAddress org_lower_bound = 0;
+            if (get_symbol_lower_bound(org_type, &org_lower_bound) < 0) {
+                error_sym("get_symbol_lower_bound", org_type);
             }
-            if (get_symbol_children(type, &children, &count) < 0) {
-                error_sym("get_symbol_children", type);
-            }
-            for (i = 0; i < count; i++) {
-                Symbol * child_type = NULL;
-                void * value = NULL;
-                size_t value_size = 0;
-                int big_endian = 0;
-                if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
-                    error_sym("get_symbol_value", children[i]);
-                }
-                if (get_symbol_type(children[i], &child_type) < 0) {
-                    error_sym("get_symbol_type", children[i]);
-                }
-                if (symcmp(enum_type, child_type) != 0) {
-                    errno = ERR_OTHER;
-                    error("Invalid type of enum element");
-                }
+            if (lower_bound != org_lower_bound) {
+                errno = ERR_OTHER;
+                error("Invalid lower bound of typedef");
             }
         }
+        if (type_class == TYPE_CLASS_ENUMERATION) {
+            test_enumeration_type(type);
+        }
         else if (type_class == TYPE_CLASS_COMPOSITE) {
-            int i;
-            int count = 0;
-            Symbol ** children = NULL;
-            if (get_symbol_children(type, &children, &count) < 0) {
-                error_sym("get_symbol_children", type);
-            }
-            if (children != NULL) {
-                Symbol ** buf = (Symbol **)tmp_alloc(sizeof(Symbol *) * count);
-                memcpy(buf, children, sizeof(Symbol *) * count);
-                children = buf;
-            }
-            for (i = 0; i < count; i++) {
-                int member_class = 0;
-                ContextAddress offs = 0;
-                if (get_symbol_class(children[i], &member_class) < 0) {
-                    error_sym("get_symbol_class", children[i]);
-                }
-                if (member_class == SYM_CLASS_REFERENCE) {
-                    if (get_symbol_address(children[i], &offs) < 0) {
-                        if (get_symbol_offset(children[i], &offs) < 0) {
-#if 0
-                            int ok = 0;
-                            int err = errno;
-                            unsigned type_flags;
-                            if (get_symbol_flags(children[i], &type_flags) < 0) {
-                                error("get_symbol_flags");
-                            }
-                            if (type_flags & SYM_FLAG_EXTERNAL) ok = 1;
-                            if (!ok) {
-                                errno = err;
-                                error("get_symbol_offset");
-                            }
-#endif
-                        }
-                        else {
-                            Value v;
-                            uint64_t n = 0;
-                            char * expr = (char *)tmp_alloc(512);
-                            sprintf(expr, "&(((${%s} *)0)->${%s})", tmp_strdup(symbol2id(type)), tmp_strdup(symbol2id(children[i])));
-                            if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
-                                error("evaluate_expression");
-                            }
-                            if (value_to_unsigned(&v, &n) < 0) {
-                                error("value_to_unsigned");
-                            }
-                            if (n != offs) {
-                                errno = ERR_OTHER;
-                                error("invalid result of evaluate_expression");
-                            }
-                        }
-                    }
-                }
-                else if (member_class == SYM_CLASS_VALUE) {
-                    void * value = NULL;
-                    size_t value_size = 0;
-                    int big_endian = 0;
-                    if (get_symbol_value(children[i], &value, &value_size, &big_endian) < 0) {
-                        error_sym("get_symbol_value", children[i]);
-                    }
-                }
+            test_composite_type(type);
+        }
+        else if (type_class == TYPE_CLASS_POINTER) {
+            if (base_type_class == TYPE_CLASS_COMPOSITE &&
+                    (flags & SYM_FLAG_PARAMETER) && (flags & SYM_FLAG_ARTIFICIAL) &&
+                    name != NULL && strcmp(name, "this") == 0) {
+                test_composite_type(base_type);
+                test_this_pointer(base_type);
             }
         }
     }
@@ -880,27 +940,49 @@ static void next_pc(void) {
             }
         }
         else {
-            char * name = NULL;
-            ContextAddress addr = 0;
-            ContextAddress size = 0;
+            int i;
+            char * func_name = NULL;
+            ContextAddress func_addr = 0;
+            ContextAddress func_size = 0;
+            Symbol * func_type = NULL;
+            int func_children_count = 0;
+            Symbol ** func_children = NULL;
             func_object = get_symbol_object(sym);
-            if (get_symbol_name(sym, &name) < 0) {
-                error("get_symbol_name");
+            if (get_symbol_name(sym, &func_name) < 0) {
+                error_sym("get_symbol_name", sym);
             }
-            if (name != NULL) name = tmp_strdup(name);
-            if (get_symbol_address(sym, &addr) < 0) {
-                error("get_symbol_address");
+            if (func_name != NULL) func_name = tmp_strdup(func_name);
+            if (get_symbol_address(sym, &func_addr) < 0) {
+                error_sym("get_symbol_address", sym);
             }
-            if (get_symbol_size(sym, &size) < 0) {
-                error("get_symbol_size");
+            if (get_symbol_size(sym, &func_size) < 0) {
+                error_sym("get_symbol_size", sym);
             }
-            if (pc < addr || pc >= addr + size) {
+            if (get_symbol_type(sym, &func_type) < 0) {
+                error_sym("get_symbol_type", sym);
+            }
+            if (func_type != NULL) {
+                if (get_symbol_children(func_type, &func_children, &func_children_count) < 0) {
+                    error_sym("get_symbol_children", func_type);
+                }
+                for (i = 0; i < func_children_count; i++) {
+                    Symbol * arg_type = NULL;
+                    ContextAddress arg_size = 0;
+                    if (get_symbol_type(func_children[i], &arg_type) < 0) {
+                        error_sym("get_symbol_type", func_children[i]);
+                    }
+                    if (get_symbol_size(func_children[i], &arg_size) < 0) {
+                        error_sym("get_symbol_size", func_children[i]);
+                    }
+                }
+            }
+            if (pc < func_addr || pc >= func_addr + func_size) {
                 errno = ERR_OTHER;
                 error("invalid symbol address");
             }
-            if (name != NULL) {
+            if (func_name != NULL) {
                 Symbol * fnd_sym = NULL;
-                if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, name, &fnd_sym) < 0) {
+                if (find_symbol_by_name(elf_ctx, STACK_TOP_FRAME, 0, func_name, &fnd_sym) < 0) {
                     if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
                         error("find_symbol_by_name");
                     }
@@ -915,23 +997,23 @@ static void next_pc(void) {
                         errno = ERR_OTHER;
                         error_sym("invalid symbol name", fnd_sym);
                     }
-                    if (strcmp(fnd_name, name) != 0) {
+                    if (strcmp(fnd_name, func_name) != 0) {
                         errno = ERR_OTHER;
                         error_sym("strcmp(name_buf, name)", fnd_sym);
                     }
                     if (get_symbol_address(fnd_sym, &fnd_addr) == 0) {
                         Value v;
                         SYM_FLAGS flags = 0;
-                        char * expr = (char *)tmp_alloc(strlen(name) + 16);
+                        char * expr = (char *)tmp_alloc(strlen(func_name) + 16);
                         if (get_symbol_flags(fnd_sym, &flags) < 0) {
                             error_sym("get_symbol_flags", fnd_sym);
                         }
-                        sprintf(expr, "$\"%s\"", name);
+                        sprintf(expr, "$\"%s\"", func_name);
                         if (evaluate_expression(elf_ctx, STACK_TOP_FRAME, 0, expr, 0, &v) < 0) {
                             error_sym("evaluate_expression", fnd_sym);
                         }
                         if (flags & SYM_FLAG_EXTERNAL) {
-                            if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, name, &fnd_sym) < 0) {
+                            if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, func_name, &fnd_sym) < 0) {
                                 error("find_symbol_by_name");
                             }
                         }

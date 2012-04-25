@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2008, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -43,7 +43,6 @@ typedef struct DWARFExpressionInfo {
     size_t expr_size;
 } DWARFExpressionInfo;
 
-extern ObjectInfo * get_parent_function(ObjectInfo * info);
 extern void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo * info);
 extern void dwarf_evaluate_expression(PropertyValue * value);
 

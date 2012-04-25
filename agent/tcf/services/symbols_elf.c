@@ -260,10 +260,6 @@ static int is_frame_based_object(Symbol * sym) {
             else if (get_symbol_address(sym, &addr) < 0) {
                 res = 1;
             }
-            else {
-                sym->has_address = 1;
-                sym->address = addr;
-            }
         }
 
         if (!res) {
@@ -1662,7 +1658,7 @@ static void read_object_value(PropertyValue * v, void ** value, size_t * size, i
         else {
             U1_T * p = (U1_T *)&v->mValue;
             if (val_size > sizeof(v->mValue)) str_exception(ERR_INV_DWARF, "Unknown object size");
-            if (big_endian_host()) p += (size_t)val_size;
+            if (big_endian_host()) p += sizeof(v->mValue) - (size_t)val_size;
             memcpy(bf, p, (size_t)val_size);
             *big_endian = big_endian_host();
         }
@@ -1725,11 +1721,16 @@ int get_symbol_type(const Symbol * sym, Symbol ** type) {
         return 0;
     }
     if (sym->sym_class == SYM_CLASS_FUNCTION) {
-        *type = alloc_symbol();
-        (*type)->ctx = sym->ctx;
-        (*type)->frame = STACK_NO_FRAME;
-        (*type)->sym_class = SYM_CLASS_TYPE;
-        (*type)->base = (Symbol *)sym;
+        if (obj == NULL) {
+            *type = NULL;
+        }
+        else {
+            *type = alloc_symbol();
+            (*type)->ctx = sym->ctx;
+            (*type)->frame = STACK_NO_FRAME;
+            (*type)->sym_class = SYM_CLASS_TYPE;
+            (*type)->base = (Symbol *)sym;
+        }
         return 0;
     }
     if (unpack(sym) < 0) return -1;
@@ -2078,6 +2079,9 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
             }
             return err_no_info();
         }
+        if (sym->base->sym_class == SYM_CLASS_REFERENCE) {
+            return err_no_info();
+        }
         *base_type = sym->base;
         return 0;
     }
@@ -2121,9 +2125,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
-        if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
-            return err_wrong_obj();
-        }
+        if (sym->base->sym_class != SYM_CLASS_TYPE) return err_wrong_obj();
         alloc_cardinal_type_pseudo_symbol(sym->ctx, context_word_size(sym->ctx), index_type);
         return 0;
     }
@@ -2195,9 +2197,7 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
-        if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
-            return err_wrong_obj();
-        }
+        if (sym->base->sym_class != SYM_CLASS_TYPE) return err_wrong_obj();
         *length = sym->length == 0 ? 1 : sym->length;
         return 0;
     }
@@ -2240,9 +2240,7 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
-        if (sym->base->sym_class == SYM_CLASS_FUNCTION) {
-            return err_wrong_obj();
-        }
+        if (sym->base->sym_class != SYM_CLASS_TYPE) return err_wrong_obj();
         *value = 0;
         return 0;
     }
@@ -2301,6 +2299,17 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
                         Symbol * y = NULL;
                         object2symbol(i, &x);
                         if (get_symbol_type(x, &y) < 0) return -1;
+                        if (y == NULL && i->mTag == TAG_unspecified_parameters) {
+                            y = alloc_symbol();
+                            y->ctx = sym->ctx;
+                            y->frame = STACK_NO_FRAME;
+                            y->sym_class = SYM_CLASS_TYPE;
+                            y->base = (Symbol *)x;
+                        }
+                        if (y == NULL) {
+                            set_errno(ERR_INV_DWARF, "Invalid function arguments info");
+                            return -1;
+                        }
                         if (buf_len <= n) {
                             buf_len += 16;
                             buf = (Symbol **)tmp_realloc(buf, sizeof(Symbol *) * buf_len);
@@ -2349,116 +2358,6 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     return 0;
 }
 
-int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big_endian) {
-    ObjectInfo * obj = sym->obj;
-    assert(sym->magic == SYMBOL_MAGIC);
-    if (is_constant_pseudo_symbol(sym)) {
-        ContextAddress sym_size = 0;
-        if (get_symbol_size(sym, &sym_size) < 0) return -1;
-        *size = (size_t)sym_size;
-        *big_endian = big_endian_host();
-        *value = &constant_pseudo_symbols[(int)sym->length].value;
-        if (*big_endian && *size < sizeof(ConstantValueType)) {
-            *value = (char *)(*value) + (sizeof(ConstantValueType) - *size);
-        }
-        return 0;
-    }
-    if (is_array_type_pseudo_symbol(sym) || is_cardinal_type_pseudo_symbol(sym) || sym->var) {
-        return err_wrong_obj();
-    }
-    if (unpack(sym) < 0) return -1;
-    if (obj != NULL) {
-        Trap trap;
-        PropertyValue v;
-        Symbol * s = NULL;
-        if (set_trap(&trap)) {
-            read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_const_value, &v);
-            read_object_value(&v, value, size, big_endian);
-            clear_trap(&trap);
-            return 0;
-        }
-        else if (trap.error != ERR_SYM_NOT_FOUND) {
-            return -1;
-        }
-        if (set_trap(&trap)) {
-            read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_location, &v);
-            read_object_value(&v, value, size, big_endian);
-            clear_trap(&trap);
-            return 0;
-        }
-        else if (trap.error != ERR_SYM_NOT_FOUND) {
-            return -1;
-        }
-#if SERVICE_StackTrace || ENABLE_ContextProxy
-        if (obj->mTag == TAG_formal_parameter) {
-            /* Search call site info */
-            if (set_trap(&trap)) {
-                RegisterDefinition * reg_def = get_PC_definition(sym_ctx);
-                if (reg_def != NULL) {
-                    uint64_t addr = 0;
-                    ContextAddress rt_addr = 0;
-                    UnitAddressRange * range = NULL;
-                    Symbol * caller = NULL;
-                    StackFrame * info = NULL;
-                    if (get_frame_info(sym_ctx, get_prev_frame(sym_ctx, sym_frame), &info) < 0) exception(errno);
-                    if (read_reg_value(info, reg_def, &addr) < 0) exception(errno);
-                    range = elf_find_unit(sym_ctx, addr, addr, &rt_addr);
-                    if (range != NULL) find_by_addr_in_unit(
-                        get_dwarf_children(range->mUnit->mObject),
-                        0, rt_addr - range->mAddr, addr, &caller);
-                    if (caller != NULL && caller->obj != NULL) {
-                        ObjectInfo * l = get_dwarf_children(caller->obj);
-                        while (l != NULL) {
-                            U8_T call_addr = 0;
-                            if (l->mTag == TAG_GNU_call_site && get_num_prop(l, AT_low_pc, &call_addr)) {
-                                call_addr += rt_addr - range->mAddr;
-                                if (call_addr == addr) {
-                                    /*
-                                    clear_trap(&trap);
-                                    return 0;
-                                    */
-                                }
-                            }
-                            l = l->mSibling;
-                        }
-                    }
-                }
-                exception(ERR_SYM_NOT_FOUND);
-            }
-        }
-#endif
-        if (map_to_sym_table(obj, &s)) return get_symbol_value(s, value, size, big_endian);
-        set_errno(ERR_OTHER, "No object location or value info found in DWARF data");
-        return -1;
-    }
-    if (sym->tbl != NULL && sym->dimension == 0) {
-        ELF_SymbolInfo info;
-        unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        switch (info.type) {
-        case STT_OBJECT:
-        case STT_FUNC:
-        case STT_GNU_IFUNC:
-            set_errno(ERR_OTHER, "Symbol represents an address");
-            return -1;
-        }
-        if (info.sym_section->file->elf64) {
-            static U8_T buf = 0;
-            buf = info.value;
-            *value = &buf;
-            *size = 8;
-        }
-        else {
-            static U4_T buf = 0;
-            buf = (U4_T)info.value;
-            *value = &buf;
-            *size = 4;
-        }
-        *big_endian = big_endian_host();
-        return 0;
-    }
-    return err_no_info();
-}
-
 static int calc_member_offset(ObjectInfo * type, ObjectInfo * member, ContextAddress * offs) {
     PropertyValue v;
     ObjectInfo * obj = NULL;
@@ -2479,45 +2378,6 @@ static int calc_member_offset(ObjectInfo * type, ObjectInfo * member, ContextAdd
         obj = obj->mSibling;
     }
     return 0;
-}
-
-static int get_elf_symbol_address(const Symbol * sym, ContextAddress * address) {
-    ELF_SymbolInfo info;
-    assert(sym_ctx == sym->ctx);
-    if (sym->dimension != 0) {
-        /* @plt symbol */
-        *address = sym->tbl->addr + sym->cardinal + sym->index * sym->dimension;
-        return 0;
-    }
-    unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-    if (info.type == STT_GNU_IFUNC && info.name != NULL) {
-        int error = 0;
-        int found = 0;
-        ELF_File * file = elf_list_first(sym_ctx, 0, ~(ContextAddress)0);
-        if (file == NULL) error = errno;
-        while (error == 0 && file != NULL) {
-            ContextAddress got_addr = 0;
-            if (elf_find_got_entry(file, info.name, &got_addr) < 0) {
-                error = errno;
-            }
-            else if (got_addr != 0) {
-                got_addr = elf_map_to_run_time_address(sym_ctx, file, NULL, got_addr);
-                if (got_addr != 0 && elf_read_memory_word(sym_ctx, file, got_addr, address) == 0) {
-                    found = 1;
-                    break;
-                }
-            }
-            file = elf_list_next(sym_ctx);
-            if (file == NULL) error = errno;
-        }
-        elf_list_done(sym_ctx);
-        if (found) return 0;
-        if (error) {
-            errno = error;
-            return -1;
-        }
-    }
-    return syminfo2address(sym_ctx, &info, address);
 }
 
 static LocationCommands * location_cmds = NULL;
@@ -2582,7 +2442,25 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
     location_cmds = &info->value_cmds;
 
     if (sym->has_address) {
+        info->big_endian = big_endian_host();
         add_location_command(SFT_CMD_NUMBER)->args.num = sym->address;
+        return 0;
+    }
+
+    if (is_constant_pseudo_symbol(sym)) {
+        void * value = NULL;
+        ContextAddress size = 0;
+        LocationExpressionCommand * cmd = add_location_command(SFT_CMD_PIECE);
+
+        if (get_symbol_size(sym->base, &size) < 0) return -1;
+        info->big_endian = big_endian_host();
+        cmd->args.piece.bit_size = (unsigned)(size * 8);
+        cmd->args.piece.value = tmp_alloc((size_t)size);
+        value = &constant_pseudo_symbols[(int)sym->length].value;
+        if (big_endian_host() && size < sizeof(ConstantValueType)) {
+            value = (uint8_t *)value + (sizeof(ConstantValueType) - size);
+        }
+        memcpy(cmd->args.piece.value, value, (size_t)size);
         return 0;
     }
 
@@ -2598,23 +2476,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
         Trap trap;
         PropertyValue v;
 
-        if (obj->mType != NULL && obj->mType->mTag == TAG_string_type) {
-            if (set_trap(&trap)) {
-                U8_T n = 0;
-                location_cmds = &info->length_cmds;
-                read_dwarf_object_property(sym_ctx, sym_frame, obj->mType, AT_string_length, &v);
-                add_dwarf_location_command(info, &v);
-                clear_trap(&trap);
-                if (get_num_prop(obj->mType, AT_byte_size, &n)) info->length_size = (ContextAddress)n;
-                else if (get_num_prop(obj->mType, AT_bit_size, &n)) info->length_bits = (unsigned)n;
-            }
-            else if (errno != ERR_SYM_NOT_FOUND) {
-                set_errno(errno, "Cannot read location expression");
-                return -1;
-            }
-        }
-
-        location_cmds = &info->value_cmds;
+        info->big_endian = obj->mCompUnit->mFile->big_endian;
         if ((obj->mFlags & DOIF_external) == 0 && sym->var != NULL) {
             /* The symbol represents a member of a class instance */
             ContextAddress offs = 0;
@@ -2651,11 +2513,51 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                 return -1;
             }
         }
+        if (obj->mTag != TAG_inlined_subroutine) {
+            if (set_trap(&trap)) {
+                LocationExpressionCommand * cmd = NULL;
+                read_dwarf_object_property(sym_ctx, sym_frame, obj, AT_const_value, &v);
+                assert(v.mObject == obj);
+                assert(v.mPieces == NULL);
+                assert(v.mForm != FORM_EXPRLOC);
+                if (v.mAddr != NULL) {
+                    assert(v.mBigEndian == info->big_endian);
+                    cmd = add_location_command(SFT_CMD_PIECE);
+                    cmd->args.piece.bit_size = v.mSize * 8;
+                    cmd->args.piece.value = v.mAddr;
+                }
+                else {
+                    U1_T * bf = NULL;
+                    U8_T val_size = 0;
+                    U8_T bit_size = 0;
+                    U1_T * p = (U1_T *)&v.mValue;
+                    if (!get_object_size(obj, 0, &val_size, &bit_size)) {
+                        str_exception(ERR_INV_DWARF, "Unknown object size");
+                    }
+                    assert(v.mForm != FORM_EXPR_VALUE);
+                    if (val_size > sizeof(v.mValue)) str_exception(ERR_INV_DWARF, "Unknown object size");
+                    bf = (U1_T *)tmp_alloc((size_t)val_size);
+                    if (big_endian_host()) p += sizeof(v.mValue) - (size_t)val_size;
+                    memcpy(bf, p, (size_t)val_size);
+                    info->big_endian = big_endian_host();
+                    if (bit_size % 8 != 0) bf[bit_size / 8] &= (1 << (bit_size % 8)) - 1;
+                    cmd = add_location_command(SFT_CMD_PIECE);
+                    cmd->args.piece.bit_size = (unsigned)(bit_size ? bit_size : val_size * 8);
+                    cmd->args.piece.value = bf;
+                }
+                clear_trap(&trap);
+                return 0;
+            }
+            else if (trap.error != ERR_SYM_NOT_FOUND) {
+                return -1;
+            }
+        }
         if (obj->mTag == TAG_member || obj->mTag == TAG_inheritance) {
             if (set_trap(&trap)) {
                 read_dwarf_object_property(sym_ctx, sym_frame, obj, AT_data_member_location, &v);
                 switch (v.mForm) {
                 case FORM_DATA1     :
+                case FORM_DATA2     :
                 case FORM_DATA4     :
                 case FORM_DATA8     :
                 case FORM_SDATA     :
@@ -2668,8 +2570,12 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                 case FORM_BLOCK2    :
                 case FORM_BLOCK4    :
                 case FORM_BLOCK     :
+                case FORM_EXPRLOC   :
                     add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
                     add_dwarf_location_command(info, &v);
+                    break;
+                default:
+                    str_fmt_exception(ERR_OTHER, "Invalid AT_data_member_location form 0x%04x", v.mForm);
                     break;
                 }
                 info->args_cnt = 1;
@@ -2682,6 +2588,44 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                 return -1;
             }
         }
+#if SERVICE_StackTrace || ENABLE_ContextProxy
+        if (obj->mTag == TAG_formal_parameter) {
+            /* Search call site info */
+            if (set_trap(&trap)) {
+                RegisterDefinition * reg_def = get_PC_definition(sym_ctx);
+                if (reg_def != NULL) {
+                    uint64_t addr = 0;
+                    ContextAddress rt_addr = 0;
+                    UnitAddressRange * range = NULL;
+                    Symbol * caller = NULL;
+                    StackFrame * info = NULL;
+                    if (get_frame_info(sym_ctx, get_prev_frame(sym_ctx, sym_frame), &info) < 0) exception(errno);
+                    if (read_reg_value(info, reg_def, &addr) < 0) exception(errno);
+                    range = elf_find_unit(sym_ctx, addr, addr, &rt_addr);
+                    if (range != NULL) find_by_addr_in_unit(
+                        get_dwarf_children(range->mUnit->mObject),
+                        0, rt_addr - range->mAddr, addr, &caller);
+                    if (caller != NULL && caller->obj != NULL) {
+                        ObjectInfo * l = get_dwarf_children(caller->obj);
+                        while (l != NULL) {
+                            U8_T call_addr = 0;
+                            if (l->mTag == TAG_GNU_call_site && get_num_prop(l, AT_low_pc, &call_addr)) {
+                                call_addr += rt_addr - range->mAddr;
+                                if (call_addr == addr) {
+                                    /*
+                                    clear_trap(&trap);
+                                    return 0;
+                                    */
+                                }
+                            }
+                            l = l->mSibling;
+                        }
+                    }
+                }
+                exception(ERR_SYM_NOT_FOUND);
+            }
+        }
+#endif
         {
             U8_T addr = 0;
             Symbol * s = NULL;
@@ -2692,14 +2636,15 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                 return 0;
             }
             else if (errno != ERR_SYM_NOT_FOUND) {
-                set_errno(errno, "Cannot read location expression");
                 return -1;
             }
             if (get_num_prop(obj, AT_low_pc, &addr)) {
                 add_location_command(SFT_CMD_NUMBER)->args.num = addr;
                 return 0;
             }
-            if (get_error_code(errno) != ERR_SYM_NOT_FOUND) return -1;
+            else if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                return -1;
+            }
             if (map_to_sym_table(obj, &s)) return get_location_info(s, res);
             set_errno(ERR_OTHER, "No object location info found in DWARF data");
             return -1;
@@ -2707,13 +2652,73 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
     }
 
     if (sym->tbl != NULL) {
-        ContextAddress addr = 0;
-        if (get_elf_symbol_address(sym, &addr) < 0) return -1;
-        add_location_command(SFT_CMD_NUMBER)->args.num = addr;
+        LocationExpressionCommand * cmd = NULL;
+        ELF_SymbolInfo elf_sym_info;
+        ContextAddress address = 0;
+        info->big_endian = sym->tbl->file->big_endian;
+        if (sym->dimension != 0) {
+            /* @plt symbol */
+            address = sym->tbl->addr + sym->cardinal + sym->index * sym->dimension;
+            add_location_command(SFT_CMD_NUMBER)->args.num = address;
+            return 0;
+        }
+        unpack_elf_symbol_info(sym->tbl, sym->index, &elf_sym_info);
+        if (elf_sym_info.type == STT_GNU_IFUNC && elf_sym_info.name != NULL) {
+            int error = 0;
+            int found = 0;
+            ELF_File * file = elf_list_first(sym_ctx, 0, ~(ContextAddress)0);
+            if (file == NULL) error = errno;
+            while (error == 0 && file != NULL) {
+                ContextAddress got_addr = 0;
+                if (elf_find_got_entry(file, elf_sym_info.name, &got_addr) < 0) {
+                    error = errno;
+                }
+                else if (got_addr != 0) {
+                    got_addr = elf_map_to_run_time_address(sym_ctx, file, NULL, got_addr);
+                    if (got_addr != 0 && elf_read_memory_word(sym_ctx, file, got_addr, &address) == 0) {
+                        found = 1;
+                        break;
+                    }
+                }
+                file = elf_list_next(sym_ctx);
+                if (file == NULL) error = errno;
+            }
+            elf_list_done(sym_ctx);
+            if (found) {
+                add_location_command(SFT_CMD_NUMBER)->args.num = address;
+                return 0;
+            }
+            if (error) {
+                errno = error;
+                return -1;
+            }
+        }
+        switch (elf_sym_info.type) {
+        case STT_OBJECT:
+        case STT_FUNC:
+        case STT_GNU_IFUNC:
+            if (syminfo2address(sym_ctx, &elf_sym_info, &address)) return -1;
+            add_location_command(SFT_CMD_NUMBER)->args.num = address;
+            return 0;
+        }
+        info->big_endian = big_endian_host();
+        cmd = add_location_command(SFT_CMD_PIECE);
+        if (elf_sym_info.sym_section->file->elf64) {
+            static U8_T buf = 0;
+            buf = elf_sym_info.value;
+            cmd->args.piece.bit_size = 64;
+            cmd->args.piece.value = &buf;
+        }
+        else {
+            static U4_T buf = 0;
+            buf = (U4_T)elf_sym_info.value;
+            cmd->args.piece.bit_size = 32;
+            cmd->args.piece.value = &buf;
+        }
         return 0;
     }
 
-    set_errno(ERR_OTHER, "Symbol does not have a memory address");
+    set_errno(ERR_OTHER, "Symbol does not have a location information");
     return -1;
 }
 
@@ -2722,7 +2727,12 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
     ObjectInfo * obj = sym->obj;
     *flags = 0;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym)) return 0;
+    if (sym->base || is_cardinal_type_pseudo_symbol(sym)) {
+        if (is_array_type_pseudo_symbol(sym) && sym->base->sym_class == SYM_CLASS_REFERENCE) {
+            *flags |= SYM_FLAG_VARARG;
+        }
+        return 0;
+    }
     if (unpack(sym) < 0) return -1;
     if (obj != NULL) {
         if (obj->mFlags & DOIF_external) *flags |= SYM_FLAG_EXTERNAL;

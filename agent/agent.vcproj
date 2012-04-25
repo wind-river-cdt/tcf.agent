@@ -836,6 +836,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\symbols_common.c"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\symbols_elf.c"
 				>
 			</File>

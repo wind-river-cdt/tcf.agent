@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2011, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -124,6 +124,21 @@ static void op_addr(void) {
     add_uleb128(addr);
 }
 
+static ObjectInfo * get_parent_function(ObjectInfo * info) {
+    while (info != NULL) {
+        switch (info->mTag) {
+        case TAG_global_subroutine:
+        case TAG_inlined_subroutine:
+        case TAG_subroutine:
+        case TAG_subprogram:
+        case TAG_entry_point:
+            return info;
+        }
+        info = get_dwarf_parent(info);
+    }
+    return NULL;
+}
+
 static void op_fbreg(void) {
     PropertyValue fp;
     DWARFExpressionInfo info;
@@ -202,13 +217,12 @@ static void op_fbreg(void) {
 static void op_implicit_pointer(void) {
     Trap trap;
     PropertyValue pv;
-    DWARFExpressionInfo info;
     U1_T op = expr->expr_addr[expr_pos];
     CompUnit * unit = expr->object->mCompUnit;
     int arg_size = unit->mDesc.m64bit ? 8 : 4;
     ObjectInfo * ref_obj = NULL;
     ContextAddress ref_id = 0;
-    U4_T offset = 0;
+    U8_T offset = 0;
     U8_T dio_pos = 0;
 
     expr_pos++;
@@ -216,7 +230,7 @@ static void op_implicit_pointer(void) {
     dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
     dio_EnterSection(&expr->unit->mDesc, expr->section, dio_pos);
     ref_id = dio_ReadUX(arg_size);
-    offset = dio_ReadULEB128();
+    offset = dio_ReadU8LEB128();
     expr_pos += (size_t)(dio_GetPos() - dio_pos);
     dio_ExitSection();
 
@@ -225,20 +239,33 @@ static void op_implicit_pointer(void) {
 
     memset(&pv, 0, sizeof(pv));
     if (set_trap(&trap)) {
+        DWARFExpressionInfo info;
         read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_location, &pv);
+        dwarf_find_expression(&pv, expr_ip, &info);
+        add_expression(&info);
+        if (offset != 0) {
+            add(OP_TCF_offset);
+            add_uleb128(offset);
+        }
         clear_trap(&trap);
     }
     else if (trap.error == ERR_SYM_NOT_FOUND) {
+        size_t i;
         read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_const_value, &pv);
+        if (pv.mAddr == NULL) str_exception(ERR_INV_DWARF, "Invalid OP_GNU_implicit_pointer");
+        if (offset != 0) {
+            if (offset > pv.mSize) str_exception(ERR_INV_DWARF, "Invalid OP_GNU_implicit_pointer");
+            pv.mSize -= (size_t)offset;
+            pv.mAddr = (U1_T *)pv.mAddr + offset;
+        }
+        add(OP_implicit_value);
+        add_uleb128(pv.mSize);
+        for (i = 0; i < pv.mSize; i++) {
+            add(*((U1_T *)pv.mAddr + i));
+        }
     }
     else {
         exception(trap.error);
-    }
-    dwarf_find_expression(&pv, expr_ip, &info);
-    add_expression(&info);
-    if (offset != 0) {
-        add(OP_TCF_offset);
-        add_uleb128(offset);
     }
 }
 

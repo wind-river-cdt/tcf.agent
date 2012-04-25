@@ -97,11 +97,9 @@ typedef struct LocationCommands {
 typedef struct LocationInfo {
     ContextAddress code_addr;
     ContextAddress code_size;
+    int big_endian;
     unsigned args_cnt;
     LocationCommands value_cmds;
-    LocationCommands length_cmds;
-    ContextAddress length_size;
-    unsigned length_bits;
 } LocationInfo;
 
 /* Stack tracing command sequence */

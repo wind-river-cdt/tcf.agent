@@ -43,65 +43,18 @@ static void list_add(Symbol * sym) {
     list_buf[list_cnt++] = sym;
 }
 
-static LocationExpressionState * evaluate_symbol_location(const Symbol * sym, unsigned args_cnt) {
+static LocationExpressionState * evaluate_location(Context * ctx, int frame, LocationInfo * loc_info) {
     Trap trap;
-    Context * ctx = NULL;
-    int frame = STACK_NO_FRAME;
-    LocationInfo * loc_info = NULL;
     StackFrame * frame_info = NULL;
     LocationExpressionState * state = NULL;
     static uint64_t args[] = { 0, 0 };
 
-    if (get_symbol_frame(sym, &ctx, &frame) < 0) return NULL;
-    if (get_location_info(sym, &loc_info) < 0) return NULL;
-    if (loc_info->args_cnt != args_cnt) {
-        set_errno(ERR_OTHER, "Wrong object kind");
-        return NULL;
-    }
     if (frame != STACK_NO_FRAME && get_frame_info(ctx, frame, &frame_info) < 0) return NULL;
     if (!set_trap(&trap)) return NULL;
     state = evaluate_location_expression(ctx, frame_info,
-        loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, args, args_cnt);
+        loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, args, loc_info->args_cnt);
     clear_trap(&trap);
     return state;
-}
-
-int get_symbol_address(const Symbol * sym, ContextAddress * address) {
-    LocationExpressionState * state = evaluate_symbol_location(sym, 0);
-    if (state == NULL) return -1;
-    if (state->stk_pos == 1) {
-        *address = (ContextAddress)state->stk[0];
-        return 0;
-    }
-    set_errno(ERR_OTHER, "Symbol does not have a memory address");
-    return -1;
-}
-
-int get_symbol_register(const Symbol * sym, Context ** ctx, int * frame, RegisterDefinition ** reg) {
-    LocationExpressionState * state = evaluate_symbol_location(sym, 0);
-    if (state == NULL) return -1;
-    if (state->pieces_cnt == 1 && state->pieces->reg != NULL && state->pieces->reg->size == state->pieces->size) {
-        if (get_symbol_frame(sym, ctx, frame) < 0) return -1;
-        *reg = state->pieces->reg;
-        return 0;
-    }
-    set_errno(ERR_OTHER, "Symbol is not located in a register");
-    return -1;
-}
-
-int get_symbol_offset(const Symbol * sym, ContextAddress * offset) {
-    LocationExpressionState * state = evaluate_symbol_location(sym, 1);
-    if (state == NULL) return -1;
-    if (state->pieces_cnt > 0) {
-        set_errno(ERR_OTHER, "Cannot get member offset: the symbol is a bit field");
-        return -1;
-    }
-    if (state->stk_pos == 1) {
-        *offset = (ContextAddress)state->stk[0];
-        return 0;
-    }
-    set_errno(ERR_OTHER, "Symbol does not have a member offset");
-    return -1;
 }
 
 typedef struct CommandGetContextArgs {
@@ -128,6 +81,7 @@ static void command_get_context_cache_client(void * x) {
     int has_lower_bound = 0;
     int has_offset = 0;
     int has_address = 0;
+    int has_frame = 0;
     int big_endian = 0;
     ContextAddress size = 0;
     ContextAddress length = 0;
@@ -154,36 +108,49 @@ static void command_get_context_cache_client(void * x) {
         get_symbol_base_type(sym, &base);
         get_symbol_index_type(sym, &index);
         get_symbol_container(sym, &container);
+        has_frame = get_symbol_frame(sym, &ctx, &frame) == 0;
         has_size = get_symbol_size(sym, &size) == 0;
         has_length = get_symbol_length(sym, &length) == 0;
-        if (has_length) {
-            has_lower_bound = get_symbol_lower_bound(sym, &lower_bound) == 0;
-        }
-        if (sym_class == SYM_CLASS_REFERENCE) {
-            has_offset = get_symbol_offset(sym, &offset) == 0;
-        }
-        if (sym_class == SYM_CLASS_REFERENCE || sym_class == SYM_CLASS_FUNCTION) {
-            LocationExpressionState * state = evaluate_symbol_location(sym, 0);
-            if (state != NULL) {
-                if (state->stk_pos == 1) {
-                    address = (ContextAddress)state->stk[0];
-                    has_address = 1;
+        if (has_length) has_lower_bound = get_symbol_lower_bound(sym, &lower_bound) == 0;
+        if (sym_class == SYM_CLASS_REFERENCE || sym_class == SYM_CLASS_FUNCTION || sym_class == SYM_CLASS_VALUE) {
+            LocationInfo * loc_info = NULL;
+            if (has_frame && get_location_info(sym, &loc_info) == 0) {
+                LocationExpressionState * state = NULL;
+                if (loc_info->args_cnt == 0) {
+                    /* Absolute location */
+                    state = evaluate_location(ctx, frame, loc_info);
+                    if (state != NULL) {
+                        if (state->stk_pos == 1) {
+                            address = (ContextAddress)state->stk[0];
+                            has_address = 1;
+                        }
+                        if (state->pieces_cnt == 1 && state->pieces->reg != NULL &&
+                                state->pieces->reg->size == state->pieces->size) {
+                            reg = state->pieces->reg;
+                        }
+                        if (state->pieces_cnt > 0) {
+                            Trap trap;
+                            if (set_trap(&trap)) {
+                                read_location_peices(state->ctx, state->stack_frame,
+                                    state->pieces, state->pieces_cnt, loc_info->big_endian, &value, &value_size);
+                                big_endian = loc_info->big_endian;
+                                clear_trap(&trap);
+                            }
+                        }
+                    }
                 }
-                if (state->pieces_cnt == 1 && state->pieces->reg != NULL &&
-                        state->pieces->reg->size == state->pieces->size) {
-                    reg = state->pieces->reg;
+                else if (loc_info->args_cnt == 1) {
+                    /* Relative location */
+                    state = evaluate_location(ctx, frame, loc_info);
+                    if (state != NULL && state->stk_pos == 1) {
+                        offset = (ContextAddress)state->stk[0];
+                        has_offset = 1;
+                    }
                 }
             }
         }
-        if (sym_class == SYM_CLASS_VALUE) {
-            get_symbol_value(sym, &value, &value_size, &big_endian);
-        }
-        if (sym_class == SYM_CLASS_REFERENCE && !has_address && !has_offset) {
-            get_symbol_value(sym, &value, &value_size, &big_endian);
-            assert(value == NULL || update_policy == UPDATE_ON_EXE_STATE_CHANGES);
-        }
         get_symbol_flags(sym, &flags);
-        get_symbol_frame(sym, &ctx, &frame);
+        assert(value == NULL || update_policy == UPDATE_ON_EXE_STATE_CHANGES);
     }
 
     cache_exit();
@@ -323,7 +290,7 @@ static void command_get_context_cache_client(void * x) {
             }
         }
 
-        if (frame != STACK_NO_FRAME) {
+        if (has_frame && frame != STACK_NO_FRAME) {
             json_write_string(&c->out, "Frame");
             write_stream(&c->out, ':');
             json_write_long(&c->out, frame);
@@ -781,7 +748,7 @@ static void write_commands(OutputStream * out, Context * ctx, LocationExpression
                 if (cmd->args.piece.reg == NULL) write_string(out, "null");
                 else json_write_string(out, register2id(ctx, STACK_NO_FRAME, cmd->args.piece.reg));
                 write_stream(out, ',');
-                if (cmd->args.piece.value != NULL) write_string(out, "null");
+                if (cmd->args.piece.value == NULL) write_string(out, "null");
                 else json_write_binary(out, cmd->args.piece.value, (cmd->args.piece.bit_size + 7) / 8);
                 break;
             }
@@ -823,27 +790,13 @@ static void command_get_location_info_cache_client(void * x) {
     }
     else {
         write_stream(&c->out, '{');
+        json_write_string(&c->out, "BigEndian");
+        write_stream(&c->out, ':');
+        json_write_boolean(&c->out, info->big_endian);
+        write_stream(&c->out, ',');
         json_write_string(&c->out, "ValueCmds");
         write_stream(&c->out, ':');
         write_commands(&c->out, ctx, info->value_cmds.cmds, info->value_cmds.cnt);
-        if (info->length_cmds.cnt > 0) {
-            write_stream(&c->out, ',');
-            json_write_string(&c->out, "LengthCmds");
-            write_stream(&c->out, ':');
-            write_commands(&c->out, ctx, info->length_cmds.cmds, info->length_cmds.cnt);
-            if (info->length_size > 0) {
-                write_stream(&c->out, ',');
-                json_write_string(&c->out, "LengthSize");
-                write_stream(&c->out, ':');
-                json_write_uint64(&c->out, info->length_size);
-            }
-            if (info->length_bits > 0) {
-                write_stream(&c->out, ',');
-                json_write_string(&c->out, "LengthBits");
-                write_stream(&c->out, ':');
-                json_write_ulong(&c->out, info->length_bits);
-            }
-        }
         if (info->args_cnt) {
             write_stream(&c->out, ',');
             json_write_string(&c->out, "ArgCnt");

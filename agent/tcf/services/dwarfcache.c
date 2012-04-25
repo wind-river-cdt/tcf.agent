@@ -1399,6 +1399,7 @@ void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, ObjectInf
     else if (Attr == AT_data_member_location) {
         switch (Value->mForm) {
         case FORM_DATA1     :
+        case FORM_DATA2     :
         case FORM_DATA4     :
         case FORM_DATA8     :
         case FORM_SDATA     :
