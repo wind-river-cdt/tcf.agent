@@ -1162,6 +1162,19 @@ ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
     return 0;
 }
 
+static LocationExpressionCommand * add_location_command(int op) {
+    LocationExpressionCommand * cmd = NULL;
+    if (location_cmds.cnt >= location_cmds.max) {
+        location_cmds.max += 16;
+        location_cmds.cmds = (LocationExpressionCommand *)loc_realloc(location_cmds.cmds,
+            sizeof(LocationExpressionCommand) * location_cmds.max);
+    }
+    cmd = location_cmds.cmds + location_cmds.cnt++;
+    memset(cmd, 0, sizeof(LocationExpressionCommand));
+    cmd->cmd = op;
+    return cmd;
+}
+
 static void read_dwarf_location_params(InputStream * inp, const char * nm, void * arg) {
     LocationExpressionCommand * cmd = (LocationExpressionCommand *)arg;
     if (strcmp(nm, "Machine") == 0) cmd->args.loc.reg_id_scope.machine = (uint16_t)json_read_long(inp);
@@ -1179,14 +1192,7 @@ static void read_location_command(InputStream * inp, void * args) {
     Context * ctx = NULL;
     int frame = STACK_NO_FRAME;
     LocationExpressionCommand * cmd = NULL;
-    if (location_cmds.cnt >= location_cmds.max) {
-        location_cmds.max += 16;
-        location_cmds.cmds = (LocationExpressionCommand *)loc_realloc(location_cmds.cmds,
-            location_cmds.max * sizeof(LocationExpressionCommand));
-    }
-    cmd = location_cmds.cmds + location_cmds.cnt++;
-    memset(cmd, 0, sizeof(*cmd));
-    cmd->cmd = json_read_long(inp);
+    cmd = add_location_command((int)json_read_long(inp));
     switch (cmd->cmd) {
     case SFT_CMD_NUMBER:
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
@@ -1222,7 +1228,7 @@ static void read_location_command(InputStream * inp, void * args) {
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
         cmd->args.piece.bit_size = (unsigned)json_read_ulong(inp);
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
-        if (json_read_string(inp, id, sizeof(id))) {
+        if (json_read_string(inp, id, sizeof(id)) > 0) {
             if (id2register(id, &ctx, &frame, &cmd->args.piece.reg) < 0) id2register_error = errno;
         }
         if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
@@ -1323,25 +1329,30 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     assert(f == NULL || f->pending == NULL);
 
     if (f == NULL) {
-        Channel * c = get_channel(syms);
         f = (LocationInfoCache *)loc_alloc_zero(sizeof(LocationInfoCache));
         list_add_first(&f->link_syms, syms->link_location + h);
         context_lock(f->ctx = prs);
         f->ip = ip;
-        f->sym_id = loc_strdup(sym_cache->id);
 #if ENABLE_RCBP_TEST
-        if (strncmp(f->sym_id, "@T.", 3) == 0) {
+        if (strncmp(sym_cache->id, "@T.", 3) == 0) {
             int sym_class = 0;
             uint64_t address = 0;
             char ctx_id[256];
-            if (sscanf(f->sym_id, "@T.%X.%"SCNx64".%255s", &sym_class, &address, ctx_id) == 3) {
+            if (sscanf(sym_cache->id, "@T.%X.%"SCNx64".%255s", &sym_class, &address, ctx_id) == 3) {
                 location_cmds.cnt = 0;
+                add_location_command(SFT_CMD_NUMBER)->args.num = address;
                 f->info.value_cmds.cmds = (LocationExpressionCommand *)loc_alloc(location_cmds.cnt * sizeof(LocationExpressionCommand));
                 memcpy(f->info.value_cmds.cmds, location_cmds.cmds, location_cmds.cnt * sizeof(LocationExpressionCommand));
                 f->info.value_cmds.cnt = f->info.value_cmds.max = location_cmds.cnt;
+                f->info.big_endian = big_endian_host();
+                f->sym_id = loc_strdup(sym_cache->id);
             }
         }
 #endif
+    }
+    if (f->sym_id == NULL) {
+        Channel * c = get_channel(syms);
+        f->sym_id = loc_strdup(sym_cache->id);
         f->pending = protocol_send_command(c, SYMBOLS, "getLocationInfo", validate_location_info, f);
         json_write_string(&c->out, f->sym_id);
         write_stream(&c->out, 0);

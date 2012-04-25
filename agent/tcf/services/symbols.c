@@ -150,7 +150,6 @@ static void command_get_context_cache_client(void * x) {
             }
         }
         get_symbol_flags(sym, &flags);
-        assert(value == NULL || update_policy == UPDATE_ON_EXE_STATE_CHANGES);
     }
 
     cache_exit();
