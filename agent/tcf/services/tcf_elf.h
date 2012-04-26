@@ -23,12 +23,13 @@
 
 #if ENABLE_ELF
 
-#if !defined(_WIN32) && !defined(__APPLE__)
+#if !ENABLE_ContextProxy && !defined(_WIN32) && !defined(__APPLE__)
+#  define INCLUDE_NATIVE_ELF_H 1
 #  include <elf.h>
 #endif
 #include <tcf/framework/context.h>
 
-#if defined(_WIN32) || defined(__APPLE__)
+#if !defined(INCLUDE_NATIVE_ELF_H)
 
 #define EI_MAG0        0
 #define EI_MAG1        1
@@ -255,7 +256,7 @@ typedef struct {
 
 #endif
 
-#if defined(_WRS_KERNEL) || defined(_WIN32) || defined(__APPLE__)
+#if defined(_WRS_KERNEL) || !defined(INCLUDE_NATIVE_ELF_H)
 
 typedef uint64_t        Elf64_Addr;
 typedef uint16_t        Elf64_Half;
