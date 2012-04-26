@@ -768,6 +768,8 @@ static int addr_ranges_comparator(const void * x, const void * y) {
     UnitAddressRange * ry = (UnitAddressRange *)y;
     if (rx->mAddr < ry->mAddr) return -1;
     if (rx->mAddr > ry->mAddr) return +1;
+    if (rx->mUnit->mObject->mID < ry->mUnit->mObject->mID) return -1;
+    if (rx->mUnit->mObject->mID > ry->mUnit->mObject->mID) return +1;
     return 0;
 }
 
@@ -1603,6 +1605,7 @@ static void compute_reverse_lookup_indices(DWARFCache * Cache, CompUnit * Unit) 
         Unit->mStatesIndex[i] = s1;
     }
     qsort(Unit->mStatesIndex, Unit->mStatesCnt, sizeof(LineNumbersState *), state_text_pos_comparator);
+    for (i = 0; i < Unit->mStatesCnt; i++) Unit->mStatesIndex[i]->mStatesIndexPos = i;
     if (Cache->mFileInfoHash == NULL) {
         Cache->mFileInfoHashSize = 251;
         Cache->mFileInfoHash = (FileInfo **)loc_alloc_zero(sizeof(FileInfo *) * Cache->mFileInfoHashSize);

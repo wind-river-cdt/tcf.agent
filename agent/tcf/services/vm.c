@@ -182,7 +182,8 @@ static int is_end_of_loc_expr(void) {
     return
         code_pos >= code_len ||
         code[code_pos] == OP_piece ||
-        code[code_pos] == OP_bit_piece;
+        code[code_pos] == OP_bit_piece ||
+        code[code_pos] == OP_TCF_offset;
 }
 
 static void evaluate_expression(void) {

@@ -98,9 +98,9 @@ static int compare_path(Channel * chnl, Context * ctx, const char * file, const 
     return 0;
 }
 
-static LineNumbersState * get_next_in_text(CompUnit * unit, unsigned index) {
-    LineNumbersState * state = unit->mStatesIndex[index++];
+static LineNumbersState * get_next_in_text(CompUnit * unit, LineNumbersState * state) {
     LineNumbersState * next = NULL;
+    U4_T index = state->mStatesIndexPos + 1;
     if (index >= unit->mStatesCnt) return NULL;
     next = unit->mStatesIndex[index++];
     while (next->mLine == state->mLine && next->mColumn == state->mColumn) {
@@ -187,7 +187,7 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
                 h = k;
             }
             else {
-                LineNumbersState * next = get_next_in_text(unit, k);
+                LineNumbersState * next = get_next_in_text(unit, state);
                 U4_T next_line = next ? next->mLine : state->mLine + 1;
                 U4_T next_column = next ? next->mColumn : 0;
                 if (next_line < line || (next_line == line && next_column <= column)) {
@@ -208,7 +208,7 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
                         if (errno == 0) {
                             LineNumbersState * code_next = get_next_in_code(unit, state);
                             if (code_next != NULL) {
-                                LineNumbersState * text_next = get_next_in_text(unit, k);
+                                LineNumbersState * text_next = get_next_in_text(unit, state);
                                 U4_T next_line = text_next ? text_next->mLine : state->mLine + 1;
                                 U4_T next_column = text_next ? text_next->mColumn : 0;
                                 if (next_line > line || (next_line == line && next_column > column)) {
@@ -329,7 +329,7 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
                         for (;;) {
                             LineNumbersState * code_next = get_next_in_code(unit, state);
                             if (code_next != NULL) {
-                                LineNumbersState * text_next = get_next_in_text(unit, k);
+                                LineNumbersState * text_next = get_next_in_text(unit, state);
                                 call_client(unit, state, code_next, text_next, state->mAddress - range->mAddr + range_rt_addr, client, args);
                             }
                             if (++k >= unit->mStatesCnt) break;
