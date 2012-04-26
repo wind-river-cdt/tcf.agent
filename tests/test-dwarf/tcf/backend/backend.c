@@ -859,7 +859,7 @@ static void loc_var_func(void * args, Symbol * sym) {
             }
         }
         else if (org_type != NULL) {
-            ContextAddress org_lower_bound = 0;
+            int64_t org_lower_bound = 0;
             if (get_symbol_lower_bound(org_type, &org_lower_bound) < 0) {
                 error_sym("get_symbol_lower_bound", org_type);
             }
