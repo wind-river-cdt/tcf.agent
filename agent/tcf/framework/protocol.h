@@ -112,7 +112,11 @@ extern int protocol_cancel_command(ReplyHandlerInfo * rh);
 /*
  * Send redirect command.
  */
-extern ReplyHandlerInfo * send_redirect_command(Channel * c, const char * peerId, ReplyHandlerCB handler, void * client_data);
+extern ReplyHandlerInfo * send_redirect_command_by_id(Channel * c, const char * peerId, ReplyHandlerCB handler, void * client_data);
+extern ReplyHandlerInfo * send_redirect_command_by_props(Channel * c, const PeerServer * ps, ReplyHandlerCB handler, void * client_data);
+
+/* Deprecated, use send_redirect_by_id_command */
+#define send_redirect_command send_redirect_command_by_id
 
 /*
  * Create protocol instance

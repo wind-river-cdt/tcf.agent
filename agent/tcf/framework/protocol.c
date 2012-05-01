@@ -476,7 +476,7 @@ static void redirect_done(Channel * c, void * client_data, int error) {
     info->handler(c, info->client_data, error);
 }
 
-ReplyHandlerInfo * send_redirect_command(Channel * c, const char * peerId, ReplyHandlerCB handler, void * client_data) {
+ReplyHandlerInfo * send_redirect_command_by_id(Channel * c, const char * peerId, ReplyHandlerCB handler, void * client_data) {
     struct sendRedirectInfo * info = (struct sendRedirectInfo *)loc_alloc_zero(sizeof *info);
     ReplyHandlerInfo * rh;
 
@@ -486,6 +486,31 @@ ReplyHandlerInfo * send_redirect_command(Channel * c, const char * peerId, Reply
     info->client_data = client_data;
     rh = protocol_send_command(c, LOCATOR, "redirect", redirect_done, info);
     json_write_string(&c->out, peerId);
+    write_stream(&c->out, 0);
+    write_stream(&c->out, MARKER_EOM);
+    return rh;
+}
+
+ReplyHandlerInfo * send_redirect_command_by_props(Channel * c, const PeerServer * ps, ReplyHandlerCB handler, void * client_data) {
+    struct sendRedirectInfo * info = (struct sendRedirectInfo *)loc_alloc_zero(sizeof *info);
+    ReplyHandlerInfo * rh;
+    unsigned i;
+
+    assert(c->state == ChannelStateConnected);
+    c->state = ChannelStateRedirectSent;
+    info->handler = handler;
+    info->client_data = client_data;
+    rh = protocol_send_command(c, LOCATOR, "redirect", redirect_done, info);
+    write_stream(&c->out, '{');
+    for (i = 0; i < ps->ind; i++) {
+        if (i > 0) {
+            write_stream(&c->out, ',');
+        }
+        json_write_string(&c->out, ps->list[i].name);
+        write_stream(&c->out, ':');
+        json_write_string(&c->out, ps->list[i].value);
+    }
+    write_stream(&c->out, '}');
     write_stream(&c->out, 0);
     write_stream(&c->out, MARKER_EOM);
     return rh;
