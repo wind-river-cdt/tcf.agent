@@ -2825,7 +2825,7 @@ int get_symbol_frame(const Symbol * sym, Context ** ctx, int * frame) {
 
 int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
     assert(sym->magic == SYMBOL_MAGIC);
-    assert(sym->sym_class == SYM_CLASS_TYPE);
+    if (sym->sym_class != SYM_CLASS_TYPE) return err_wrong_obj();
     assert(sym->frame == STACK_NO_FRAME);
     assert(sym->ctx == context_get_group(sym->ctx, CONTEXT_GROUP_SYMBOLS));
     *ptr = alloc_symbol();
