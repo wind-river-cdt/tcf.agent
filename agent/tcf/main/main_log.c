@@ -117,6 +117,42 @@ static void channel_new_connection(ChannelServer * serv, Channel * c) {
     channel_start(c);
 }
 
+#if !defined(_WRS_KERNEL)
+static const char * help_text[] = {
+    "Usage: tcflog [OPTION]...",
+    "Start Target Communication Framework logger.",
+    "The TCF logger can be used to capture traffic between two TCF peers and "
+    "redirect it to either stderr or a file.",
+    "For instance:",
+    "    tcflog -s TCP::1437 TCP:128.224.218.33:4576",
+    "This starts the TCF logger on port 1437 on the local machine and "
+    "connects to target IP 128.224.218.33 on port 4576.",
+    "  -L<file>         log file name, use -L- to send log to stderr",
+    "  -l<level>        set log level, the level is comma separated list of:",
+    "@",
+    "  -s<url>          set agent listening port and protocol, default is TCP::1534",
+    NULL
+};
+
+static void show_help(void) {
+    const char ** p = help_text;
+    while (*p != NULL) {
+        if (**p == '@') {
+            struct trace_mode * tm = trace_mode_table;
+            while (tm->mode != 0) {
+                fprintf(stderr, "      %-12s %s (%#x)\n", tm->name,
+tm->description, tm->mode);
+                tm++;
+            }
+            p++;
+        }
+        else {
+            fprintf(stderr, "%s\n", *p++);
+        }
+    }
+}
+#endif
+
 #if defined(_WRS_KERNEL)
 int tcf_log(void) {
 #else
@@ -154,6 +190,10 @@ int main(int argc, char ** argv) {
         s++;
         while ((c = *s++) != '\0') {
             switch (c) {
+	    case 'h':
+		show_help();
+		exit (0);
+
             case 'l':
             case 'L':
             case 's':
@@ -182,6 +222,7 @@ int main(int argc, char ** argv) {
 
                 default:
                     fprintf(stderr, "%s: error: illegal option '%c'\n", progname, c);
+		    show_help();
                     exit(1);
                 }
                 s = "";
@@ -189,6 +230,7 @@ int main(int argc, char ** argv) {
 
             default:
                 fprintf(stderr, "%s: error: illegal option '%c'\n", progname, c);
+		show_help();
                 exit(1);
             }
         }
