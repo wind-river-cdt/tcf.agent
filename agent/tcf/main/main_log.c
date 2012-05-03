@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -140,8 +140,9 @@ static void show_help(void) {
         if (**p == '@') {
             struct trace_mode * tm = trace_mode_table;
             while (tm->mode != 0) {
-                fprintf(stderr, "      %-12s %s (%#x)\n", tm->name,
-tm->description, tm->mode);
+                fprintf(stderr,
+                    "      %-12s %s (%#x)\n", tm->name,
+                    tm->description, tm->mode);
                 tm++;
             }
             p++;
@@ -190,9 +191,9 @@ int main(int argc, char ** argv) {
         s++;
         while ((c = *s++) != '\0') {
             switch (c) {
-	    case 'h':
-		show_help();
-		exit (0);
+            case 'h':
+                show_help();
+                exit (0);
 
             case 'l':
             case 'L':
@@ -222,7 +223,7 @@ int main(int argc, char ** argv) {
 
                 default:
                     fprintf(stderr, "%s: error: illegal option '%c'\n", progname, c);
-		    show_help();
+                    show_help();
                     exit(1);
                 }
                 s = "";
@@ -230,7 +231,7 @@ int main(int argc, char ** argv) {
 
             default:
                 fprintf(stderr, "%s: error: illegal option '%c'\n", progname, c);
-		show_help();
+                show_help();
                 exit(1);
             }
         }
