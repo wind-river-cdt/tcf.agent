@@ -251,7 +251,27 @@ static void op_implicit_pointer(void) {
     }
     else if (trap.error == ERR_SYM_NOT_FOUND) {
         size_t i;
+        union {
+            U4_T u4;
+            U8_T u8;
+            U1_T arr[8];
+        } buf;
         read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_const_value, &pv);
+        switch (pv.mForm) {
+        case FORM_SDATA:
+        case FORM_UDATA:
+            pv.mAddr = buf.arr;
+            if (unit->mFile->elf64) {
+                pv.mSize = 8;
+                buf.u8 = pv.mValue;
+            }
+            else {
+                pv.mSize = 4;
+                buf.u4 = (U4_T)pv.mValue;
+            }
+            if (unit->mFile->byte_swap) swap_bytes(buf.arr, pv.mSize);
+            break;
+        }
         if (pv.mAddr == NULL) str_exception(ERR_INV_DWARF, "Invalid OP_GNU_implicit_pointer");
         if (offset != 0) {
             if (offset > pv.mSize) str_exception(ERR_INV_DWARF, "Invalid OP_GNU_implicit_pointer");
