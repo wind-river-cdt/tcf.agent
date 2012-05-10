@@ -160,7 +160,7 @@ RegisterDefinition regs_index[] = {
     { "eip",    REG_OFFSET(r_eip),    4,  8,  8},
     { "eflags", REG_OFFSET(r_eflags), 4,  9,  9},
 
-#elif defined (_WRS_KERNEL) && defined(__i386__)
+#elif defined(_WRS_KERNEL) && defined(__i386__)
 #   define REG_SP esp
 #   define REG_BP ebp
 #   define REG_IP eip
