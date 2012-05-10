@@ -211,10 +211,11 @@ static int is_register(SYMBOL_INFO * info) {
     return info->Flags & SYMFLAG_REGISTER;
 }
 
-static void syminfo2symbol(Context * ctx, int frame, SYMBOL_INFO * info, Symbol * sym) {
+static int syminfo2symbol(Context * ctx, int frame, SYMBOL_INFO * info, Symbol * sym) {
     sym->module = info->ModBase;
     sym->index = info->Index;
     if (is_frame_relative(info) || is_register(info)) {
+        if (frame == STACK_NO_FRAME) return 0;
         assert(frame >= 0);
         assert(ctx != ctx->mem);
         sym->frame = frame - STACK_NO_FRAME;
@@ -225,6 +226,7 @@ static void syminfo2symbol(Context * ctx, int frame, SYMBOL_INFO * info, Symbol 
     }
     sym->ctx = ctx;
     tag2symclass(sym, info->Tag);
+    return 1;
 }
 
 static int get_type_tag(Symbol * type, DWORD * tag) {
@@ -873,17 +875,20 @@ static int find_pe_symbol_by_name(Context * ctx, int frame, ContextAddress ip, c
     if (find_cache_symbol(ctx, frame, stack_frame.InstructionOffset, name, sym)) return errno ? -1 : 0;
 
     /* TODO: SymFromName() searches only main executable, need to search DLLs too */
+    SetLastError(0);
     if (SymFromName(process, name, info) && info->Tag != SymTagPublicSymbol) {
-        syminfo2symbol(ctx, frame, info, sym);
-        add_cache_symbol(ctx, stack_frame.InstructionOffset, name, sym, 0);
-        return 0;
+        if (syminfo2symbol(ctx, frame, info, sym)) {
+            add_cache_symbol(ctx, stack_frame.InstructionOffset, name, sym, 0);
+            return 0;
+        }
     }
     if (stack_frame.InstructionOffset != 0) {
         DWORD64 module = SymGetModuleBase64(process, stack_frame.InstructionOffset);
         if (module != 0 && SymGetTypeFromName(process, module, name, info)) {
-            syminfo2symbol(ctx, frame, info, sym);
-            add_cache_symbol(ctx, stack_frame.InstructionOffset, name, sym, 0);
-            return 0;
+            if (syminfo2symbol(ctx, frame, info, sym)) {
+                add_cache_symbol(ctx, stack_frame.InstructionOffset, name, sym, 0);
+                return 0;
+            }
         }
     }
     set_win32_errno(err = GetLastError());
@@ -907,9 +912,9 @@ static int find_pe_symbol_by_addr(Context * ctx, int frame, ContextAddress addr,
     info->SizeOfStruct = sizeof(SYMBOL_INFO);
     info->MaxNameLen = MAX_SYM_NAME;
 
+    SetLastError(0);
     if (SymFromAddr(process, addr, NULL, info)) {
-        syminfo2symbol(ctx, frame, info, sym);
-        return 0;
+        if (syminfo2symbol(ctx, frame, info, sym)) return 0;
     }
 
     set_win32_errno(err = GetLastError());
@@ -1002,8 +1007,9 @@ typedef struct EnumerateSymbolsContext {
 static BOOL CALLBACK enumerate_symbols_proc(SYMBOL_INFO * info, ULONG symbol_size, VOID * user_context) {
     EnumerateSymbolsContext * enum_context = (EnumerateSymbolsContext *)user_context;
     Symbol * sym = alloc_symbol();
-    syminfo2symbol(enum_context->ctx, enum_context->frame, info, sym);
-    enum_context->call_back(enum_context->args, sym);
+    if (syminfo2symbol(enum_context->ctx, enum_context->frame, info, sym)) {
+        enum_context->call_back(enum_context->args, sym);
+    }
     return TRUE;
 }
 
