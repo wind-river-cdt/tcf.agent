@@ -2427,7 +2427,7 @@ void evaluate_breakpoint(Context * ctx) {
     BreakInstruction * bi = NULL;
     Context * grp = context_get_group(ctx, CONTEXT_GROUP_BREAKPOINT);
     EvaluationRequest * req = create_evaluation_request(grp);
-    int need_to_post = 1; //!list_is_empty(&req->link_posted);
+    int need_to_post = !list_is_empty(&req->link_posted);
 
     assert(context_has_state(ctx));
     assert(ctx->stopped);
