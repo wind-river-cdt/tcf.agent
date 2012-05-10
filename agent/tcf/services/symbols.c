@@ -89,8 +89,6 @@ static void command_get_context_cache_client(void * x) {
     ContextAddress offset = 0;
     ContextAddress address = 0;
     RegisterDefinition * reg = NULL;
-    Context * reg_ctx = NULL;
-    int reg_frame = 0;
     SYM_FLAGS flags = 0;
     void * value = NULL;
     size_t value_size = 0;
@@ -261,10 +259,10 @@ static void command_get_context_cache_client(void * x) {
             write_stream(&c->out, ',');
         }
 
-        if (reg != NULL) {
+        if (reg != NULL && has_frame) {
             json_write_string(&c->out, "Register");
             write_stream(&c->out, ':');
-            json_write_string(&c->out, register2id(reg_ctx, reg_frame, reg));
+            json_write_string(&c->out, register2id(ctx, frame, reg));
             write_stream(&c->out, ',');
         }
 
