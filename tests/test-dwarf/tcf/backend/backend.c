@@ -303,6 +303,10 @@ static void addr_to_line_callback(CodeArea * area, void * args) {
         errno = set_errno(ERR_OTHER, "Invalid line area address");
         error("address_to_line");
     }
+    if (area->start_line > area->end_line) {
+        errno = set_errno(ERR_OTHER, "Invalid line area end line number");
+        error("address_to_line");
+    }
     *dst = *area;
 }
 
