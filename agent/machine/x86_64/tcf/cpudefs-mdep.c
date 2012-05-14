@@ -63,7 +63,7 @@ RegisterDefinition regs_index[] = {
     { "dl",     REG_OFFSET(Edx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 21 },
     { "dh",     REG_OFFSET(Edx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 21 },
 
-    { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 },
+    { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 24 */
 
     { "f0", REG_OFFSET(FloatSave.RegisterArea) + 0,  10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
     { "f1", REG_OFFSET(FloatSave.RegisterArea) + 10, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
@@ -76,7 +76,16 @@ RegisterDefinition regs_index[] = {
 
     { "control", REG_OFFSET(FloatSave.ControlWord),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
     { "status",  REG_OFFSET(FloatSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "tag",     REG_OFFSET(FloatSave.TagWord),      2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "tag",     REG_OFFSET(FloatSave.TagWord),      1, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+
+    { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 36 */
+
+    { "dr0",    REG_OFFSET(Dr0), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr1",    REG_OFFSET(Dr1), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr2",    REG_OFFSET(Dr2), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr3",    REG_OFFSET(Dr3), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
 
 #elif defined(_WIN32) && defined(__x86_64__)
 #   define REG_SP Rsp
@@ -106,6 +115,30 @@ RegisterDefinition regs_index[] = {
     { "ds",     REG_OFFSET(SegDs),    2, 53, -1},
     { "fs",     REG_OFFSET(SegFs),    2, 54, -1},
     { "gs",     REG_OFFSET(SegGs),    2, 55, -1},
+
+    { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 24 */
+
+    { "f0", REG_OFFSET(FltSave.FloatRegisters[0]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f1", REG_OFFSET(FltSave.FloatRegisters[1]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f2", REG_OFFSET(FltSave.FloatRegisters[2]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f3", REG_OFFSET(FltSave.FloatRegisters[3]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f4", REG_OFFSET(FltSave.FloatRegisters[4]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f5", REG_OFFSET(FltSave.FloatRegisters[5]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f6", REG_OFFSET(FltSave.FloatRegisters[6]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f7", REG_OFFSET(FltSave.FloatRegisters[7]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+
+    { "control", REG_OFFSET(FltSave.ControlWord),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "status",  REG_OFFSET(FltSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "tag",     REG_OFFSET(FltSave.TagWord),      1, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+
+    { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 36 */
+
+    { "dr0",    REG_OFFSET(Dr0), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr1",    REG_OFFSET(Dr1), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr2",    REG_OFFSET(Dr2), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr3",    REG_OFFSET(Dr3), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
 
 #elif defined(__APPLE__) && defined(__i386__)
 #   define REG_SP __esp
@@ -246,6 +279,15 @@ RegisterDefinition regs_index[] = {
     { "xmm14",  REG_OFFSET(fp.xmm_space) + 224, 16, 31, 31, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
     { "xmm15",  REG_OFFSET(fp.xmm_space) + 240, 16, 32, 32, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
 
+    { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 60 */
+
+    { "dr0",    REG_OFFSET(user.u_debugreg[0]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
+    { "dr1",    REG_OFFSET(user.u_debugreg[1]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
+    { "dr2",    REG_OFFSET(user.u_debugreg[2]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
+    { "dr3",    REG_OFFSET(user.u_debugreg[3]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
+    { "dr6",    REG_OFFSET(user.u_debugreg[6]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
+    { "dr7",    REG_OFFSET(user.u_debugreg[7]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
+
 #elif defined(__i386__)
 #   define REG_SP user.regs.esp
 #   define REG_BP user.regs.ebp
@@ -305,7 +347,7 @@ RegisterDefinition regs_index[] = {
 
     { "mxcsr",  REG_OFFSET(other.mxcsr), 4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
 
-    { "xmm",    0, 0, -1, -1, 0, 0, 1, 1 },
+    { "xmm",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 46 */
 
     { "xmm0",   REG_OFFSET(other.xmm_space) +   0, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
     { "xmm1",   REG_OFFSET(other.xmm_space) +  16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
@@ -315,6 +357,15 @@ RegisterDefinition regs_index[] = {
     { "xmm5",   REG_OFFSET(other.xmm_space) +  80, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
     { "xmm6",   REG_OFFSET(other.xmm_space) +  96, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
     { "xmm7",   REG_OFFSET(other.xmm_space) + 112, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+
+    { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 55 */
+
+    { "dr0",    REG_OFFSET(user.u_debugreg[0]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
+    { "dr1",    REG_OFFSET(user.u_debugreg[1]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
+    { "dr2",    REG_OFFSET(user.u_debugreg[2]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
+    { "dr3",    REG_OFFSET(user.u_debugreg[3]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
+    { "dr6",    REG_OFFSET(user.u_debugreg[6]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
+    { "dr7",    REG_OFFSET(user.u_debugreg[7]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
 
 #endif
 
@@ -630,40 +681,20 @@ static size_t context_extension_offset = 0;
 #define EXT(ctx) ((ContextExtensionX86 *)((char *)(ctx) + context_extension_offset))
 
 static RegisterDefinition * get_DR_definition(unsigned no) {
-#if defined(__i386__)
-#  define DR_SIZE 4
-#else
-#  define DR_SIZE 8
-#endif
-#if defined(_WIN32)
-    static RegisterDefinition dr_defs[] = {
-        { "dr0",    REG_OFFSET(Dr0), DR_SIZE,  -1,  -1 },
-        { "dr1",    REG_OFFSET(Dr1), DR_SIZE,  -1,  -1 },
-        { "dr2",    REG_OFFSET(Dr2), DR_SIZE,  -1,  -1 },
-        { "dr3",    REG_OFFSET(Dr3), DR_SIZE,  -1,  -1 },
-        { NULL },
-        { NULL },
-        { "dr6",    REG_OFFSET(Dr6), DR_SIZE,  -1,  -1 },
-        { "dr7",    REG_OFFSET(Dr7), DR_SIZE,  -1,  -1 },
-    };
-    if ((no > 3 && no < 6) || no > 7) return NULL;
-    return dr_defs + no;
-#elif defined(__linux__)
-    static RegisterDefinition dr_defs[] = {
-        { "dr0",    REG_OFFSET(user.u_debugreg[0]), DR_SIZE,  -1,  -1 },
-        { "dr1",    REG_OFFSET(user.u_debugreg[1]), DR_SIZE,  -1,  -1 },
-        { "dr2",    REG_OFFSET(user.u_debugreg[2]), DR_SIZE,  -1,  -1 },
-        { "dr3",    REG_OFFSET(user.u_debugreg[3]), DR_SIZE,  -1,  -1 },
-        { NULL },
-        { NULL },
-        { "dr6",    REG_OFFSET(user.u_debugreg[6]), DR_SIZE,  -1,  -1 },
-        { "dr7",    REG_OFFSET(user.u_debugreg[7]), DR_SIZE,  -1,  -1 },
-    };
-    if ((no > 3 && no < 6) || no > 7) return NULL;
-    return dr_defs + no;
-#else
-    return NULL;
-#endif
+    static RegisterDefinition * dr_defs[8];
+    if (no > 7) return NULL;
+    if (dr_defs[no] == NULL) {
+        RegisterDefinition * def = regs_index;
+        while (def->name) {
+            if (def->name[0] == 'd' && def->name[1] == 'r' &&
+                def->name[2] == '0' + (int)no && def->name[3] == 0) {
+                dr_defs[no] = def;
+                break;
+            }
+            def++;
+        }
+    }
+    return dr_defs[no];
 }
 
 static int skip_read_only_breakpoint(Context * ctx, uint8_t dr6, ContextBreakpoint * bp) {
@@ -682,6 +713,78 @@ static int skip_read_only_breakpoint(Context * ctx, uint8_t dr6, ContextBreakpoi
         ContextBreakpoint ** p = ctx->stopped_by_cb;
         while (*p != NULL) if (*p++ == bp) return 1;
     }
+    return 0;
+}
+
+static int set_debug_regs(Context * ctx, int check_ip, int * step_over_hw_bp) {
+    int i;
+    uint32_t dr7 = 0;
+    ContextAddress ip = 0;
+    ContextExtensionX86 * ext = EXT(ctx);
+    ContextExtensionX86 * bps = EXT(context_get_group(ctx, CONTEXT_GROUP_BREAKPOINT));
+
+    if (check_ip) {
+        *step_over_hw_bp = 0;
+        if (context_read_reg(ctx, get_PC_definition(ctx), 0, sizeof(ip), &ip) < 0) return -1;
+    }
+
+    for (i = 0; i < MAX_HW_BPS; i++) {
+        ContextBreakpoint * bp = bps->hw_bps[i];
+        if (bp == NULL) {
+            /* nothing */
+        }
+        else if (check_ip && bp->address == ip && (bp->access_types & CTX_BP_ACCESS_INSTRUCTION)) {
+            /* Skipping the breakpoint */
+            *step_over_hw_bp = 1;
+        }
+        else {
+            if (context_write_reg(ctx, get_DR_definition(i), 0, sizeof(bp->address), &bp->address) < 0) return -1;
+            dr7 |= (uint32_t)1 << (i * 2);
+            if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
+                /* nothing */
+            }
+            else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
+                if (bps->hw_idx[i] == 0) {
+                    dr7 |= (uint32_t)1 << (i * 4 + 16);
+                }
+                else {
+                    dr7 |= (uint32_t)3 << (i * 4 + 16);
+                }
+                dr7 |= 0x100u;
+            }
+            else if (bp->access_types == (CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
+                dr7 |= (uint32_t)1 << (i * 4 + 16);
+                dr7 |= 0x100u;
+            }
+            else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
+                dr7 |= (uint32_t)3 << (i * 4 + 16);
+                dr7 |= 0x100u;
+            }
+            else {
+                set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported access mode");
+                return -1;
+            }
+            if (bp->length == 1) {
+                /* nothing */
+            }
+            else if (bp->length == 2) {
+                dr7 |= (uint32_t)1 << (i * 4 + 18);
+            }
+            else if (bp->length == 4) {
+                dr7 |= (uint32_t)3 << (i * 4 + 18);
+            }
+            else if (bp->length == 8) {
+                dr7 |= (uint32_t)2 << (i * 4 + 18);
+            }
+            else {
+                set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported length");
+                return -1;
+            }
+        }
+    }
+    if (context_write_reg(ctx, get_DR_definition(7), 0, sizeof(dr7), &dr7) < 0) return -1;
+    ext->hw_bps_regs_generation = bps->hw_bps_generation;
+    if (check_ip && *step_over_hw_bp) ext->hw_bps_regs_generation--;
     return 0;
 }
 
@@ -742,7 +845,20 @@ int cpu_bp_plant(ContextBreakpoint * bp) {
                 }
             }
             if (m == n) {
+                LINK * l = context_root.next;
                 bps->hw_bps_generation++;
+                while (l != &context_root) {
+                    Context * c = ctxl2ctxp(l);
+                    if (c->stopped && context_get_group(c, CONTEXT_GROUP_BREAKPOINT) == ctx) {
+                        if (set_debug_regs(c, 0, NULL) < 0) {
+                            for (i = 0; i < MAX_HW_BPS && n > 0; i++) {
+                                if (bps->hw_bps[i] == bp) bps->hw_bps[i] = NULL;
+                            }
+                            return -1;
+                        }
+                    }
+                    l = l->next;
+                }
                 return 0;
             }
             for (i = 0; i < MAX_HW_BPS && n > 0; i++) {
@@ -756,94 +872,33 @@ int cpu_bp_plant(ContextBreakpoint * bp) {
 
 int cpu_bp_remove(ContextBreakpoint * bp) {
     int i;
+    LINK * l = NULL;
     Context * ctx = bp->ctx;
-    if (ctx->mem == ctx && !ctx->exited) {
-        ContextExtensionX86 * bps = EXT(ctx);
-        for (i = 0; i < MAX_HW_BPS; i++) {
-            if (bps->hw_bps[i] == bp) {
-                bps->hw_bps[i] = NULL;
-                bps->hw_bps_generation++;
-            }
+    ContextExtensionX86 * bps = EXT(ctx);
+    for (i = 0; i < MAX_HW_BPS; i++) {
+        if (bps->hw_bps[i] == bp) {
+            bps->hw_bps[i] = NULL;
+            bps->hw_bps_generation++;
         }
+    }
+    l = context_root.next;
+    while (l != &context_root) {
+        Context * c = ctxl2ctxp(l);
+        if (c->stopped && context_get_group(c, CONTEXT_GROUP_BREAKPOINT) == ctx) {
+            if (set_debug_regs(c, 0, NULL) < 0) return -1;
+        }
+        l = l->next;
     }
     return 0;
 }
 
 int cpu_bp_on_resume(Context * ctx, int * single_step) {
     /* Update debug registers */
-    int step = 0;
     ContextExtensionX86 * ext = EXT(ctx);
     ContextExtensionX86 * bps = EXT(context_get_group(ctx, CONTEXT_GROUP_BREAKPOINT));
     if (ctx->stopped_by_cb != NULL || ext->hw_bps_regs_generation != bps->hw_bps_generation) {
-        int i;
-        uint32_t dr7 = 0;
-        ContextAddress ip = 0;
-        int step_over_hw_bp = 0;
-
-        if (context_read_reg(ctx, get_PC_definition(ctx), 0, sizeof(ip), &ip) < 0) return -1;
-
-        for (i = 0; i < MAX_HW_BPS; i++) {
-            ContextBreakpoint * bp = bps->hw_bps[i];
-            if (bp == NULL) {
-                /* nothing */
-            }
-            else if (bp->address == ip && (bp->access_types & CTX_BP_ACCESS_INSTRUCTION)) {
-                /* Skipping the breakpoint */
-                step_over_hw_bp = 1;
-            }
-            else {
-                if (context_write_reg(ctx, get_DR_definition(i), 0, sizeof(bp->address), &bp->address) < 0) return -1;
-                dr7 |= (uint32_t)1 << (i * 2);
-                if (bp->access_types == (CTX_BP_ACCESS_INSTRUCTION | CTX_BP_ACCESS_VIRTUAL)) {
-                    /* nothing */
-                }
-                else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_VIRTUAL)) {
-                    if (bps->hw_idx[i] == 0) {
-                        dr7 |= (uint32_t)1 << (i * 4 + 16);
-                    }
-                    else {
-                        dr7 |= (uint32_t)3 << (i * 4 + 16);
-                    }
-                    dr7 |= 0x100u;
-                }
-                else if (bp->access_types == (CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
-                    dr7 |= (uint32_t)1 << (i * 4 + 16);
-                    dr7 |= 0x100u;
-                }
-                else if (bp->access_types == (CTX_BP_ACCESS_DATA_READ | CTX_BP_ACCESS_DATA_WRITE | CTX_BP_ACCESS_VIRTUAL)) {
-                    dr7 |= (uint32_t)3 << (i * 4 + 16);
-                    dr7 |= 0x100u;
-                }
-                else {
-                    set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported access mode");
-                    return -1;
-                }
-                if (bp->length == 1) {
-                    /* nothing */
-                }
-                else if (bp->length == 2) {
-                    dr7 |= (uint32_t)1 << (i * 4 + 18);
-                }
-                else if (bp->length == 4) {
-                    dr7 |= (uint32_t)3 << (i * 4 + 18);
-                }
-                else if (bp->length == 8) {
-                    dr7 |= (uint32_t)2 << (i * 4 + 18);
-                }
-                else {
-                    set_errno(ERR_UNSUPPORTED, "Invalid hardware breakpoint: unsupported length");
-                    return -1;
-                }
-            }
-        }
-        if (context_write_reg(ctx, get_DR_definition(7), 0, sizeof(dr7), &dr7) < 0) return -1;
-        ext->hw_bps_regs_generation = bps->hw_bps_generation;
-        if (step_over_hw_bp) {
-            step = 1;
-            ext->hw_bps_regs_generation--;
-        }
+        if (set_debug_regs(ctx, 1, single_step) < 0) return -1;
     }
-    *single_step = step;
     return 0;
 }
 

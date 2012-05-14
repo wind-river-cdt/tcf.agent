@@ -347,8 +347,13 @@ static int flush_regs(Context * ctx) {
         return 0;
     }
 
-    trace(LOG_ALWAYS, "error: writing registers failed: ctx %#lx, id %s, error %d %s",
-        ctx, ctx->id, err, errno_to_str(err));
+    {
+        RegisterDefinition * def = get_reg_definitions(ctx);
+        while (def->name != NULL && (def->offset > i || def->offset + def->size <= i)) def++;
+        trace(LOG_ALWAYS, "error: writing register %s failed: ctx %#lx, id %s, error %d %s",
+            def->name ? def->name : "?", ctx, ctx->id, err, errno_to_str(err));
+        if (def->name) err = set_fmt_errno(err, "Cannot write register %s", def->name);
+    }
     errno = err;
     return -1;
 }
@@ -1290,11 +1295,10 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
 
         cpu_bp_on_suspend(ctx, &cb_found);
         if (signal == SIGTRAP && event == 0 && !syscall) {
-            size_t break_size = 0;
-            get_break_instruction(ctx, &break_size);
             ctx->stopped_by_bp = is_breakpoint_address(ctx, pc1 + TRAP_OFFSET);
-            ext->end_of_step = !ctx->stopped_by_cb && !ctx->stopped_by_bp && ext->pending_step;
             if (ctx->stopped_by_bp) set_regs_PC(ctx, pc1 + TRAP_OFFSET);
+            else ctx->stopped_by_bp = is_breakpoint_address(ctx, pc1);
+            ext->end_of_step = !ctx->stopped_by_cb && !ctx->stopped_by_bp && ext->pending_step;
         }
         ext->pending_step = 0;
         send_context_stopped_event(ctx);
