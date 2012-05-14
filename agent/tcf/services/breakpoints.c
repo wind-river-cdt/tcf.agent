@@ -2136,7 +2136,6 @@ static void command_enable(char * token, Channel * c) {
                 bp = find_breakpoint(id);
                 if (bp != NULL && !list_is_empty(&bp->link_clients) && !bp->enabled) {
                     bp->enabled = 1;
-                    reset_bp_hit_count(bp);
                     set_breakpoint_attribute(bp, BREAKPOINT_ENABLED, "true");
                     replant_breakpoint(bp);
                     send_event_context_changed(bp);
