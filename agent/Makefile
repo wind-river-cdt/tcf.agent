@@ -99,7 +99,7 @@ install: all
 	install -c -t $(INSTALLROOT)$(INCLUDE)/tcf/framework -m 644 tcf/framework/*.h
 	install -c -t $(INSTALLROOT)$(INCLUDE)/tcf/services -m 644 tcf/services/*.h
 
-ALLFILES = Makefile* *.html *.sln *.vcproj *.h bin tcf
+ALLFILES = Makefile* *.html *.sln *.vcproj *.h bin tcf system machine
 
 tcf-agent-$(VERSION).tar.bz2: $(HFILES) $(CFILES) Makefile Makefile.inc \
 			      tcf/main/tcf-agent.spec tcf/main/tcf-agent.init
