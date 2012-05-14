@@ -1438,14 +1438,14 @@ void generate_ssl_certificate(void) {
     if (!err && !PEM_write_PKCS8PrivateKey(fp, rsa_key, NULL, NULL, 0, NULL, NULL)) err = set_ssl_errno();
     if (!err && fclose(fp) != 0) err = errno;
 #ifndef _WIN32
-    if (!err && chmod(fnm, S_IRWXU) != 0) err = errno;
+    if (!err && chmod(fnm, S_IRUSR|S_IWUSR) != 0) err = errno;
 #endif
     snprintf(fnm, sizeof(fnm), "%s/ssl/local.cert", tcf_dir);
     if (!err && (fp = fopen(fnm, "w")) == NULL) err = errno;
     if (!err && !PEM_write_X509(fp, cert)) err = set_ssl_errno();
     if (!err && fclose(fp) != 0) err = errno;
 #ifndef _WIN32
-    if (!err && chmod(fnm, S_IRWXU) != 0) err = errno;
+    if (!err && chmod(fnm, S_IRUSR|S_IWUSR) != 0) err = errno;
 #endif
     if (err) {
         fprintf(stderr, "Cannot create SSL certificate: %s\n", errno_to_str(err));
