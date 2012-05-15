@@ -1129,6 +1129,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
         add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
         add_location_command(SFT_CMD_NUMBER)->args.num = dword;
         add_location_command(SFT_CMD_ADD);
+        (*loc)->args_cnt = 1;
         return 0;
     }
 
