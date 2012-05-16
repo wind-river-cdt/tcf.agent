@@ -2702,12 +2702,14 @@ static void event_context_disposed(Context * ctx, void * args) {
         ext->bp_ids = NULL;
     }
     l = ext->link_hit_count.next;
-    while (l != &ext->link_hit_count) {
-        BreakpointHitCount * c = link_ctx2hcnt(l);
-        l = l->next;
-        list_remove(&c->link_bp);
-        list_remove(&c->link_ctx);
-        loc_free(c);
+    if (l != NULL) { /* link_hit_count can be uninitialized */
+        while (l != &ext->link_hit_count) {
+            BreakpointHitCount * c = link_ctx2hcnt(l);
+            l = l->next;
+            list_remove(&c->link_bp);
+            list_remove(&c->link_ctx);
+            loc_free(c);
+        }
     }
 }
 
