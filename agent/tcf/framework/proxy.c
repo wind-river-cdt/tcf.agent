@@ -132,7 +132,9 @@ static void log_byte_func(int i) {
         /* Printable ASCII  */
         log_chr(i);
     }
-    else if (i == 0) {
+    else if (i == 0 || i == ' ') {
+        /* Leave spaces as is for better log readibility */
+
         log_chr(' ');
     }
     else if (i > 0) {
