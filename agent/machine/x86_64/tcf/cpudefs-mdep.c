@@ -738,14 +738,6 @@ static void ini_xmm_regs(void) {
     }
 }
 
-static void ini_regs(void) {
-#if defined(__i386__) || defined(__x86_64__)
-    ini_xmm_regs ();
-#else
-    regs_index = reg_defs;
-#endif
-}
-
 #if ENABLE_HardwareBreakpoints
 
 #define MAX_HW_BPS 4
@@ -1019,14 +1011,12 @@ int cpu_bp_on_suspend(Context * ctx, int * triggered) {
 
 #endif /* ENABLE_HardwareBreakpoints */
 
-#if ENABLE_ini_cpudefs_mdep
 void ini_cpudefs_mdep(void) {
-    ini_regs();
+    ini_xmm_regs ();
 #if ENABLE_HardwareBreakpoints
     context_extension_offset = context_extension(sizeof(ContextExtensionX86));
 #endif
 }
-#endif
 
 #endif
 #endif

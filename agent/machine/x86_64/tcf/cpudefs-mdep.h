@@ -41,10 +41,8 @@
 extern RegisterDefinition * regs_index;
 extern unsigned char BREAK_INST[1];
 
-#if ENABLE_HardwareBreakpoints
 #define ENABLE_ini_cpudefs_mdep 1
 extern void ini_cpudefs_mdep(void);
-#endif
 
 #else
 
