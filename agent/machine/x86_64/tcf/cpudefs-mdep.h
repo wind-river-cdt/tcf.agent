@@ -38,7 +38,7 @@
 #  define ENABLE_HardwareBreakpoints 1
 #endif
 
-extern RegisterDefinition regs_index[];
+extern RegisterDefinition * regs_index;
 extern unsigned char BREAK_INST[1];
 
 #if ENABLE_HardwareBreakpoints
