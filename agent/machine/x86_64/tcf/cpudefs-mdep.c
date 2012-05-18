@@ -711,6 +711,8 @@ static void ini_xmm_regs(void) {
             sprintf(sub_xmm_name, "w%d", sub_xmm_sizes[sub_xmm_sizes_ix]);
             cur_reg_def->name = loc_strdup(sub_xmm_name);
             cur_reg_def->dwarf_id = -1;
+            cur_reg_def->no_read = 1;
+            cur_reg_def->no_write = 1;
             cur_reg_def->parent = regs_index + xmm_ix;
             cur_reg_def ++;
             for (sub_xmm_ix = 0; sub_xmm_ix < nb_sub_xmm; sub_xmm_ix ++) {
