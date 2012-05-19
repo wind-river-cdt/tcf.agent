@@ -61,6 +61,7 @@ struct ContextCache {
     ErrorReport * mmap_error;
     ReplyHandlerInfo * pending_get_mmap;
     int mmap_is_valid;
+    int has_mmap;
 
     /* Register definitions */
     AbstractCache regs_cache;
@@ -97,7 +98,6 @@ struct ContextCache {
 struct RegisterProps {
     RegisterDefinition def;
     char * id;
-    char * role;
 };
 
 struct MemoryCache {
@@ -277,7 +277,7 @@ static void free_context_cache(ContextCache * c) {
         unsigned i;
         for (i = 0; i < c->reg_max; i++) {
             loc_free(c->reg_props[i].id);
-            loc_free(c->reg_props[i].role);
+            loc_free(c->reg_props[i].def.role);
         }
         loc_free(c->reg_props);
     }
@@ -370,6 +370,10 @@ static void crear_memory_map_data(ContextCache * ctx) {
     release_error_report(ctx->mmap_error);
     ctx->mmap_is_valid = 0;
     ctx->mmap_error = NULL;
+    if (ctx->has_mmap) {
+        memory_map_event_mapping_changed(ctx->ctx);
+        ctx->has_mmap = 0;
+    }
 }
 
 static void read_context_added_item(InputStream * inp, void * args) {
@@ -605,7 +609,6 @@ static void event_memory_map_changed(Channel * c, void * args) {
     if (ctx != NULL) {
         assert(*EXT(ctx->ctx) == ctx);
         crear_memory_map_data(ctx);
-        memory_map_event_mapping_changed(ctx->ctx);
     }
     else if (p->rc_done) {
         trace(LOG_ALWAYS, "Invalid ID in 'memory map changed' event: %s", id);
@@ -1070,6 +1073,7 @@ int context_get_memory_map(Context * ctx, MemoryMap * map) {
         set_error_report_errno(cache->mmap_error);
         return -1;
     }
+    cache->has_mmap = 1;
     return 0;
 }
 
@@ -1096,7 +1100,7 @@ static void read_ids_item(InputStream * inp, void * args) {
 static void read_register_property(InputStream * inp, const char * name, void * args) {
     RegisterProps * p = (RegisterProps *)args;
     if (strcmp(name, "ID") == 0) p->id = json_read_alloc_string(inp);
-    else if (strcmp(name, "Role") == 0) p->role = json_read_alloc_string(inp);
+    else if (strcmp(name, "Role") == 0) p->def.role = json_read_alloc_string(inp);
     else if (strcmp(name, "Name") == 0) p->def.name = json_read_alloc_string(inp);
     else if (strcmp(name, "Size") == 0) p->def.size = (uint16_t)json_read_long(inp);
     else if (strcmp(name, "DwarfID") == 0) p->def.dwarf_id = (int16_t)json_read_long(inp);
@@ -1181,9 +1185,6 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
                 }
                 cache->reg_props[i] = props;
                 cache->reg_defs[i] = props.def;
-                if (props.role != NULL && strcmp(props.role, "PC") == 0) {
-                    cache->pc_def = cache->reg_defs + i;
-                }
                 cache->pending_regs_cnt++;
                 protocol_send_command(c, "Registers", "getChildren", validate_registers_cache, cache);
                 json_write_string(&c->out, props.id);
@@ -1211,6 +1212,9 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
             if (r->name != NULL) {
                 r->offset = offs;
                 offs += r->size;
+            }
+            if (r->role != NULL && strcmp(r->role, "PC") == 0) {
+                cache->pc_def = r;
             }
         }
         cache->reg_size = offs;
@@ -1547,10 +1551,7 @@ static void event_path_mapping_changed(Channel * c, void * args) {
     while (x != &context_root) {
         Context * ctx = ctxl2ctxp(x);
         ContextCache * p = *EXT(ctx);
-        if (p->mmap_is_valid) {
-            crear_memory_map_data(p);
-            memory_map_event_mapping_changed(ctx);
-        }
+        crear_memory_map_data(p);
         x = x->next;
     }
 }
