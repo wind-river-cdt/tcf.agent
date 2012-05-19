@@ -1747,6 +1747,7 @@ int safe_context_single_step(Context * ctx) {
     int res = 0;
     ContextExtensionRC * ext = EXT(ctx);
     assert(run_ctrl_lock_cnt > 0);
+    assert(safe_event_list != NULL);
     assert(ext->safe_single_step == 0);
     ext->safe_single_step = 1;
     res = context_single_step(ctx);
@@ -1847,7 +1848,8 @@ static void event_context_started(Context * ctx, void * client_data) {
     assert(run_ctrl_lock_cnt == 0 || ext->safe_single_step || ctx->exiting);
     if (ext->intercepted) resume_context_tree(ctx);
     ext->intercepted_by_bp = 0;
-    if (safe_event_list) {
+    if (run_ctrl_lock_cnt) {
+        assert(!ext->safe_single_step || safe_event_list != NULL);
         if (!ext->safe_single_step && !ctx->exiting) {
             context_stop(ctx);
         }
