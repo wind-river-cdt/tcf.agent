@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -1648,9 +1648,9 @@ static void run_safe_events(void * arg) {
         ContextExtensionRC * ext = EXT(ctx);
         l = l->next;
         ext->pending_safe_event = 0;
-        if (context_get_group(ctx, CONTEXT_GROUP_STOP) != grp) continue;
         if (ctx->exited || ctx->exiting) continue;
         if (ctx->stopped || !context_has_state(ctx)) continue;
+        if (!ext->safe_single_step && context_get_group(ctx, CONTEXT_GROUP_STOP) != grp) continue;
         if (stop_all_timer_cnt >= STOP_ALL_MAX_CNT) {
             trace(LOG_ALWAYS, "can't stop %s; error: timeout", ctx->id);
             ctx->exiting = 1;
