@@ -1141,12 +1141,13 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 (prs2->creator = ctx)->ref_count++;
                 prs2->sig_dont_stop = ctx->sig_dont_stop;
                 prs2->sig_dont_pass = ctx->sig_dont_pass;
+                link_context(prs2);
                 clone_breakpoints_on_process_fork(ctx, prs2);
                 if ((ext->attach_mode & CONTEXT_ATTACH_CHILDREN) == 0) {
+                    list_remove(&prs2->ctxl);
                     list_add_first(&prs2->ctxl, &detach_list);
                     break;
                 }
-                link_context(prs2);
                 send_context_created_event(prs2);
             }
 
