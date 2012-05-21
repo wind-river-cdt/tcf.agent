@@ -103,7 +103,8 @@ int parse_context_query(const char * q) {
                                 break;
                             }
                         }
-                    } else {
+                    }
+                    else {
                         while (*q) {
                             if ((*q != '_') &&
                                 (((*q < '0') || (*q > '9')) &&
@@ -130,6 +131,10 @@ int parse_context_query(const char * q) {
                                 set_errno(ERR_OTHER, "Invalid context query syntax: \" and \\ are the only characters that can be escaped");
                                 return -1;
                             }
+                        }
+                        else if (*q == 0) {
+                            set_errno(ERR_OTHER, "Invalid context query syntax: missing closing quote character");
+                            return -1;
                         }
                         add_char(*q++);
                     }
