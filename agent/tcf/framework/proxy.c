@@ -128,13 +128,11 @@ static void log_str(const char * s) {
 }
 
 static void log_byte_func(int i) {
-    if (i > ' ' && i < 127) {
+    if (i >= ' ' && i < 127) {
         /* Printable ASCII  */
         log_chr(i);
     }
-    else if (i == 0 || i == ' ') {
-        /* Leave spaces as is for better log readibility */
-
+    else if (i == 0) {
         log_chr(' ');
     }
     else if (i > 0) {
