@@ -529,8 +529,9 @@ static void event_context_suspended(Channel * ch, void * args) {
             send_context_stopped_event(c->ctx);
         }
     }
-    else if (p->rc_done) {
-        trace(LOG_ALWAYS, "Invalid ID in 'context suspended' event: %s", c->id);
+    else {
+        if (p->rc_done) trace(LOG_ALWAYS, "Invalid ID in 'context suspended' event: %s", c->id);
+        clear_context_suspended_data(c);
     }
 }
 
@@ -561,23 +562,40 @@ static void event_context_resumed(Channel * ch, void * args) {
     }
 }
 
-static void event_container_suspended(Channel * c, void * args) {
+static void event_container_suspended(Channel * ch, void * args) {
     PeerCache * p = (PeerCache *)args;
-    ContextCache ctx;
+    ContextCache buf;
+    ContextCache * c = &buf;
 
-    memset(&ctx, 0, sizeof(ctx));
+    assert(p->target == ch);
+    memset(&buf, 0, sizeof(buf));
     write_stringz(&p->host->out, "E");
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "containerSuspended");
-    json_read_string(p->bck_inp, ctx.id, sizeof(ctx.id));
+    json_read_string(p->bck_inp, c->id, sizeof(c->id));
     if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    ctx.suspend_pc = json_read_uint64(p->bck_inp);
+    c = find_context_cache(p, c->id);
+    if (c == NULL) c = &buf;
+    else clear_context_suspended_data(c);
+    c->suspend_pc = json_read_uint64(p->bck_inp);
     if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    ctx.suspend_reason = json_read_alloc_string(p->bck_inp);
+    c->suspend_reason = json_read_alloc_string(p->bck_inp);
     if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    json_read_struct(p->bck_inp, read_context_suspended_data, &ctx);
+    json_read_struct(p->bck_inp, read_context_suspended_data, c);
     if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    /* TODO: save suspend data in the cache */
+    if (c != &buf) {
+        assert(*EXT(c->ctx) == c);
+        c->pc_valid = 1;
+        if (!c->ctx->stopped) {
+            c->ctx->stopped = 1;
+            on_context_suspended(c);
+            send_context_stopped_event(c->ctx);
+        }
+    }
+    else {
+        if (p->rc_done) trace(LOG_ALWAYS, "Invalid ID in 'container suspended' event: %s", c->id);
+        clear_context_suspended_data(c);
+    }
     json_read_array(p->bck_inp, read_container_suspended_item, p);
     if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
     if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);

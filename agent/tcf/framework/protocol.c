@@ -722,6 +722,7 @@ void protocol_release(Protocol * p) {
         }
     }
     free_services(p);
+    loc_free(p);
 }
 
 const char * get_agent_id(void) {

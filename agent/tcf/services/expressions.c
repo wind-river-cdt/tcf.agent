@@ -3085,6 +3085,7 @@ static void command_create_cache_client(void * x) {
 
     if (err) {
         write_stringz(&c->out, "null");
+        loc_free(e->script);
     }
     else {
         *(e = (Expression *)loc_alloc(sizeof(Expression))) = buf;
