@@ -341,7 +341,7 @@ static MemoryCommandArgs * read_command_args(char * token, Channel * c, int cmd)
 void send_event_memory_changed(Context * ctx, ContextAddress addr, unsigned long size) {
     OutputStream * out = &broadcast_group->out;
 
-    if (is_intercepted(ctx)) {
+    if (!context_has_state(ctx) || is_intercepted(ctx)) {
         write_stringz(out, "E");
         write_stringz(out, MEMORY);
         write_stringz(out, "memoryChanged");
