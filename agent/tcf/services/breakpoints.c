@@ -2572,7 +2572,7 @@ static void safe_skip_breakpoint(void * arg) {
 /*
  * When a context is stopped by breakpoint, it is necessary to disable
  * the breakpoint temporarily before the context can be resumed.
- * This function function removes break instruction, then does single step
+ * This function removes break instruction, then does single step
  * over breakpoint location, then restores break intruction.
  * Return: 0 if it is OK to resume context from current state,
  * return 1 if context needs to step over a breakpoint.
