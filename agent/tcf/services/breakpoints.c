@@ -411,16 +411,17 @@ static void flush_instructions(void) {
         l = l->next;
         if (bi->valid) continue;
         while (i < bi->ref_cnt) {
-            if (bi->refs[i].cnt == 0 || bi->refs[i].ctx->exiting) {
-                bi->refs[i].bp->instruction_cnt--;
-                bi->refs[i].bp->status_changed = 1;
-                context_unlock(bi->refs[i].ctx);
-                memmove(bi->refs + i, bi->refs + i + 1, sizeof(InstructionRef) * (bi->ref_cnt - i - 1));
+            InstructionRef * ref = bi->refs + i;
+            if (ref->cnt == 0 || ref->ctx->exiting || ref->ctx->exited) {
+                ref->bp->instruction_cnt--;
+                ref->bp->status_changed = 1;
+                context_unlock(ref->ctx);
+                memmove(ref, ref + 1, sizeof(InstructionRef) * (bi->ref_cnt - i - 1));
                 bi->ref_cnt--;
                 replant = 1;
             }
             else {
-                if (bi->refs[i].bp->attrs_changed) replant = 1;
+                if (ref->bp->attrs_changed) replant = 1;
                 i++;
             }
         }
