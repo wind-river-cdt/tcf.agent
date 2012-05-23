@@ -17,7 +17,7 @@
  * Expression evaluation service.
  *
  * Extensions to regular C/C++ syntax:
- * 1. Special characters in identifiers: $"X"
+ * 1. Special characters in identifiers: $"X", or just "X" if followed by ::
  *    where X is object name that can contain any characters.
  * 2. Symbol IDs in expressions: ${X}
  *    where X is symbol ID as returned by symbols service.
@@ -1300,6 +1300,11 @@ static int to_boolean(int mode, Value * v) {
 
 static void expression(int mode, Value * v);
 
+static void qualified_name_expression(int mode, Value * scope, Value * v) {
+    if (qualified_name(mode, scope, 0, v) != SYM_CLASS_TYPE) return;
+    error(ERR_INV_EXPRESSION, "Illegal usage of a type in expression");
+}
+
 static void primary_expression(int mode, Value * v) {
     if (text_sy == '(') {
         next_sy();
@@ -1308,20 +1313,25 @@ static void primary_expression(int mode, Value * v) {
         next_sy();
     }
     else if (text_sy == SY_VAL) {
-        if (mode != MODE_SKIP) *v = text_val;
-        else memset(v, 0, sizeof(Value));
+        *v = text_val;
         next_sy();
+        if (v->type_class == TYPE_CLASS_ARRAY && text_sy == SY_SCOPE) {
+            Value x;
+            char * name = (char *)v->value;
+            if (identifier(mode, NULL, name, 0, &x) < 0)
+                error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", name);
+            next_sy();
+            qualified_name_expression(mode, &x, v);
+        }
     }
     else if (text_sy == SY_SCOPE) {
         Value x;
         next_sy();
         memset(&x, 0, sizeof(x));
-        if (qualified_name(mode, &x, 0, v) == SYM_CLASS_TYPE)
-            error(ERR_INV_EXPRESSION, "Illegal usage of a type in expression");
+        qualified_name_expression(mode, &x, v);
     }
     else if (text_sy == SY_NAME || text_sy == SY_ID) {
-        if (qualified_name(mode, NULL, 0, v) == SYM_CLASS_TYPE)
-            error(ERR_INV_EXPRESSION, "Illegal usage of a type in expression");
+        qualified_name_expression(mode, NULL, v);
     }
     else {
         error(ERR_INV_EXPRESSION, "Syntax error");

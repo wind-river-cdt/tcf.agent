@@ -932,6 +932,20 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names) {
     dio_ExitSection();
 }
 
+static void add_pub_name(PubNamesTable * tbl, ObjectInfo * obj) {
+    PubNamesInfo * info = NULL;
+    unsigned h = calc_symbol_name_hash(obj->mName) % tbl->mHashSize;
+    if (tbl->mCnt >= tbl->mMax) {
+        tbl->mMax = tbl->mMax * 3 / 2;
+        tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
+    }
+    info = tbl->mNext + tbl->mCnt;
+    info->mObject = obj;
+    info->mNext = tbl->mHash[h];
+    tbl->mHash[h] = tbl->mCnt++;
+    obj->mFlags |= DOIF_pub_mark;
+}
+
 static void create_pub_names(ELF_Section * debug_info) {
     ObjectInfo * unit = sCache->mCompUnits;
     PubNamesTable * tbl = &sCache->mPubNames;
@@ -939,19 +953,12 @@ static void create_pub_names(ELF_Section * debug_info) {
         ObjectInfo * obj = get_dwarf_children(unit);
         while (obj != NULL) {
             if ((obj->mFlags & DOIF_pub_mark) == 0 && obj->mDefinition == NULL && obj->mName != NULL) {
-                PubNamesInfo * info = NULL;
-                unsigned h = calc_symbol_name_hash(obj->mName) % tbl->mHashSize;
-                if (tbl->mCnt >= tbl->mMax) {
-                    tbl->mMax = tbl->mMax * 3 / 2;
-                    tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
-                }
-                info = tbl->mNext + tbl->mCnt;
-                info->mObject = obj;
-                info->mNext = tbl->mHash[h];
-                tbl->mHash[h] = tbl->mCnt++;
-                obj->mFlags |= DOIF_pub_mark;
+                add_pub_name(tbl, obj);
             }
             obj = obj->mSibling;
+        }
+        if ((unit->mFlags & DOIF_pub_mark) == 0 && unit->mName != NULL) {
+            add_pub_name(tbl, unit);
         }
         unit = unit->mSibling;
     }
