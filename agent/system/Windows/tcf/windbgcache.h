@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008 Wind River Systems, Inc. and others.
+ * Copyright (c) 2008, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -162,6 +162,32 @@ typedef struct _IMAGEHLP_STACK_FRAME {
     BOOL    Virtual;
     ULONG   Reserved2;
 } IMAGEHLP_STACK_FRAME, *PIMAGEHLP_STACK_FRAME;
+
+typedef struct _IMAGEHLP_MODULE64 {
+    DWORD    SizeOfStruct;
+    DWORD64  BaseOfImage;
+    DWORD    ImageSize;
+    DWORD    TimeDateStamp;
+    DWORD    CheckSum;
+    DWORD    NumSyms;
+    SYM_TYPE SymType;
+    CHAR     ModuleName[32];
+    CHAR     ImageName[256];
+    CHAR     LoadedImageName[256];
+    CHAR     LoadedPdbName[256];
+    DWORD    CVSig;
+    CHAR     CVData[MAX_PATH * 3];
+    DWORD    PdbSig;
+    GUID     PdbSig70;
+    DWORD    PdbAge;
+    BOOL     PdbUnmatched;
+    BOOL     DbgUnmatched;
+    BOOL     LineNumbers;
+    BOOL     GlobalSymbols;
+    BOOL     TypeInfo;
+    BOOL     SourceIndexed;
+    BOOL     Publics;
+} IMAGEHLP_MODULE64, *PIMAGEHLP_MODULE64;
 
 typedef VOID IMAGEHLP_CONTEXT, *PIMAGEHLP_CONTEXT;
 
