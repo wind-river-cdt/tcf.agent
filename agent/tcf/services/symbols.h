@@ -287,7 +287,7 @@ extern int get_stack_tracing_info(Context * ctx, ContextAddress addr, StackTraci
 /*
  * Get name of a symbol file that is used for a given module.
  */
-extern const char * get_symbol_file_name(MemoryRegion * module);
+extern const char * get_symbol_file_name(Context * ctx, MemoryRegion * module);
 
 /*
  * Initialize symbol service.

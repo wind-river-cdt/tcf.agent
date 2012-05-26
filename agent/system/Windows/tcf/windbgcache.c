@@ -48,12 +48,6 @@ and rebuild."
 
 static HINSTANCE dbghelp_dll = NULL;
 
-#define SYM_SEARCH_PATH ""
-/* Path could contain "http://msdl.microsoft.com/download/symbols",
-   but access to Microsoft debug info server is too slow,
-   and dbghelp.dll caching is inadequate
-*/
-
 static wchar_t * pathes[] = {
     L"%\\Debugging Tools for Windows (x86)\\dbghelp.dll",
     L"%\\Debugging Tools for Windows\\dbghelp.dll",
@@ -66,11 +60,24 @@ static wchar_t * pathes[] = {
 
 static void event_context_created(Context * ctx, void * client_data) {
     HANDLE handle = NULL;
+    WCHAR fnm[_MAX_PATH];
+    DWORD w = 0;
+
     if (ctx->parent != NULL) return;
     handle = get_context_handle(ctx);
     assert(handle != NULL);
     assert(ctx->mem == ctx);
-    if (!SymInitialize(handle, SYM_SEARCH_PATH, FALSE)) {
+
+    w = GetModuleFileNameW(NULL, fnm, _MAX_PATH);
+    while (w > 0 && fnm[w] != '\\') w--;
+    fnm[w] = 0;
+
+    /* Symbol search path could contain "http://msdl.microsoft.com/download/symbols",
+       but access to Microsoft debug info server is too slow,
+       and dbghelp.dll caching is inadequate
+    */
+
+    if (!SymInitializeW(handle, fnm, TRUE)) {
         set_win32_errno(GetLastError());
         trace(LOG_ALWAYS, "SymInitialize() error: %s", errno_to_str(errno));
     }
@@ -223,11 +230,11 @@ static FARPROC GetProc(char * name) {
 
 #if ENABLE_PE_Symbols
 
-BOOL SymInitialize(HANDLE hProcess, PCSTR UserSearchPath, BOOL fInvadeProcess) {
-    typedef BOOL (FAR WINAPI * ProcType)(HANDLE, PCSTR, BOOL);
+BOOL SymInitializeW(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeProcess) {
+    typedef BOOL (FAR WINAPI * ProcType)(HANDLE, PCWSTR, BOOL);
     static ProcType proc = NULL;
     if (proc == NULL) {
-        proc = (ProcType)GetProc("SymInitialize");
+        proc = (ProcType)GetProc("SymInitializeW");
         if (proc == NULL) return 0;
     }
     return proc(hProcess, UserSearchPath, fInvadeProcess);
@@ -383,6 +390,16 @@ BOOL SymUnloadModule64(HANDLE hProcess, DWORD64 BaseOfDll) {
         if (proc == NULL) return 0;
     }
     return proc(hProcess, BaseOfDll);
+}
+
+BOOL SymGetModuleInfo64(HANDLE hProcess, DWORD64 Addr, PIMAGEHLP_MODULE64 ModuleInfo) {
+    typedef BOOL (FAR WINAPI * ProcType)(HANDLE, DWORD64, PIMAGEHLP_MODULE64);
+    static ProcType proc = NULL;
+    if (proc == NULL) {
+        proc = (ProcType)GetProc("SymGetModuleInfo64");
+        if (proc == NULL) return 0;
+    }
+    return proc(hProcess, Addr, ModuleInfo);
 }
 
 BOOL SymCleanup(HANDLE hProcess) {

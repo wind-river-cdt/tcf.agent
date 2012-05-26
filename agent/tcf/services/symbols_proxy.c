@@ -1547,7 +1547,8 @@ int get_funccall_info(const Symbol * func,
     return -1;
 }
 
-const char * get_symbol_file_name(MemoryRegion * module) {
+const char * get_symbol_file_name(Context * ctx, MemoryRegion * module) {
+    /* TODO: get_symbol_file_name() in symbols proxy */
     errno = 0;
     return NULL;
 }

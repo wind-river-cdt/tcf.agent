@@ -150,7 +150,7 @@ static int get_stack_frame(Context * ctx, int frame, ContextAddress ip, IMAGEHLP
 static int get_sym_info(const Symbol * sym, DWORD index, SYMBOL_INFO ** res) {
     static ULONG64 buffer[(sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR) + sizeof(ULONG64) - 1) / sizeof(ULONG64)];
     SYMBOL_INFO * info = (SYMBOL_INFO *)buffer;
-    HANDLE process = get_context_handle(sym->ctx->parent == NULL ? sym->ctx : sym->ctx->parent);
+    HANDLE process = get_context_handle(context_get_group(sym->ctx, CONTEXT_GROUP_PROCESS));
 
     info->SizeOfStruct = sizeof(SYMBOL_INFO);
     info->MaxNameLen = MAX_SYM_NAME;
@@ -163,7 +163,7 @@ static int get_sym_info(const Symbol * sym, DWORD index, SYMBOL_INFO ** res) {
 }
 
 static int get_type_info(const Symbol * sym, IMAGEHLP_SYMBOL_TYPE_INFO info_tag, void * info) {
-    HANDLE process = get_context_handle(sym->ctx->parent == NULL ? sym->ctx : sym->ctx->parent);
+    HANDLE process = get_context_handle(context_get_group(sym->ctx, CONTEXT_GROUP_PROCESS));
     if (!SymGetTypeInfo(process, sym->module, sym->index, info_tag, info)) {
         set_win32_errno(GetLastError());
         return -1;
@@ -538,6 +538,10 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
 
 int get_symbol_type(const Symbol * sym, Symbol ** type) {
     assert(sym->magic == SYMBOL_MAGIC);
+    if (sym->address) {
+        *type = NULL;
+        return 0;
+    }
     if (!sym->base && !sym->info) {
         DWORD tag = 0;
         DWORD index = 0;
@@ -860,7 +864,7 @@ static int set_pe_context(Context * ctx, int frame, ContextAddress ip, HANDLE pr
 }
 
 static int find_pe_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char * name, Symbol * sym) {
-    HANDLE process = get_context_handle(ctx->parent == NULL ? ctx : ctx->parent);
+    HANDLE process = get_context_handle(context_get_group(ctx, CONTEXT_GROUP_PROCESS));
     ULONG64 buffer[(sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR) + sizeof(ULONG64) - 1) / sizeof(ULONG64)];
     SYMBOL_INFO * info = (SYMBOL_INFO *)buffer;
     IMAGEHLP_STACK_FRAME stack_frame;
@@ -900,7 +904,7 @@ static int find_pe_symbol_by_name(Context * ctx, int frame, ContextAddress ip, c
 }
 
 static int find_pe_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol * sym) {
-    HANDLE process = get_context_handle(ctx->parent == NULL ? ctx : ctx->parent);
+    HANDLE process = get_context_handle(context_get_group(ctx, CONTEXT_GROUP_PROCESS));
     ULONG64 buffer[(sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR) + sizeof(ULONG64) - 1) / sizeof(ULONG64)];
     SYMBOL_INFO * info = (SYMBOL_INFO *)buffer;
     IMAGEHLP_STACK_FRAME stack_frame;
@@ -1018,7 +1022,7 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * call_
     SYMBOL_INFO * symbol = (SYMBOL_INFO *)buffer;
     IMAGEHLP_STACK_FRAME stack_frame;
     EnumerateSymbolsContext enum_context;
-    HANDLE process = get_context_handle(ctx->parent == NULL ? ctx : ctx->parent);
+    HANDLE process = get_context_handle(context_get_group(ctx, CONTEXT_GROUP_PROCESS));
 
     symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
     symbol->MaxNameLen = MAX_SYM_NAME;
@@ -1225,9 +1229,18 @@ int get_funccall_info(const Symbol * func,
     return 0;
 }
 
-const char * get_symbol_file_name(MemoryRegion * module) {
+const char * get_symbol_file_name(Context * ctx, MemoryRegion * module) {
+    IMAGEHLP_MODULE64 info;
+    HANDLE process = get_context_handle(context_get_group(ctx, CONTEXT_GROUP_PROCESS));
+    memset(&info, 0, sizeof(info));
+    info.SizeOfStruct = sizeof(info);
+    if (!SymGetModuleInfo64(process, module->addr, &info)) {
+        set_win32_errno(GetLastError());
+        return NULL;
+    }
     errno = 0;
-    return NULL;
+    if (info.LoadedImageName[0] == 0) return NULL;
+    return tmp_strdup(info.LoadedImageName);
 }
 
 static void event_context_exited(Context * ctx, void * client_data) {

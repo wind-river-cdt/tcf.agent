@@ -204,7 +204,7 @@ enum DataKind {
    DataIsConstant
 };
 
-#define SymInitialize LocSymInitialize
+#define SymInitializeW LocSymInitializeW
 #define SymGetOptions LocSymGetOptions
 #define SymSetOptions LocSymSetOptions
 #define SymGetLineFromName LocSymGetLineFromName
@@ -220,11 +220,12 @@ enum DataKind {
 #define SymGetModuleBase64 LocSymGetModuleBase64
 #define SymLoadModule64 LocSymLoadModule64
 #define SymUnloadModule64 LocSymUnloadModule64
+#define SymGetModuleInfo64 LocSymGetModuleInfo64
 #define SymCleanup LocSymCleanup
 
 #define EnumerateLoadedModulesW64 LocEnumerateLoadedModulesW64
 
-extern BOOL SymInitialize(HANDLE hProcess, PCSTR UserSearchPath, BOOL fInvadeProcess);
+extern BOOL SymInitializeW(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeProcess);
 extern DWORD SymGetOptions(void);
 extern BOOL SymSetOptions(DWORD Options);
 extern BOOL SymGetLineFromName(HANDLE hProcess, PCSTR ModuleName, PCSTR FileName, DWORD dwLineNumber, PLONG plDisplacement, PIMAGEHLP_LINE Line);
@@ -240,6 +241,7 @@ extern BOOL SymGetTypeFromName(HANDLE hProcess, ULONG64 BaseOfDll, PCSTR Name, P
 extern DWORD64 SymGetModuleBase64(HANDLE hProcess, ULONG64 Address);
 extern BOOL SymLoadModule64(HANDLE hProcess, HANDLE hFile, PCSTR ImageName, PCSTR ModuleName, DWORD64 BaseOfDll, DWORD SizeOfDll);
 extern BOOL SymUnloadModule64(HANDLE hProcess, DWORD64 BaseOfDll);
+extern BOOL SymGetModuleInfo64(HANDLE hProcess, DWORD64 Addr, PIMAGEHLP_MODULE64 ModuleInfo);
 extern BOOL SymCleanup(HANDLE hProcess);
 
 extern BOOL LocEnumerateLoadedModulesW64(HANDLE hProcess, PENUMLOADED_MODULES_CALLBACKW64 Callback, PVOID UserContext);

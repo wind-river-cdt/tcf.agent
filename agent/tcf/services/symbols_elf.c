@@ -1442,7 +1442,7 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
     return 0;
 }
 
-const char * get_symbol_file_name(MemoryRegion * module) {
+const char * get_symbol_file_name(Context * ctx, MemoryRegion * module) {
     int error = 0;
     ELF_File * file = module ? elf_open_memory_region_file(module, &error) : NULL;
     errno = error;

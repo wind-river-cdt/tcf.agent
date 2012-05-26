@@ -926,7 +926,7 @@ static void command_get_sym_file_info_cache_client(void * x) {
             }
         }
 
-        sym_file = get_symbol_file_name(region);
+        sym_file = get_symbol_file_name(ctx, region);
         sym_error = errno;
     }
 
