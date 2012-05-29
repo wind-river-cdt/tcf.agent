@@ -8,7 +8,7 @@ ifndef MACHINE
 endif
 
 INCDIRS = . system/$(OPSYS) machine/$(MACHINE)
-SRCDIRS = . system/$(OPSYS)/tcf machine/$(MACHINE)/tcf tcf/framework tcf/services tcf/main
+SRCDIRS = . system/$(OPSYS)/tcf machine/$(MACHINE)/tcf tcf tcf/framework tcf/services tcf/main
 BINDIR  = obj/$(OPSYS)/$(MACHINE)/$(CONF)
 
 MKDIR   = mkdir -p $(1)
