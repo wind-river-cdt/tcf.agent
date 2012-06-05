@@ -1289,6 +1289,7 @@ static int check_context_ids_location(BreakpointInfo * bp, Context * ctx) {
         int ok = 0;
         LINK * l = context_root.next;
         if (parse_context_query(bp->context_query) < 0) {
+            assert(bp_location_error == NULL);
             bp_location_error = get_error_report(errno);
             return 0;
         }
@@ -1423,16 +1424,13 @@ static void evaluate_bp_location(void * x) {
             link_breakpoint_instruction(bp, ctx, 0, bp->access_size, NULL, 0, 0, NULL);
         }
     }
-    expr_cache_exit(args);
     if (!compare_error_reports(bp_location_error, bp->error)) {
         release_error_report(bp->error);
         bp->error = bp_location_error;
         bp->status_changed = 1;
+        bp_location_error = NULL;
     }
-    else {
-        release_error_report(bp_location_error);
-    }
-    bp_location_error = NULL;
+    expr_cache_exit(args);
 }
 
 static void event_replant_breakpoints(void * arg) {
