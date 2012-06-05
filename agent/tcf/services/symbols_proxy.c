@@ -256,7 +256,7 @@ static void free_arr_sym_cache(ArraySymCache * a) {
 
 static void free_sym_info_cache(SymInfoCache * c) {
     assert(c->magic == SYM_CACHE_MAGIC);
-    assert(!c->disposed || c->pending == NULL);
+    assert(!c->disposed || (c->pending_get_context == NULL && c->pending_get_children == NULL));
     if (!c->disposed) {
         list_remove(&c->link_syms);
         c->disposed = 1;
