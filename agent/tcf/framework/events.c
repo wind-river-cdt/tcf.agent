@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -36,6 +36,10 @@
 #include <tcf/framework/trace.h>
 #include <tcf/framework/events.h>
 
+#if !defined(ENABLE_FastMemAlloc)
+#  define ENABLE_FastMemAlloc 1
+#endif
+
 typedef struct event_node event_node;
 
 struct event_node {
@@ -60,8 +64,39 @@ struct event_node {
 #  define trace if ((log_mode & LOG_EVENTCORE) && log_file) print_trace
 #endif
 
+#if ENABLE_FastMemAlloc
+
 #define EVENT_BUF_SIZE 0x200
 static event_node event_buf[EVENT_BUF_SIZE];
+static event_node * free_queue = NULL;
+static event_node * free_bg_queue = NULL;
+
+#define alloc_event_node(ev) \
+    ev = free_queue; \
+    if (ev != NULL) free_queue = ev->next; \
+    else ev = (event_node *)loc_alloc(sizeof(event_node));
+
+#define alloc_event_node_bg(ev) \
+    ev = free_bg_queue; \
+    if (ev != NULL) free_bg_queue = ev->next; \
+    else ev = (event_node *)loc_alloc(sizeof(event_node));
+
+#define free_event_node(ev) \
+    if (ev >= event_buf && ev < event_buf + EVENT_BUF_SIZE) { \
+        ev->next = free_queue; \
+        free_queue = ev; \
+    } \
+    else { \
+        loc_free(ev); \
+    }
+
+#else
+
+#define alloc_event_node(ev) ev = (event_node *)loc_alloc(sizeof(event_node))
+#define alloc_event_node_bg(ev) alloc_event_node(ev)
+#define free_event_node(ev) loc_free(ev)
+
+#endif
 
 static pthread_mutex_t event_lock;
 static pthread_cond_t event_cond;
@@ -70,9 +105,6 @@ static pthread_cond_t cancel_cond;
 static event_node * event_queue = NULL;
 static event_node * event_last = NULL;
 static event_node * timer_queue = NULL;
-static event_node * free_queue = NULL;
-static event_node * free_bg_queue = NULL;
-static int free_bg_size = 0;
 static EventCallBack * cancel_handler = NULL;
 static void * cancel_arg = NULL;
 static int process_events = 0;
@@ -87,9 +119,7 @@ static int time_cmp(const struct timespec * tv1, const struct timespec * tv2) {
     return 0;
 }
 
-/*
- * Add microsecond value to timespec.
- */
+/* Add microsecond value to timespec. */
 static void time_add_usec(struct timespec * tv, unsigned long usec) {
     tv->tv_sec += usec / 1000000;
     tv->tv_nsec += (usec % 1000000) * 1000;
@@ -111,15 +141,7 @@ static void post_from_bg_thread(EventCallBack * handler, void * arg, unsigned lo
         check_error(pthread_mutex_unlock(&event_lock));
         return;
     }
-    ev = free_bg_queue;
-    assert(ev == NULL ? free_bg_size == 0 : free_bg_size > 0);
-    if (ev != NULL) {
-        free_bg_queue = ev->next;
-        free_bg_size--;
-    }
-    else {
-        ev = (event_node *)loc_alloc(sizeof(event_node));
-    }
+    alloc_event_node_bg(ev);
     if (clock_gettime(CLOCK_REALTIME, &ev->runtime)) check_error(errno);
     time_add_usec(&ev->runtime, delay);
     ev->handler = handler;
@@ -151,9 +173,7 @@ void post_event_with_delay(EventCallBack * handler, void * arg, unsigned long de
         event_node * next;
         event_node * prev;
 
-        ev = free_queue;
-        if (ev != NULL) free_queue = ev->next;
-        else ev = (event_node *)loc_alloc(sizeof(event_node));
+        alloc_event_node(ev);
         if (clock_gettime(CLOCK_REALTIME, &ev->runtime)) check_error(errno);
         time_add_usec(&ev->runtime, delay);
         ev->handler = handler;
@@ -186,9 +206,9 @@ void post_event_with_delay(EventCallBack * handler, void * arg, unsigned long de
 
 void post_event(EventCallBack * handler, void * arg) {
     if (is_event_thread) {
-        event_node * ev = free_queue;
-        if (ev != NULL) free_queue = ev->next;
-        else ev = (event_node *)loc_alloc(sizeof(event_node));
+        event_node * ev;
+
+        alloc_event_node(ev);
         ev->handler = handler;
         ev->arg = arg;
         ev->next = NULL;
@@ -230,13 +250,7 @@ int cancel_event(EventCallBack * handler, void * arg, int wait) {
             else {
                 prev->next = ev->next;
             }
-            if (ev >= event_buf && ev < event_buf + EVENT_BUF_SIZE) {
-                ev->next = free_queue;
-                free_queue = ev;
-            }
-            else {
-                loc_free(ev);
-            }
+            free_event_node(ev);
             return 1;
         }
         prev = ev;
@@ -254,13 +268,7 @@ int cancel_event(EventCallBack * handler, void * arg, int wait) {
             else {
                 prev->next = ev->next;
             }
-            if (ev >= event_buf && ev < event_buf + EVENT_BUF_SIZE) {
-                ev->next = free_queue;
-                free_queue = ev;
-            }
-            else {
-                loc_free(ev);
-            }
+            free_event_node(ev);
             check_error(pthread_mutex_unlock(&event_lock));
             return 1;
         }
@@ -286,25 +294,22 @@ int is_dispatch_thread(void) {
 }
 
 void ini_events_queue(void) {
-    int i;
-    assert(free_queue == NULL);
-    assert(free_bg_queue == NULL);
     event_thread = current_thread;
     check_error(pthread_mutex_init(&event_lock, NULL));
     check_error(pthread_cond_init(&event_cond, NULL));
     check_error(pthread_cond_init(&cancel_cond, NULL));
-    for (i = 0; i < EVENT_BUF_SIZE; i++) {
-        event_node * ev = event_buf + i;
-        if (i < EVENT_BUF_SIZE / 4) {
-            ev->next = free_bg_queue;
-            free_bg_queue = ev;
-            free_bg_size++;
-        }
-        else {
+#if ENABLE_FastMemAlloc
+    {
+        int i;
+        assert(free_queue == NULL);
+        assert(free_bg_queue == NULL);
+        for (i = 0; i < EVENT_BUF_SIZE; i++) {
+            event_node * ev = event_buf + i;
             ev->next = free_queue;
             free_queue = ev;
         }
     }
+#endif
 }
 
 void cancel_event_loop(void) {
@@ -324,13 +329,14 @@ void run_event_loop(void) {
 
         if (event_queue == NULL || (event_cnt & 0x3fu) == 0) {
             check_error(pthread_mutex_lock(&event_lock));
-            while (free_queue != NULL && free_bg_size < EVENT_BUF_SIZE / 4) {
+#if ENABLE_FastMemAlloc
+            while (free_queue != NULL && (free_bg_queue == NULL || free_bg_queue->next == NULL)) {
                 event_node * x = free_queue;
                 free_queue = x->next;
                 x->next = free_bg_queue;
                 free_bg_queue = x;
-                free_bg_size++;
             }
+#endif
             for (;;) {
                 if (timer_queue != NULL) {
                     struct timespec timenow;
@@ -372,13 +378,7 @@ void run_event_loop(void) {
 
         trace(LOG_EVENTCORE, "run_event_loop: event %#lx, handler %#lx, arg %#lx", ev, ev->handler, ev->arg);
         ev->handler(ev->arg);
-        if (ev >= event_buf && ev < event_buf + EVENT_BUF_SIZE) {
-            ev->next = free_queue;
-            free_queue = ev;
-        }
-        else {
-            loc_free(ev);
-        }
+        free_event_node(ev);
         event_cnt++;
     }
 }

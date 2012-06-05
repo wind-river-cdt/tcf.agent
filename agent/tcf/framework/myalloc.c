@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -26,14 +26,21 @@
 #include <tcf/framework/myalloc.h>
 
 #define ALIGNMENT (sizeof(size_t *))
-#define POOL_SIZE (0x100000 * MEM_USAGE_FACTOR)
 
+#if !defined(ENABLE_FastMemAlloc)
+#  define ENABLE_FastMemAlloc 1
+#endif
+
+#if ENABLE_FastMemAlloc
+#define POOL_SIZE (0x100000 * MEM_USAGE_FACTOR)
 static char * tmp_pool = NULL;
 static size_t tmp_pool_pos = 0;
 static size_t tmp_pool_max = 0;
 static size_t tmp_pool_avr = 0;
-static size_t tmp_alloc_size = 0;
+#endif
+
 static LINK tmp_alloc_list = TCF_LIST_INIT(tmp_alloc_list);
+static size_t tmp_alloc_size = 0;
 static int tmp_gc_posted = 0;
 
 static void gc_event(void * args) {
@@ -42,17 +49,11 @@ static void gc_event(void * args) {
 }
 
 void tmp_gc(void) {
-    if (!list_is_empty(&tmp_alloc_list)) {
-        if (tmp_pool_max < POOL_SIZE) {
-            tmp_pool_max += tmp_pool_max > tmp_alloc_size ? tmp_pool_max : tmp_alloc_size;
-            if (tmp_pool_max > POOL_SIZE) tmp_pool_max = POOL_SIZE;
-            tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
-        }
-        while (!list_is_empty(&tmp_alloc_list)) {
-            LINK * l = tmp_alloc_list.next;
-            list_remove(l);
-            loc_free(l);
-        }
+#if ENABLE_FastMemAlloc
+    if (!list_is_empty(&tmp_alloc_list) && tmp_pool_max < POOL_SIZE) {
+        tmp_pool_max += tmp_pool_max > tmp_alloc_size ? tmp_pool_max : tmp_alloc_size;
+        if (tmp_pool_max > POOL_SIZE) tmp_pool_max = POOL_SIZE;
+        tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
     }
     if (tmp_pool_pos + tmp_alloc_size >= tmp_pool_avr) {
         tmp_pool_avr = tmp_pool_pos + tmp_alloc_size;
@@ -65,6 +66,12 @@ void tmp_gc(void) {
         tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
     }
     tmp_pool_pos = 0;
+#endif
+    while (!list_is_empty(&tmp_alloc_list)) {
+        LINK * l = tmp_alloc_list.next;
+        list_remove(l);
+        loc_free(l);
+    }
     tmp_alloc_size = 0;
 }
 
@@ -75,14 +82,17 @@ void * tmp_alloc(size_t size) {
         post_event(gc_event, NULL);
         tmp_gc_posted = 1;
     }
+#if ENABLE_FastMemAlloc
     if (tmp_pool_pos + size + ALIGNMENT + sizeof(size_t *) <= tmp_pool_max) {
         tmp_pool_pos += sizeof(size_t *);
         tmp_pool_pos = (tmp_pool_pos + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
         p = tmp_pool + tmp_pool_pos;
         *((size_t *)p - 1) = size;
         tmp_pool_pos += size;
+        return p;
     }
-    else {
+#endif
+    {
         LINK * l = (LINK *)loc_alloc(sizeof(LINK) + size);
         list_add_last(l, &tmp_alloc_list);
         tmp_alloc_size += size;
@@ -97,20 +107,27 @@ void * tmp_alloc_zero(size_t size) {
 
 void * tmp_realloc(void * ptr, size_t size) {
     if (ptr == NULL) return tmp_alloc(size);
+    assert(is_dispatch_thread());
+    assert(tmp_gc_posted);
+#if ENABLE_FastMemAlloc
     if ((char *)ptr >= tmp_pool && (char *)ptr <= tmp_pool + tmp_pool_max) {
         size_t m = *((size_t *)ptr - 1);
-        size_t pos = tmp_pool_pos - m;
-        if (ptr == tmp_pool + pos && pos + size <= tmp_pool_max) {
-            tmp_pool_pos = pos + size;
-            *((size_t *)ptr - 1) = size;
+        if (m < size) {
+            size_t pos = tmp_pool_pos - m;
+            if (ptr == tmp_pool + pos && pos + size <= tmp_pool_max) {
+                tmp_pool_pos = pos + size;
+                *((size_t *)ptr - 1) = size;
+            }
+            else {
+                void * p = tmp_alloc(size);
+                if (m > size) m = size;
+                ptr = memcpy(p, ptr, m);
+            }
         }
-        else {
-            void * p = tmp_alloc(size);
-            if (m > size) m = size;
-            ptr = memcpy(p, ptr, m);
-        }
+        return ptr;
     }
-    else {
+#endif
+    {
         LINK * l = (LINK *)ptr - 1;
         list_remove(l);
         l = (LINK *)loc_realloc(l, sizeof(LINK) + size);
@@ -179,20 +196,14 @@ void loc_free(const void * p) {
     free((void *)p);
 }
 
-
-/*
- * strdup() with end-of-memory checking.
- */
+/* strdup() with end-of-memory checking. */
 char * loc_strdup(const char * s) {
     char * rval = (char *)loc_alloc(strlen(s) + 1);
     strcpy(rval, s);
     return rval;
 }
 
-
-/*
- * strdup2() with concatenation and  end-of-memory checking.
- */
+/* strdup2() with concatenation and  end-of-memory checking. */
 char * loc_strdup2(const char * s1, const char * s2) {
     size_t l1 = strlen(s1);
     size_t l2 = strlen(s2);
@@ -202,10 +213,7 @@ char * loc_strdup2(const char * s1, const char * s2) {
     return rval;
 }
 
-
-/*
- * strndup() with end-of-memory checking.
- */
+/* strndup() with end-of-memory checking. */
 char * loc_strndup(const char * s, size_t len) {
     char * rval = (char *)loc_alloc(len + 1);
     strncpy(rval, s, len);
