@@ -206,7 +206,7 @@ static void write_context(OutputStream * out, char * id,
     while (parent_reg_def != NULL && parent_reg_def->size == 0) parent_reg_def = parent_reg_def->parent;
     if (parent_reg_def != NULL) {
         if (reg_def->offset >= parent_reg_def->offset &&
-            reg_def->offset + reg_def->size < parent_reg_def->offset + parent_reg_def->size) {
+            reg_def->offset + reg_def->size <= parent_reg_def->offset + parent_reg_def->size) {
             write_stream(out, ',');
             json_write_string(out, "Offset");
             write_stream(out, ':');
