@@ -241,8 +241,11 @@ static SymbolsCache * get_symbols_cache(void) {
 }
 
 static void free_arr_sym_cache(ArraySymCache * a) {
-    list_remove(&a->link_sym);
-    a->disposed = 1;
+    assert(!a->disposed || a->pending == NULL);
+    if (!a->disposed) {
+        list_remove(&a->link_sym);
+        a->disposed = 1;
+    }
     if (a->pending == NULL) {
         cache_dispose(&a->cache);
         release_error_report(a->error);
@@ -253,8 +256,11 @@ static void free_arr_sym_cache(ArraySymCache * a) {
 
 static void free_sym_info_cache(SymInfoCache * c) {
     assert(c->magic == SYM_CACHE_MAGIC);
-    list_remove(&c->link_syms);
-    c->disposed = 1;
+    assert(!c->disposed || c->pending == NULL);
+    if (!c->disposed) {
+        list_remove(&c->link_syms);
+        c->disposed = 1;
+    }
     if (c->pending_get_context == NULL && c->pending_get_children == NULL) {
         c->magic = 0;
         cache_dispose(&c->cache);
@@ -276,8 +282,11 @@ static void free_sym_info_cache(SymInfoCache * c) {
 }
 
 static void free_find_sym_cache(FindSymCache * c) {
-    list_remove(&c->link_syms);
-    c->disposed = 1;
+    assert(!c->disposed || c->pending == NULL);
+    if (!c->disposed) {
+        list_remove(&c->link_syms);
+        c->disposed = 1;
+    }
     if (c->pending == NULL) {
         if (find_next_buf == c->id_buf) {
             find_next_buf = NULL;
@@ -306,8 +315,11 @@ static void free_sft_sequence(StackFrameRegisterLocation * seq) {
 }
 
 static void free_stack_frame_cache(StackFrameCache * c) {
-    list_remove(&c->link_syms);
-    c->disposed = 1;
+    assert(!c->disposed || c->pending == NULL);
+    if (!c->disposed) {
+        list_remove(&c->link_syms);
+        c->disposed = 1;
+    }
     if (c->pending == NULL) {
         int i;
         cache_dispose(&c->cache);
@@ -330,8 +342,11 @@ static void free_location_commands(LocationCommands * cmds) {
 }
 
 static void free_location_info_cache(LocationInfoCache * c) {
-    list_remove(&c->link_syms);
-    c->disposed = 1;
+    assert(!c->disposed || c->pending == NULL);
+    if (!c->disposed) {
+        list_remove(&c->link_syms);
+        c->disposed = 1;
+    }
     if (c->pending == NULL) {
         cache_dispose(&c->cache);
         release_error_report(c->error);
