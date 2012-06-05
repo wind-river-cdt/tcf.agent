@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -63,6 +63,8 @@ static void write_boolean_member(OutputStream * out, const char * name, int val)
 
 static void write_context(OutputStream * out, char * id,
         Context * ctx, int frame, RegisterDefinition * reg_def) {
+    RegisterDefinition * parent_reg_def = NULL;
+
     assert(!ctx->exited);
 
     write_stream(out, '{');
@@ -198,6 +200,18 @@ static void write_context(OutputStream * out, char * id,
         json_write_string(out, "Role");
         write_stream(out, ':');
         json_write_string(out, "PC");
+    }
+
+    parent_reg_def = reg_def->parent;
+    while (parent_reg_def != NULL && parent_reg_def->size == 0) parent_reg_def = parent_reg_def->parent;
+    if (parent_reg_def != NULL) {
+        if (reg_def->offset >= parent_reg_def->offset &&
+            reg_def->offset + reg_def->size < parent_reg_def->offset + parent_reg_def->size) {
+            write_stream(out, ',');
+            json_write_string(out, "Offset");
+            write_stream(out, ':');
+            json_write_uint64(out, reg_def->offset - parent_reg_def->offset);
+        }
     }
 
     write_stream(out, '}');
