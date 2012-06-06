@@ -965,7 +965,7 @@ static void send_event_context_suspended(void) {
             e->intercepted = 1;
             x->pending_intercept = 0;
             if (get_context_breakpoint_ids(x) != NULL) e->intercepted_by_bp++;
-            if (e->intercepted_by_bp || x->stopped_by_exception) n = &p0;
+            if (e->intercepted_by_bp || x->stopped_by_exception || e->step_done) n = &p0;
             list_add_last(&e->link, n);
         }
     }
