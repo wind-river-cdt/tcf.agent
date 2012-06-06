@@ -303,13 +303,15 @@ static void free_find_sym_cache(FindSymCache * c) {
     }
 }
 
+static void free_location_command_args(LocationExpressionCommand * cmd) {
+    if (cmd->cmd == SFT_CMD_LOCATION) loc_free(cmd->args.loc.code_addr);
+    else if (cmd->cmd == SFT_CMD_PIECE) loc_free(cmd->args.piece.value);
+}
+
 static void free_sft_sequence(StackFrameRegisterLocation * seq) {
     if (seq != NULL) {
         unsigned i = 0;
-        while (i < seq->cmds_cnt) {
-            LocationExpressionCommand * cmd = seq->cmds + i++;
-            if (cmd->cmd == SFT_CMD_LOCATION) loc_free(cmd->args.loc.code_addr);
-        }
+        while (i < seq->cmds_cnt) free_location_command_args(seq->cmds + i++);
         loc_free(seq);
     }
 }
@@ -334,10 +336,7 @@ static void free_stack_frame_cache(StackFrameCache * c) {
 
 static void free_location_commands(LocationCommands * cmds) {
     unsigned i = 0;
-    while (i < cmds->cnt) {
-        LocationExpressionCommand * cmd = cmds->cmds + i++;
-        if (cmd->cmd == SFT_CMD_LOCATION) loc_free(cmd->args.loc.code_addr);
-    }
+    while (i < cmds->cnt) free_location_command_args(cmds->cmds + i++);
     loc_free(cmds->cmds);
 }
 
