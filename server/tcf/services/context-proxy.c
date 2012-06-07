@@ -278,6 +278,7 @@ static void free_context_cache(ContextCache * c) {
         for (i = 0; i < c->reg_max; i++) {
             loc_free(c->reg_props[i].id);
             loc_free(c->reg_props[i].def.role);
+            loc_free(c->reg_props[i].def.name);
         }
         loc_free(c->reg_props);
     }
@@ -1039,7 +1040,7 @@ static void validate_memory_map_cache(Channel * c, void * args, int error) {
             json_read_array(&c->inp, read_memory_map_item, cache);
             cache->mmap.region_cnt = mem_buf_pos;
             cache->mmap.region_max = mem_buf_pos;
-            cache->mmap.regions = (MemoryRegion *)loc_alloc(sizeof(MemoryRegion) * mem_buf_pos);
+            cache->mmap.regions = (MemoryRegion *)loc_realloc(cache->mmap.regions, sizeof(MemoryRegion) * mem_buf_pos);
             memcpy(cache->mmap.regions, mem_buf, sizeof(MemoryRegion) * mem_buf_pos);
 
             if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
