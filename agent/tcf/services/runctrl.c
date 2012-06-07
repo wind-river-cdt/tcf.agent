@@ -1160,6 +1160,7 @@ static int update_step_machine_state(Context * ctx) {
             case RM_STEP_OUT:
             case RM_STEP_OVER_RANGE:
             case RM_STEP_INTO_RANGE:
+            case RM_UNTIL_ACTIVE:
                 if (context_can_resume(ctx, ext->step_continue_mode = RM_UNTIL_ACTIVE)) return 0;
                 break;
             case RM_REVERSE_STEP_OVER:
@@ -1169,6 +1170,7 @@ static int update_step_machine_state(Context * ctx) {
             case RM_REVERSE_STEP_OUT:
             case RM_REVERSE_STEP_OVER_RANGE:
             case RM_REVERSE_STEP_INTO_RANGE:
+            case RM_REVERSE_UNTIL_ACTIVE:
                 if (context_can_resume(ctx, ext->step_continue_mode = RM_REVERSE_UNTIL_ACTIVE)) return 0;
                 break;
             }
