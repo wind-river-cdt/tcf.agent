@@ -39,6 +39,7 @@ LINK context_root = TCF_LIST_INIT(context_root);
 
 const char * REASON_USER_REQUEST = "Suspended";
 const char * REASON_STEP = "Step";
+const char * REASON_ACTIVE = "Active";
 const char * REASON_BREAKPOINT = "Breakpoint";
 const char * REASON_EXCEPTION = "Exception";
 const char * REASON_CONTAINER = "Container";

@@ -71,6 +71,7 @@ struct Context {
  */
 extern const char * REASON_USER_REQUEST;
 extern const char * REASON_STEP;
+extern const char * REASON_ACTIVE;
 extern const char * REASON_BREAKPOINT;
 extern const char * REASON_EXCEPTION;
 extern const char * REASON_CONTAINER;

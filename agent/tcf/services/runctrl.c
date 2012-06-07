@@ -1322,6 +1322,11 @@ static int update_step_machine_state(Context * ctx) {
             ext->step_continue_mode = mode;
         }
         return 0;
+    case RM_UNTIL_ACTIVE:
+    case RM_REVERSE_UNTIL_ACTIVE:
+        ctx->pending_intercept = 1;
+        ext->step_done = REASON_ACTIVE;
+        return 0;
     case RM_STEP_INTO:
     case RM_STEP_OVER:
     case RM_REVERSE_STEP_INTO:
