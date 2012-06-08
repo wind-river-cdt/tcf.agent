@@ -77,7 +77,8 @@ static void event_context_created(Context * ctx, void * client_data) {
        and dbghelp.dll caching is inadequate
     */
 
-    if (!SymInitializeW(handle, fnm, TRUE)) {
+    /* Note: SymInitializeW(..., ..., TRUE) does not work on Windows 7 */
+    if (!SymInitializeW(handle, fnm, FALSE)) {
         set_win32_errno(GetLastError());
         trace(LOG_ALWAYS, "SymInitialize() error: %s", errno_to_str(errno));
     }
