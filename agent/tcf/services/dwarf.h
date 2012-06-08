@@ -589,6 +589,11 @@
 #define CFA_offset_extended_sf      0x11  /* v3 */
 #define CFA_def_cfa_sf              0x12  /* v3 */
 #define CFA_def_cfa_offset_sf       0x13  /* v3 */
+#define CFA_val_offset              0x14
+#define CFA_val_offset_sf           0x15
+#define CFA_val_expression          0x16
+#define CFA_GNU_args_size           0x2e
+#define CFA_GNU_negative_offset_ext 0x2f
 #define CFA_lo_user                 0x1c
 #define CFA_hi_user                 0x3f
 

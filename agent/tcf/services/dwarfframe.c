@@ -66,6 +66,10 @@ typedef struct RegisterRules {
 } RegisterRules;
 
 typedef struct StackFrameRegisters {
+    int cfa_rule;
+    I4_T cfa_offset;
+    U4_T cfa_register;
+    U8_T cfa_expression;
     RegisterRules * regs;
     int regs_cnt;
     int regs_max;
@@ -92,10 +96,6 @@ typedef struct StackFrameRules {
     U1_T addr_encoding;
     U8_T location;
     int return_address_register;
-    int cfa_rule;
-    I4_T cfa_offset;
-    U4_T cfa_register;
-    U8_T cfa_expression;
 } StackFrameRules;
 
 static StackFrameRegisters frame_regs;
@@ -182,9 +182,21 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
     return regs->regs + reg;
 }
 
+static void clear_frame_registers(StackFrameRegisters * rgs) {
+    rgs->cfa_rule = 0;
+    rgs->cfa_offset = 0;
+    rgs->cfa_register = 0;
+    rgs->cfa_expression = 0;
+    rgs->regs_cnt = 0;
+}
+
 static void copy_register_rules(StackFrameRegisters * dst, StackFrameRegisters * src) {
     int n;
-    dst->regs_cnt = 0;
+    clear_frame_registers(dst);
+    dst->cfa_rule = src->cfa_rule;
+    dst->cfa_offset = src->cfa_offset;
+    dst->cfa_register = src->cfa_register;
+    dst->cfa_expression = src->cfa_expression;
     for (n = 0; n < src->regs_cnt; n++) {
         *get_reg(dst, n) = *get_reg(src, n);
     }
@@ -286,115 +298,115 @@ static void exec_stack_frame_instruction(void) {
     U4_T n;
     U1_T op = dio_ReadU1();
     switch (op) {
-    case 0x00: /* DW_CFA_nop */
+    case CFA_nop:
         break;
-    case 0x01: /* DW_CFA_set_loc */
+    case CFA_set_loc:
         rules.location = read_frame_data_pointer(rules.addr_encoding, 0);
         break;
-    case 0x02: /* DW_CFA_advance_loc1 */
+    case CFA_advance_loc1:
         rules.location += dio_ReadU1() * rules.code_alignment;
         break;
-    case 0x03: /* DW_CFA_advance_loc2 */
+    case CFA_advance_loc2:
         rules.location += dio_ReadU2() * rules.code_alignment;
         break;
-    case 0x04: /* DW_CFA_advance_loc4 */
+    case CFA_advance_loc4:
         rules.location += dio_ReadU4() * rules.code_alignment;
         break;
-    case 0x05: /* DW_CFA_offset_extended */
+    case CFA_offset_extended:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_OFFSET;
         reg->offset = dio_ReadULEB128() * rules.data_alignment;
         break;
-    case 0x06: /* DW_CFA_restore_extended */
+    case CFA_restore_extended:
         n = dio_ReadULEB128();
         reg = get_reg(&frame_regs, n);
         *reg = *get_reg(&cie_regs, n);
         break;
-    case 0x07: /* DW_CFA_undefined */
+    case CFA_undefined:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         memset(reg, 0, sizeof(*reg));
         break;
-    case 0x08: /* DW_CFA_same_value */
+    case CFA_same_value:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_SAME_VALUE;
         break;
-    case 0x09: /* DW_CFA_register */
+    case CFA_register:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_REGISTER;
         reg->offset = dio_ReadULEB128();
         break;
-    case 0x0a: /* DW_CFA_remember_state */
+    case CFA_remember_state:
         copy_register_rules(get_regs_stack_item(regs_stack_pos++), &frame_regs);
         break;
-    case 0x0b: /* DW_CFA_restore_state */
+    case CFA_restore_state:
         if (regs_stack_pos <= 0) {
             str_exception(ERR_INV_DWARF, "Invalid DW_CFA_restore_state instruction");
         }
         copy_register_rules(&frame_regs, get_regs_stack_item(--regs_stack_pos));
         break;
-    case 0x0c: /* DW_CFA_def_cfa */
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_register = dio_ReadULEB128();
-        rules.cfa_offset = dio_ReadULEB128();
+    case CFA_def_cfa:
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = dio_ReadULEB128();
+        frame_regs.cfa_offset = dio_ReadULEB128();
         break;
-    case 0x0d: /* DW_CFA_def_cfa_register */
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_register = dio_ReadULEB128();
+    case CFA_def_cfa_register:
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = dio_ReadULEB128();
         break;
-    case 0x0e: /* DW_CFA_def_cfa_offset */
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_offset = dio_ReadULEB128();
+    case CFA_def_cfa_offset:
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_offset = dio_ReadULEB128();
         break;
-    case 0x0f: /* DW_CFA_def_cfa_expression */
-        rules.cfa_rule = RULE_EXPRESSION;
-        rules.cfa_offset = dio_ReadULEB128();
-        rules.cfa_expression = dio_GetPos();
-        dio_Skip(rules.cfa_offset);
+    case CFA_def_cfa_expression:
+        frame_regs.cfa_rule = RULE_EXPRESSION;
+        frame_regs.cfa_offset = dio_ReadULEB128();
+        frame_regs.cfa_expression = dio_GetPos();
+        dio_Skip(frame_regs.cfa_offset);
         break;
-    case 0x10: /* DW_CFA_expression */
+    case CFA_expression:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_EXPRESSION;
         reg->offset = dio_ReadULEB128();
         reg->expression = dio_GetPos();
         dio_Skip(reg->offset);
         break;
-    case 0x11: /* DW_CFA_offset_extended_sf */
+    case CFA_offset_extended_sf:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_OFFSET;
         reg->offset = dio_ReadSLEB128() * rules.data_alignment;
         break;
-    case 0x12: /* DW_CFA_def_cfa_sf */
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_register = dio_ReadULEB128();
-        rules.cfa_offset = dio_ReadSLEB128() * rules.data_alignment;
+    case CFA_def_cfa_sf:
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = dio_ReadULEB128();
+        frame_regs.cfa_offset = dio_ReadSLEB128() * rules.data_alignment;
         break;
-    case 0x13: /* DW_CFA_def_cfa_offset_sf */
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_offset = dio_ReadSLEB128() * rules.data_alignment;
+    case CFA_def_cfa_offset_sf:
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_offset = dio_ReadSLEB128() * rules.data_alignment;
         break;
-    case 0x14: /* DW_CFA_val_offset */
+    case CFA_val_offset:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_VAL_OFFSET;
         reg->offset = dio_ReadULEB128() * rules.data_alignment;
         break;
-    case 0x15: /* DW_CFA_val_offset_sf */
+    case CFA_val_offset_sf:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_VAL_OFFSET;
         reg->offset = dio_ReadSLEB128() * rules.data_alignment;
         break;
-    case 0x16: /* DW_CFA_val_expression */
+    case CFA_val_expression:
         reg = get_reg(&frame_regs, dio_ReadULEB128());
         reg->rule = RULE_VAL_EXPRESSION;
         reg->offset = dio_ReadULEB128();
         reg->expression = dio_GetPos();
         dio_Skip(reg->offset);
         break;
-    case 0x2e: /* DW_CFA_GNU_args_size */
+    case CFA_GNU_args_size:
         /* This instruction specifies the total size of the arguments
          * which have been pushed onto the stack. Not used by the debugger. */
         dio_ReadULEB128();
         break;
-    case 0x2f: /* DW_CFA_GNU_negative_offset_extended */
+    case CFA_GNU_negative_offset_ext:
         /* This instruction is identical to DW_CFA_offset_extended_sf
          * except that the operand is subtracted to produce the offset. */
         reg = get_reg(&frame_regs, dio_ReadULEB128());
@@ -754,19 +766,19 @@ static void generate_commands(void) {
     }
 
     trace_cmds_cnt = 0;
-    switch (rules.cfa_rule) {
+    switch (frame_regs.cfa_rule) {
     case RULE_OFFSET:
-        reg_def = get_reg_by_id(rules.ctx, rules.cfa_register, &rules.reg_id_scope);
+        reg_def = get_reg_by_id(rules.ctx, frame_regs.cfa_register, &rules.reg_id_scope);
         if (reg_def != NULL) {
             add_command(SFT_CMD_RD_REG)->args.reg = reg_def;
-            if (rules.cfa_offset != 0) {
-                add_command(SFT_CMD_NUMBER)->args.num = rules.cfa_offset;
+            if (frame_regs.cfa_offset != 0) {
+                add_command(SFT_CMD_NUMBER)->args.num = frame_regs.cfa_offset;
                 add_command(SFT_CMD_ADD);
             }
         }
         break;
     case RULE_EXPRESSION:
-        add_dwarf_expression_commands(rules.cfa_expression, rules.cfa_offset);
+        add_dwarf_expression_commands(frame_regs.cfa_expression, frame_regs.cfa_offset);
         break;
     default:
         str_exception(ERR_INV_DWARF, "Invalid .debug_frame");
@@ -787,23 +799,23 @@ static void generate_plt_section_commands(Context * ctx, ELF_File * file, U8_T o
     rules.reg_id_scope.id_type = REGNUM_DWARF;
     rules.address_size = file->elf64 ? 8 : 4;
 
-    cie_regs.regs_cnt = 0;
-    frame_regs.regs_cnt = 0;
+    clear_frame_registers(&cie_regs);
+    clear_frame_registers(&frame_regs);
     switch (rules.reg_id_scope.machine) {
     case EM_386:
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_register = 4; /* esp */
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = 4; /* esp */
         if (offs == 0) {
-            rules.cfa_offset = 8;
+            frame_regs.cfa_offset = 8;
         }
         else if (offs < 16) {
-            rules.cfa_offset = 12;
+            frame_regs.cfa_offset = 12;
         }
         else if ((offs - 16) % 16 < 11) {
-            rules.cfa_offset = 4;
+            frame_regs.cfa_offset = 4;
         }
         else {
-            rules.cfa_offset = 8;
+            frame_regs.cfa_offset = 8;
         }
         rules.return_address_register = 8; /* eip */
         reg = get_reg(&frame_regs, rules.return_address_register);
@@ -812,19 +824,19 @@ static void generate_plt_section_commands(Context * ctx, ELF_File * file, U8_T o
         generate_commands();
         break;
     case EM_X86_64:
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_register = 7; /* rsp */
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = 7; /* rsp */
         if (offs == 0) {
-            rules.cfa_offset = 16;
+            frame_regs.cfa_offset = 16;
         }
         else if (offs < 16) {
-            rules.cfa_offset = 24;
+            frame_regs.cfa_offset = 24;
         }
         else if ((offs - 16) % 16 < 11) {
-            rules.cfa_offset = 8;
+            frame_regs.cfa_offset = 8;
         }
         else {
-            rules.cfa_offset = 16;
+            frame_regs.cfa_offset = 16;
         }
         rules.return_address_register = 16; /* rip */
         reg = get_reg(&frame_regs, rules.return_address_register);
@@ -834,9 +846,9 @@ static void generate_plt_section_commands(Context * ctx, ELF_File * file, U8_T o
         break;
     case EM_PPC:
         rules.return_address_register = 108; /* LR */
-        rules.cfa_rule = RULE_OFFSET;
-        rules.cfa_register = 1; /* R1 */
-        rules.cfa_offset = 0;
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = 1; /* R1 */
+        frame_regs.cfa_offset = 0;
         generate_commands();
         break;
     }
@@ -907,8 +919,8 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
         }
         dio_SetPos(aug_pos + aug_length);
     }
-    cie_regs.regs_cnt = 0;
-    frame_regs.regs_cnt = 0;
+    clear_frame_registers(&cie_regs);
+    clear_frame_registers(&frame_regs);
     regs_stack_pos = 0;
     while (dio_GetPos() < cie_end) {
         exec_stack_frame_instruction();
