@@ -216,6 +216,7 @@ static int certificate_verify_callback(int preverify_ok, X509_STORE_CTX * ctx) {
         if (!err && (cert = PEM_read_X509(fp, NULL, NULL, NULL)) == NULL) err = set_ssl_errno();
         if (!err && fclose(fp) != 0) err = errno;
         if (!err && X509_cmp(X509_STORE_CTX_get_current_cert(ctx), cert) == 0) found = 1;
+        if (cert) X509_free(cert);
     }
     if (dir != NULL && closedir(dir) < 0 && !err) err = errno;
     if (err) trace(LOG_ALWAYS, "Cannot read certificate %s: %s", fnm, errno_to_str(err));
