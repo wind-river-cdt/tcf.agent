@@ -255,8 +255,8 @@ static void command_exit(char * token, Channel * c) {
     Terminal * term = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     tid = id2tid(id);
     write_stringz(&c->out, "R");
@@ -357,8 +357,8 @@ static void command_get_context(char * token, Channel * c) {
     Terminal * term = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     tid = id2tid(id);
     write_stringz(&c->out, "R");
@@ -385,7 +385,7 @@ static char ** read_env(InputStream * inp) {
     char ** env = json_read_alloc_string_array(inp, &len);
     char ** tmp = (char **)tmp_alloc_zero((len + 1) * sizeof(char *));
 
-    if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(inp, MARKER_EOA);
     if (env == NULL) return NULL;
     /* convert the env memory layout */
     for (i = 0; i < len; i++) tmp[i] = tmp_strdup(env[i]);
@@ -407,11 +407,11 @@ static void command_launch(char * token, Channel * c) {
 
     memset(&prms, 0, sizeof(prms));
     json_read_string(&c->inp, pty_type, sizeof(pty_type));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     json_read_string(&c->inp, encoding, sizeof(encoding));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     prms.envp = read_env(&c->inp);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOM);
 
 #if !defined(_WIN32)
     {
@@ -499,12 +499,12 @@ static void command_set_win_size(char * token, Channel * c) {
     Terminal * term = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     size.ws_col = json_read_ulong(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     size.ws_row = json_read_ulong(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     tid = id2tid(id);
 

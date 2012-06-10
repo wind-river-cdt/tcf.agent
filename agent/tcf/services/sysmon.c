@@ -243,8 +243,8 @@ static void command_get_context(char * token, Channel * c) {
     kinfo_proc *    p;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -276,8 +276,8 @@ static void command_get_children(char * token, Channel * c) {
     pid_t   parent = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -367,8 +367,8 @@ static void command_get_command_line(char * token, Channel * c) {
     kinfo_proc *    p;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     pid = id2pid(id, &parent);
     if (pid != 0 && parent == 0) {
@@ -398,8 +398,8 @@ static void command_get_environment(char * token, Channel * c) {
     char            id[256];
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -686,8 +686,8 @@ static void command_get_context(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -726,8 +726,8 @@ static void command_get_children(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -813,8 +813,8 @@ static void command_get_command_line(char * token, Channel * c) {
     wchar_t * cmd = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -918,8 +918,8 @@ static void command_get_environment(char * token, Channel * c) {
     wchar_t * env = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -1445,8 +1445,8 @@ static void command_get_context(char * token, Channel * c) {
     char dir[FILE_PATH_SIZE];
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -1484,8 +1484,8 @@ static void command_get_children(char * token, Channel * c) {
     pid_t parent = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -1549,8 +1549,8 @@ static void command_get_command_line(char * token, Channel * c) {
     int f = -1;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -1592,8 +1592,8 @@ static void command_get_environment(char * token, Channel * c) {
     int f = -1;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);

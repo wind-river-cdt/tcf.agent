@@ -301,8 +301,8 @@ static void command_get_context(char * token, Channel * c) {
     pid_t pid, parent;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     pid = id2pid(id, &parent);
     write_stringz(&c->out, "R");
@@ -340,10 +340,10 @@ static void command_get_children(char * token, Channel * c) {
     int attached_only;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     attached_only = json_read_boolean(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -464,8 +464,8 @@ static void command_attach(char * token, Channel * c) {
     pid_t pid, parent;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     pid = id2pid(id, &parent);
 
@@ -498,8 +498,8 @@ static void command_detach(char * token, Channel * c) {
     Context * ctx = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     ctx = id2ctx(id);
     if (ctx == NULL) err = ERR_INV_CONTEXT;
@@ -518,8 +518,8 @@ static void command_get_signal_mask(char * token, Channel * c) {
     Context * ctx = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     ctx = id2ctx(id);
     if (ctx == NULL) err = ERR_INV_CONTEXT;
@@ -553,12 +553,12 @@ static void command_set_signal_mask(char * token, Channel * c) {
     int dont_pass;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     dont_stop = json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     dont_pass = json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     ctx = id2ctx(id);
     if (ctx == NULL) {
@@ -600,8 +600,8 @@ static void command_terminate(char * token, Channel * c) {
     pid_t pid, parent;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     pid = id2pid(id, &parent);
     write_stringz(&c->out, "R");
@@ -636,10 +636,10 @@ static void command_signal(char * token, Channel * c) {
     pid_t pid, parent;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     signal = (int)json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     pid = id2pid(id, &parent);
     write_stringz(&c->out, "R");
@@ -685,8 +685,8 @@ static void command_get_signal_list(char * token, Channel * c) {
     char id[256];
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     /* pid is ignored, same signal list for all */
     id2pid(id, NULL);
@@ -740,7 +740,7 @@ static void command_get_signal_list(char * token, Channel * c) {
 static void command_get_environment(char * token, Channel * c) {
     char ** p = environ;
 
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -1452,21 +1452,21 @@ static void command_start(char * token, Channel * c, void * x) {
     if (set_trap(&trap)) {
         memset(&params, 0, sizeof(params));
         params.dir = json_read_alloc_string(&c->inp);
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOA);
         params.exe = json_read_alloc_string(&c->inp);
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOA);
         params.args = json_read_alloc_string_array(&c->inp, &args_len);
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOA);
         params.envp = json_read_alloc_string_array(&c->inp, &envp_len);
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOA);
         if (version > 0 && (peek_stream(&c->inp) == '{' || peek_stream(&c->inp) == 'n')) {
             json_read_struct(&c->inp, read_start_params, &params);
         }
         else {
             params.attach = json_read_boolean(&c->inp);
         }
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-        if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOA);
+        json_test_char(&c->inp, MARKER_EOM);
 
         if (params.dir != NULL && params.dir[0] == 0) {
             loc_free(params.dir);

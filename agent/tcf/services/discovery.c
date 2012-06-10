@@ -61,7 +61,7 @@ static int write_peer_properties(PeerServer * ps, void * arg) {
 }
 
 static void command_sync(char * token, Channel * c) {
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOM);
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
     write_errno(&c->out, 0);
@@ -116,8 +116,8 @@ static void command_redirect(char * token, Channel * c) {
         json_read_string(&c->inp, id, sizeof(id));
         ps = peer_server_find(id);
     }
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     if (ps != NULL) {
         RedirectInfo * info = (RedirectInfo *)loc_alloc_zero(sizeof(RedirectInfo));
@@ -137,7 +137,7 @@ static void command_redirect(char * token, Channel * c) {
 }
 
 static void command_get_peers(char * token, Channel * c) {
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);

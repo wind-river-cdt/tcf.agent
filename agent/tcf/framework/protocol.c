@@ -459,7 +459,7 @@ static void redirect_done(Channel * c, void * client_data, int error) {
     if (!error) {
         assert(c->state == ChannelStateRedirectSent);
         error = read_errno(&c->inp);
-        if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOM);
         if (!error) {
             c->state = ChannelStateHelloSent;
         }

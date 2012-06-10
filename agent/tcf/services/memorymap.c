@@ -387,8 +387,8 @@ static void command_get(char * token, Channel * c) {
     MemoryMap * target_map = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     ctx = id2ctx(id);
     if (ctx == NULL) err = ERR_INV_CONTEXT;
@@ -459,10 +459,10 @@ static void command_set(char * token, Channel * c) {
     memset(&map, 0, sizeof(map));
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     json_read_array(&c->inp, read_map_item, &map);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     for (l = client_map_list.next; l != &client_map_list; l = l->next) {
         ClientMap * m = list2map(l);

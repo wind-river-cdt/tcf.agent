@@ -160,7 +160,23 @@ void json_write_string_len(OutputStream * out, const char * str, size_t len) {
     }
 }
 
-static int readHex(InputStream * inp) {
+static const char * char2str(int ch, char * buf) {
+    if (ch == MARKER_EOS) return "<eos>";
+    if (ch == MARKER_EOM) return "<eom>";
+    if (ch == MARKER_EOA) return "<eoa>";
+    if (ch >= ' ' && ch < 127) sprintf(buf, "'%c'", ch);
+    else sprintf(buf, "'\\%3o'", ch);
+    return buf;
+}
+
+static void check_char(int ch, int exp) {
+    char s0[16], s1[16];
+    if (exp == ch) return;
+    str_fmt_exception(ERR_JSON_SYNTAX, "Expected %s, got %s",
+        char2str(exp, s0), char2str(ch, s1));
+}
+
+static int read_hex_digit(InputStream * inp) {
     int ch = read_stream(inp);
     if (ch >= '0' && ch <= '9') return ch - '0';
     if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
@@ -169,11 +185,11 @@ static int readHex(InputStream * inp) {
     return 0;
 }
 
-static int readHexChar(InputStream * inp) {
-    int n = readHex(inp) << 12;
-    n |= readHex(inp) << 8;
-    n |= readHex(inp) << 4;
-    n |= readHex(inp);
+static int read_hex_char(InputStream * inp) {
+    int n = read_hex_digit(inp) << 12;
+    n |= read_hex_digit(inp) << 8;
+    n |= read_hex_digit(inp) << 4;
+    n |= read_hex_digit(inp);
     return n;
 }
 
@@ -188,7 +204,7 @@ static unsigned read_esc_char(InputStream * inp, char * utf8) {
     case 'n': ch = '\n'; break;
     case 'r': ch = '\r'; break;
     case 't': ch = '\t'; break;
-    case 'u': ch = readHexChar(inp); break;
+    case 'u': ch = read_hex_char(inp); break;
     default: exception(ERR_JSON_SYNTAX);
     }
     /* 'ch' can be wide character - convert it to UTF-8 sequence */
@@ -211,13 +227,13 @@ int json_read_string(InputStream * inp, char * str, size_t size) {
     unsigned i = 0;
     int ch = read_stream(inp);
     if (ch == 'n') {
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
         str[0] = 0;
         return -1;
     }
-    if (ch != '"') exception(ERR_JSON_SYNTAX);
+    if (ch != '"') exception(ERR_PROTOCOL);
     for (;;) {
         ch = read_stream(inp);
         if (ch < 0) exception(ERR_JSON_SYNTAX);
@@ -244,13 +260,13 @@ char * json_read_alloc_string(InputStream * inp) {
     char * str = NULL;
     int ch = read_stream(inp);
     if (ch == 'n') {
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
         return NULL;
     }
     buf_pos = 0;
-    if (ch != '"') exception(ERR_JSON_SYNTAX);
+    if (ch != '"') exception(ERR_PROTOCOL);
     for (;;) {
         ch = read_stream(inp);
         if (ch < 0) exception(ERR_JSON_SYNTAX);
@@ -274,16 +290,16 @@ char * json_read_alloc_string(InputStream * inp) {
 int json_read_boolean(InputStream * inp) {
     int ch = read_stream(inp);
     if (ch == 'f') {
-        if (read_stream(inp) != 'a') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 's') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'e') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'a');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 's');
+        json_test_char(inp, 'e');
         return 0;
     }
     if (ch == 't') {
-        if (read_stream(inp) != 'r') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'e') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'r');
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'e');
         return 1;
     }
     exception(ERR_JSON_SYNTAX);
@@ -410,40 +426,38 @@ double json_read_double(InputStream * inp) {
 int json_read_struct(InputStream * inp, JsonStructCallBack * call_back, void * arg) {
     int ch = read_stream(inp);
     if (ch == 'n') {
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
         return 0;
     }
-    if (ch == '{') {
-        ch = peek_stream(inp);
-        if (ch != '}') {
-            for (;;) {
-                char nm[256];
-                json_read_string(inp, nm, sizeof(nm));
-                ch = read_stream(inp);
-                if (ch != ':') exception(ERR_JSON_SYNTAX);
-                call_back(inp, nm, arg);
-                ch = read_stream(inp);
-                if (ch == '}') break;
-                if (ch != ',') exception(ERR_JSON_SYNTAX);
-            }
-        }
-        else {
-            read_stream(inp);
-        }
+    if (ch != '{') {
+        exception(ERR_PROTOCOL);
         return 1;
     }
-    exception(ERR_JSON_SYNTAX);
-    return 0;
+    if (peek_stream(inp) == '}') {
+        read_stream(inp);
+        return 1;
+    }
+    for (;;) {
+        char nm[256];
+        json_read_string(inp, nm, sizeof(nm));
+        json_test_char(inp, ':');
+        call_back(inp, nm, arg);
+        ch = read_stream(inp);
+        if (ch == ',') continue;
+        check_char(ch, '}');
+        break;
+    }
+    return 1;
 }
 
 char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
     int ch = read_stream(inp);
     if (ch == 'n') {
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
         if (cnt) *cnt = 0;
         return NULL;
     }
@@ -475,13 +489,13 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
                     len_buf = (size_t *)loc_realloc(len_buf, len_buf_size * sizeof(size_t));
                 }
                 if (ch == 'n') {
-                    if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-                    if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-                    if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+                    json_test_char(inp, 'u');
+                    json_test_char(inp, 'l');
+                    json_test_char(inp, 'l');
                 }
                 else {
                     size_t buf_pos0 = buf_pos;
-                    if (ch != '"') exception(ERR_JSON_SYNTAX);
+                    if (ch != '"') exception(ERR_PROTOCOL);
                     for (;;) {
                         ch = read_stream(inp);
                         if (ch < 0) exception(ERR_JSON_SYNTAX);
@@ -502,8 +516,8 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
                 len_buf[len_pos++] = len;
                 ch = read_stream(inp);
                 if (ch == ',') continue;
-                if (ch == ']') break;
-                exception(ERR_JSON_SYNTAX);
+                check_char(ch, ']');
+                break;
             }
         }
         buf_add(0);
@@ -531,9 +545,9 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
 int json_read_array(InputStream * inp, JsonArrayCallBack * call_back, void * arg) {
     int ch = read_stream(inp);
     if (ch == 'n') {
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
         return 0;
     }
     if (ch != '[') {
@@ -548,8 +562,8 @@ int json_read_array(InputStream * inp, JsonArrayCallBack * call_back, void * arg
         call_back(inp, arg);
         ch = read_stream(inp);
         if (ch == ',') continue;
-        if (ch == ']') break;
-        exception(ERR_JSON_SYNTAX);
+        check_char(ch, ']');
+        break;
     }
     return 1;
 }
@@ -563,15 +577,15 @@ void json_read_binary_start(JsonReadBinaryState * state, InputStream * inp) {
     if (ch == '(') {
         state->encoding = ENCODING_BINARY;
         state->size_start = json_read_ulong(inp);
-        if (read_stream(inp) != ')') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ')');
     }
     else if (ch == '"') {
         state->encoding = ENCODING_BASE64;
     }
     else if (ch == 'n') {
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
         state->encoding = ENCODING_BINARY;
         state->size_start = 0;
     }
@@ -625,7 +639,7 @@ void json_read_binary_end(JsonReadBinaryState * state) {
         assert(state->size_start == state->size_done);
     }
     else {
-        if (read_stream(state->inp) != '"') exception(ERR_JSON_SYNTAX);
+        json_test_char(state->inp, '"');
     }
 }
 
@@ -635,9 +649,9 @@ char * json_read_alloc_binary(InputStream * inp, size_t * size) {
     *size = 0;
     if (ch == 'n') {
         read_stream(inp);
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
     }
     else {
         JsonReadBinaryState state;
@@ -716,11 +730,8 @@ void json_write_binary_end(JsonWriteBinaryState * state) {
         assert(state->size_start == state->size_done);
     }
     else {
-        size_t rem;
-
-        if ((rem = state->rem) > 0) {
-            write_base64(state->out, state->buf, rem);
-        }
+        size_t rem = state->rem;
+        if (rem > 0) write_base64(state->out, state->buf, rem);
         write_stream(state->out, '"');
     }
 }
@@ -786,22 +797,22 @@ static int skip_char(InputStream * inp) {
 static void skip_object(InputStream * inp) {
     int ch = skip_char(inp);
     if (ch == 'n') {
-        if (skip_char(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (skip_char(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (skip_char(inp) != 'l') exception(ERR_JSON_SYNTAX);
+        check_char(skip_char(inp), 'u');
+        check_char(skip_char(inp), 'l');
+        check_char(skip_char(inp), 'l');
         return;
     }
     if (ch == 'f') {
-        if (skip_char(inp) != 'a') exception(ERR_JSON_SYNTAX);
-        if (skip_char(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (skip_char(inp) != 's') exception(ERR_JSON_SYNTAX);
-        if (skip_char(inp) != 'e') exception(ERR_JSON_SYNTAX);
+        check_char(skip_char(inp), 'a');
+        check_char(skip_char(inp), 'l');
+        check_char(skip_char(inp), 's');
+        check_char(skip_char(inp), 'e');
         return;
     }
     if (ch == 't') {
-        if (skip_char(inp) != 'r') exception(ERR_JSON_SYNTAX);
-        if (skip_char(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (skip_char(inp) != 'e') exception(ERR_JSON_SYNTAX);
+        check_char(skip_char(inp), 'r');
+        check_char(skip_char(inp), 'u');
+        check_char(skip_char(inp), 'e');
         return;
     }
     if (ch == '"') {
@@ -831,8 +842,8 @@ static void skip_object(InputStream * inp) {
                 skip_object(inp);
                 ch = skip_char(inp);
                 if (ch == ',') continue;
-                if (ch == ']') break;
-                exception(ERR_JSON_SYNTAX);
+                check_char(ch, ']');
+                break;
             }
         }
         return;
@@ -845,12 +856,12 @@ static void skip_object(InputStream * inp) {
             for (;;) {
                 int ch;
                 skip_object(inp);
-                if (skip_char(inp) != ':') exception(ERR_JSON_SYNTAX);
+                check_char(skip_char(inp), ':');
                 skip_object(inp);
                 ch = skip_char(inp);
                 if (ch == ',') continue;
-                if (ch == '}') break;
-                exception(ERR_JSON_SYNTAX);
+                check_char(ch, '}');
+                break;
             }
         }
         return;
@@ -858,7 +869,7 @@ static void skip_object(InputStream * inp) {
     if (ch == '(') {
         unsigned long size = json_read_ulong(inp);
         ch = skip_char(inp);
-        if (ch != ')') exception(ERR_JSON_SYNTAX);
+        check_char(ch, ')');
         while (size) {
             skip_char(inp);
             size--;
@@ -883,6 +894,10 @@ void json_skip_object(InputStream * inp) {
     skip_object(inp);
 }
 
+void json_test_char(InputStream * inp, int ch) {
+    check_char(read_stream(inp), ch);
+}
+
 static void read_errno_param(InputStream * inp, void * x) {
     ErrorReport * err = (ErrorReport *)x;
     if (err->param_cnt >= err->param_max) {
@@ -898,13 +913,13 @@ int read_errno(InputStream * inp) {
     int ch = read_stream(inp);
     if (ch == 0) return 0;
     if (ch == 'n') {
-        if (read_stream(inp) != 'u') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 'l') exception(ERR_JSON_SYNTAX);
-        if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, 'u');
+        json_test_char(inp, 'l');
+        json_test_char(inp, 'l');
+        json_test_char(inp, MARKER_EOA);
         return 0;
     }
-    if (ch != '{') exception(ERR_JSON_SYNTAX);
+    check_char(ch, '{');
     if (peek_stream(inp) == '}') {
         read_stream(inp);
     }
@@ -912,7 +927,7 @@ int read_errno(InputStream * inp) {
         for (;;) {
             char name[256];
             json_read_string(inp, name, sizeof(name));
-            if (read_stream(inp) != ':') exception(ERR_JSON_SYNTAX);
+            json_test_char(inp, ':');
             if (err == NULL) err = create_error_report();
             if (strcmp(name, "Code") == 0) {
                 err->code = json_read_long(inp);
@@ -935,11 +950,11 @@ int read_errno(InputStream * inp) {
             }
             ch = read_stream(inp);
             if (ch == ',') continue;
-            if (ch == '}') break;
-            exception(ERR_JSON_SYNTAX);
+            check_char(ch, '}');
+            break;
         }
     }
-    if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(inp, MARKER_EOA);
     if (err == NULL) return 0;
     if (err->code != 0) no = set_error_report_errno(err);
     release_error_report(err);

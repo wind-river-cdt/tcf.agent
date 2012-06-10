@@ -289,8 +289,8 @@ static void command_get_context(char * token, Channel * c) {
     CommandGetContextArgs args;
 
     args.ids = json_read_alloc_string_array(&c->inp, &args.id_cnt);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     args.data = (CommandGetContextData *)loc_alloc(sizeof(CommandGetContextData) * args.id_cnt);
     strlcpy(args.token, token, sizeof(args.token));
@@ -348,8 +348,8 @@ static void command_get_children(char * token, Channel * c) {
     CommandGetChildrenArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_get_children_cache_client, c, &args, sizeof(args));

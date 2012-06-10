@@ -572,8 +572,8 @@ static void command_subscribe(char * token, Channel * c) {
     LINK * l;
 
     json_read_string(&c->inp, type, sizeof(type));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     for (l = subscriptions.next; l != &subscriptions;) {
         Subscription * h = all2subscription(l);
@@ -604,8 +604,8 @@ static void command_unsubscribe(char * token, Channel * c) {
     LINK * l;
 
     json_read_string(&c->inp, type, sizeof(type));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     for (l = subscriptions.next; l != &subscriptions;) {
         Subscription * h = all2subscription(l);
@@ -631,10 +631,10 @@ static void command_read(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     size = json_read_ulong(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     client = find_client(id, c);
     if (client == NULL) err = errno;
@@ -679,9 +679,9 @@ static void command_write(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     size = json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
 
     client = find_client(id, c);
     if (client == NULL) err = errno;
@@ -720,8 +720,8 @@ static void command_write(char * token, Channel * c) {
         json_read_binary_end(&state);
     }
 
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     if (data != NULL) {
         WriteRequest * r = (WriteRequest *)loc_alloc_zero(sizeof(WriteRequest));
@@ -748,8 +748,8 @@ static void command_eos(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     client = find_client(id, c);
     if (client == NULL) err = errno;
@@ -777,8 +777,8 @@ static void command_connect(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     if (find_client(id, c) == NULL) {
         VirtualStream * stream = virtual_stream_find(id);
@@ -798,8 +798,8 @@ static void command_disconnect(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     client = find_client(id, c);
     if (client == NULL) err = errno;

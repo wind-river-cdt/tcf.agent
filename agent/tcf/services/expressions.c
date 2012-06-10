@@ -2950,8 +2950,8 @@ static void command_get_context(char * token, Channel * c) {
     CommandArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(get_context_cache_client, c, &args, sizeof(args));
@@ -3042,8 +3042,8 @@ static void command_get_children(char * token, Channel * c) {
     CommandArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(get_children_cache_client, c, &args, sizeof(args));
@@ -3112,12 +3112,12 @@ static void command_create(char * token, Channel * c) {
     CommandCreateArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     json_read_string(&c->inp, args.language, sizeof(args.language));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.script = json_read_alloc_string(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_create_cache_client, c, &args, sizeof(args));
@@ -3236,8 +3236,8 @@ static void command_evaluate(char * token, Channel * c) {
     CommandArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_evaluate_cache_client, c, &args, sizeof(args));
@@ -3289,10 +3289,10 @@ static void command_assign(char * token, Channel * c) {
     CommandAssignArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.value_buf = json_read_alloc_binary(&c->inp, &args.value_size);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_assign_cache_client, c, &args, sizeof(args));
@@ -3304,8 +3304,8 @@ static void command_dispose(char * token, Channel * c) {
     Expression * e;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     e = find_expression(id);
     if (e != NULL) {

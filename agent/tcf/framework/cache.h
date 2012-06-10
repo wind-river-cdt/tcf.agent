@@ -81,8 +81,8 @@
 
         CommandArgs args;
         json_read_string(&c->inp, args.id, sizeof(args.id));
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-        if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOA);
+        json_test_char(&c->inp, MARKER_EOM);
         strlcpy(args.token, token, sizeof(args.token));
 
         // Start cache client state machine:

@@ -94,8 +94,8 @@ static void command_echo(char * token, Channel * c) {
     char str[0x1000];
     int len = json_read_string(&c->inp, str, sizeof(str));
     if (len >= (int)sizeof(str)) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
     json_write_string_len(&c->out, str, len);
@@ -105,8 +105,8 @@ static void command_echo(char * token, Channel * c) {
 
 static void command_echo_fp(char * token, Channel * c) {
     double x = json_read_double(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
     json_write_double(&c->out, x);
@@ -131,7 +131,7 @@ static void command_echo_err(char * token, Channel * c) {
 
 static void command_get_test_list(char * token, Channel * c) {
     const char * arr = "[]";
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOM);
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
     write_errno(&c->out, 0);
@@ -172,8 +172,8 @@ static void command_run_test(char * token, Channel * c) {
     char id[256];
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     if (strcmp(id, "RCBP1") == 0) {
 #if ENABLE_RCBP_TEST
@@ -206,8 +206,8 @@ static void command_cancel_test(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
 #if ENABLE_RCBP_TEST
     if (terminate_debug_context(id2ctx(id)) != 0) err = errno;
@@ -285,10 +285,10 @@ static void command_get_symbol(char * token, Channel * c) {
     ContextAddress addr = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     name = json_read_alloc_string(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
 #if ENABLE_DebugContext
     {
@@ -379,10 +379,10 @@ static void command_create_test_streams(char * token, Channel * c) {
     int err = 0;
 
     buf_size0 = json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     buf_size1 = json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     if (buf_size0 <= 0 || buf_size1 <= 0) err = ERR_INV_NUMBER;
 
@@ -421,8 +421,8 @@ static void command_dispose_test_stream(char * token, Channel * c) {
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
 #if SERVICE_Streams
     if (!err) {

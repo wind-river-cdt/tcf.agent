@@ -29,6 +29,9 @@
 #include <stdlib.h>
 #include <tcf/framework/streams.h>
 
+/* Marker of end of command argument */
+#define MARKER_EOA 0
+
 extern int json_read_string(InputStream * inp, char * str, size_t size);
 extern int json_read_boolean(InputStream * inp);
 extern long json_read_long(InputStream * inp);
@@ -51,6 +54,9 @@ extern int json_read_struct(InputStream * inp, JsonStructCallBack * call_back, v
 extern char * json_read_object(InputStream * inp);
 /* Skip one JSON object in the input stream */
 extern void json_skip_object(InputStream * inp);
+
+/* Read one char and check that it matches 'ch' */
+extern void json_test_char(InputStream * inp, int ch);
 
 extern void json_write_ulong(OutputStream * out, unsigned long n);
 extern void json_write_long(OutputStream * out, long n);

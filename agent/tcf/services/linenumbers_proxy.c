@@ -186,8 +186,8 @@ static void validate_cache_entry(Channel * c, void * args, int error) {
             error = read_errno(&c->inp);
             code_area_cnt = 0;
             json_read_array(&c->inp, read_code_area_array, NULL);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
             if (code_area_cnt > 0) {
                 entry->areas_cnt = code_area_cnt;
                 entry->areas = (CodeArea *)loc_alloc(sizeof(CodeArea) * code_area_cnt);

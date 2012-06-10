@@ -209,12 +209,12 @@ static void command_map_to_source(char * token, Channel * c) {
     MapToSourceArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.addr0 = (ContextAddress)json_read_uint64(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.addr1 = (ContextAddress)json_read_uint64(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(map_to_source_cache_client, c, &args, sizeof(args));
@@ -263,14 +263,14 @@ static void command_map_to_memory(char * token, Channel * c) {
     MapToMemoryArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.file = json_read_alloc_string(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.line = json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.column = json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(map_to_memory_cache_client, c, &args, sizeof(args));

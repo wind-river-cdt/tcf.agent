@@ -312,8 +312,8 @@ static void command_get_context(char * token, Channel * c) {
     CommandGetContextArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_get_context_cache_client, c, &args, sizeof(args));
@@ -362,8 +362,8 @@ static void command_get_children(char * token, Channel * c) {
     CommandGetChildrenArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_get_children_cache_client, c, &args, sizeof(args));
@@ -433,14 +433,14 @@ static void command_find_by_name_cache_client(void * x) {
 static void command_find_by_name_args(char * token, Channel * c, CommandFindByNameArgs * args) {
     args->ip = 0;
     json_read_string(&c->inp, args->id, sizeof(args->id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     if (peek_stream(&c->inp) != '"' && peek_stream(&c->inp) != 'n') {
         args->ip = (ContextAddress)json_read_uint64(&c->inp);
-        if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+        json_test_char(&c->inp, MARKER_EOA);
     }
     args->name = json_read_alloc_string(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args->token, token, sizeof(args->token));
     cache_enter(command_find_by_name_cache_client, c, args, sizeof(CommandFindByNameArgs));
@@ -498,10 +498,10 @@ static void command_find_by_addr(char * token, Channel * c) {
     CommandFindByAddrArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.addr = (ContextAddress)json_read_uint64(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_find_by_addr_cache_client, c, &args, sizeof(args));
@@ -552,14 +552,14 @@ static void command_find_in_scope(char * token, Channel * c) {
     CommandFindInScopeArgs args;
 
     json_read_string(&c->inp, args.frame_id, sizeof(args.frame_id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.ip = (ContextAddress)json_read_uint64(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     json_read_string(&c->inp, args.scope_id, sizeof(args.scope_id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.name = json_read_alloc_string(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_find_in_scope_cache_client, c, &args, sizeof(args));
@@ -616,8 +616,8 @@ static void command_list(char * token, Channel * c) {
     CommandListArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_list_cache_client, c, &args, sizeof(args));
@@ -660,10 +660,10 @@ static void command_get_array_type(char * token, Channel * c) {
     CommandGetArrayTypeArgs args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.length = json_read_uint64(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_get_array_type_cache_client, c, &args, sizeof(args));
@@ -820,8 +820,8 @@ static void command_get_location_info(char * token, Channel * c) {
     CommandGetLocationInfo args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_get_location_info_cache_client, c, &args, sizeof(args));
@@ -883,10 +883,10 @@ static void command_find_frame_info(char * token, Channel * c) {
     CommandFindFrameInfo args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.addr = (ContextAddress)json_read_uint64(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_find_frame_info_cache_client, c, &args, sizeof(args));
@@ -969,10 +969,10 @@ static void command_get_sym_file_info(char * token, Channel * c) {
     CommandSymFileInfo args;
 
     json_read_string(&c->inp, args.id, sizeof(args.id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     args.addr = (ContextAddress)json_read_uint64(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
     cache_enter(command_get_sym_file_info_cache_client, c, &args, sizeof(args));

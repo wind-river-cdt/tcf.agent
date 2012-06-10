@@ -424,8 +424,8 @@ static void validate_context(Channel * c, void * args, int error) {
         if (!error) {
             error = read_errno(&c->inp);
             json_read_struct(&c->inp, read_context_data, s);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
             if (!error && s->update_owner == NULL) error = ERR_INV_CONTEXT;
             if (!error && s->update_owner->exited) error = ERR_ALREADY_EXITED;
         }
@@ -529,8 +529,8 @@ static void validate_find(Channel * c, void * args, int error) {
         if (!error) {
             error = read_errno(&c->inp);
             f->id_buf = read_symbol_list(&c->inp, &f->id_cnt);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
         }
         clear_trap(&trap);
     }
@@ -1048,8 +1048,8 @@ static void validate_children(Channel * c, void * args, int error) {
         if (!error) {
             error = read_errno(&c->inp);
             s->children_ids = read_symbol_list(&c->inp, &s->children_count);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
         }
         clear_trap(&trap);
     }
@@ -1107,8 +1107,8 @@ static void validate_type_id(Channel * c, void * args, int error) {
         if (!error) {
             error = read_errno(&c->inp);
             s->id = json_read_alloc_string(&c->inp);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
         }
         clear_trap(&trap);
     }
@@ -1209,43 +1209,43 @@ static void read_location_command(InputStream * inp, void * args) {
     cmd = add_location_command((int)json_read_long(inp));
     switch (cmd->cmd) {
     case SFT_CMD_NUMBER:
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.num = json_read_int64(inp);
         break;
     case SFT_CMD_ARG:
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.num = (unsigned)json_read_ulong(inp);
         break;
     case SFT_CMD_RD_REG:
     case SFT_CMD_WR_REG:
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         json_read_string(inp, id, sizeof(id));
         if (id2register(id, &ctx, &frame, &cmd->args.reg) < 0) id2register_error = errno;
         break;
     case SFT_CMD_RD_MEM:
     case SFT_CMD_WR_MEM:
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.mem.size = json_read_ulong(inp);
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.mem.big_endian = json_read_boolean(inp);
         break;
     case SFT_CMD_LOCATION:
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.loc.code_addr = (uint8_t *)json_read_alloc_binary(inp, &cmd->args.loc.code_size);
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         json_read_struct(inp, read_dwarf_location_params, cmd);
         cmd->args.loc.func = evaluate_vm_expression;
         break;
     case SFT_CMD_PIECE:
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.piece.bit_offs = (unsigned)json_read_ulong(inp);
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.piece.bit_size = (unsigned)json_read_ulong(inp);
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         if (json_read_string(inp, id, sizeof(id)) > 0) {
             if (id2register(id, &ctx, &frame, &cmd->args.piece.reg) < 0) id2register_error = errno;
         }
-        if (read_stream(inp) != ',') exception(ERR_JSON_SYNTAX);
+        json_test_char(inp, ',');
         cmd->args.piece.value = json_read_alloc_binary(inp, &val_size);
         if (cmd->args.piece.value != NULL && val_size < (cmd->args.piece.bit_size + 7) / 8) {
             exception(ERR_JSON_SYNTAX);
@@ -1284,8 +1284,8 @@ static void validate_location_info(Channel * c, void * args, int error) {
             id2register_error = 0;
             error = read_errno(&c->inp);
             json_read_struct(&c->inp, read_location_attrs, f);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
             if (!error && id2register_error) error = id2register_error;
         }
         clear_trap(&trap);
@@ -1420,9 +1420,9 @@ static void validate_frame(Channel * c, void * args, int error) {
             id2register_error = 0;
             error = read_errno(&c->inp);
             addr = json_read_uint64(&c->inp);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             size = json_read_uint64(&c->inp);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             if (error || size == 0) {
                 f->address = f->ip & ~(uint64_t)3;
                 f->size = 4;
@@ -1442,15 +1442,15 @@ static void validate_frame(Channel * c, void * args, int error) {
                 f->fp->cmds_max = location_cmds.cnt;
                 memcpy(f->fp->cmds, location_cmds.cmds, location_cmds.cnt * sizeof(LocationExpressionCommand));
             }
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             trace_regs_cnt = 0;
             if (json_read_struct(&c->inp, read_stack_trace_register, NULL)) {
                 f->regs_cnt = trace_regs_cnt;
                 f->regs = (StackFrameRegisterLocation **)loc_alloc(trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
                 memcpy(f->regs, trace_regs, trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
             }
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
             if (!error && id2register_error) error = id2register_error;
         }
         clear_trap(&trap);

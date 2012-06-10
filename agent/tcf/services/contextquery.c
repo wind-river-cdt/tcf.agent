@@ -259,8 +259,8 @@ int context_query(Context * ctx, const char * query) {
 static void command_query(char * token, Channel * c) {
     int err = 0;
     char * query = json_read_alloc_string(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     if (parse_context_query(query) < 0) err = errno;
 
@@ -293,7 +293,7 @@ static void command_get_attr_names(char * token, Channel * c) {
     unsigned cnt = 0;
     Comparator * l = NULL;
 
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);

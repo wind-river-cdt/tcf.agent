@@ -508,7 +508,7 @@ static void command_get(char * token, Channel * c) {
     unsigned n = 0;
     LINK * l = maps.next;
 
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -532,8 +532,8 @@ static void command_get(char * token, Channel * c) {
 static void command_set(char * token, Channel * c) {
     set_path_map(c, &c->inp);
 
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);

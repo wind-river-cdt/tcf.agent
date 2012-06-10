@@ -474,8 +474,8 @@ static void event_context_added(Channel * c, void * args) {
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "contextAdded");
     json_read_array(p->bck_inp, read_context_added_item, p);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 }
 
 static void event_context_changed(Channel * c, void * args) {
@@ -484,8 +484,8 @@ static void event_context_changed(Channel * c, void * args) {
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "contextChanged");
     json_read_array(p->bck_inp, read_context_changed_item, p);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 }
 
 static void event_context_removed(Channel * c, void * args) {
@@ -494,8 +494,8 @@ static void event_context_removed(Channel * c, void * args) {
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "contextRemoved");
     json_read_array(p->bck_inp, read_context_removed_item, p);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 }
 
 static void event_context_suspended(Channel * ch, void * args) {
@@ -509,17 +509,17 @@ static void event_context_suspended(Channel * ch, void * args) {
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "contextSuspended");
     json_read_string(p->bck_inp, c->id, sizeof(c->id));
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
     c = find_context_cache(p, c->id);
     if (c == NULL) c = &buf;
     else clear_context_suspended_data(c);
     c->suspend_pc = json_read_uint64(p->bck_inp);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
     c->suspend_reason = json_read_alloc_string(p->bck_inp);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
     json_read_struct(p->bck_inp, read_context_suspended_data, c);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 
     if (c != &buf) {
         assert(*EXT(c->ctx) == c);
@@ -546,8 +546,8 @@ static void event_context_resumed(Channel * ch, void * args) {
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "contextResumed");
     json_read_string(p->bck_inp, id, sizeof(id));
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 
     c = find_context_cache(p, id);
     if (c != NULL) {
@@ -574,16 +574,16 @@ static void event_container_suspended(Channel * ch, void * args) {
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "containerSuspended");
     json_read_string(p->bck_inp, c->id, sizeof(c->id));
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
     c = find_context_cache(p, c->id);
     if (c == NULL) c = &buf;
     else clear_context_suspended_data(c);
     c->suspend_pc = json_read_uint64(p->bck_inp);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
     c->suspend_reason = json_read_alloc_string(p->bck_inp);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
     json_read_struct(p->bck_inp, read_context_suspended_data, c);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
     if (c != &buf) {
         assert(*EXT(c->ctx) == c);
         c->pc_valid = 1;
@@ -598,8 +598,8 @@ static void event_container_suspended(Channel * ch, void * args) {
         clear_context_suspended_data(c);
     }
     json_read_array(p->bck_inp, read_container_suspended_item, p);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 }
 
 static void event_container_resumed(Channel * c, void * args) {
@@ -608,8 +608,8 @@ static void event_container_resumed(Channel * c, void * args) {
     write_stringz(&p->host->out, RUN_CONTROL);
     write_stringz(&p->host->out, "containerResumed");
     json_read_array(p->bck_inp, read_container_resumed_item, p);
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 }
 
 static void event_memory_map_changed(Channel * c, void * args) {
@@ -621,8 +621,8 @@ static void event_memory_map_changed(Channel * c, void * args) {
     write_stringz(&p->host->out, MEMORY_MAP);
     write_stringz(&p->host->out, "changed");
     json_read_string(p->bck_inp, id, sizeof(id));
-    if (read_stream(p->bck_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->bck_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->bck_inp, MARKER_EOA);
+    json_test_char(p->bck_inp, MARKER_EOM);
 
     ctx = find_context_cache(p, id);
     if (ctx != NULL) {
@@ -642,8 +642,8 @@ static void command_path_map_set(char * token, Channel * c, void * args) {
     write_stringz(&p->target->out, PATH_MAP);
     write_stringz(&p->target->out, "set");
     set_path_map(p->host, p->fwd_inp);
-    if (read_stream(p->fwd_inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(p->fwd_inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(p->fwd_inp, MARKER_EOA);
+    json_test_char(p->fwd_inp, MARKER_EOM);
 }
 
 static void validate_peer_cache_children(Channel * c, void * args, int error);
@@ -736,8 +736,8 @@ static void validate_peer_cache_children(Channel * c, void * args, int error) {
         if (!error) {
             error = read_errno(&c->inp);
             json_read_array(&c->inp, read_rc_children_item, p);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
         }
         clear_trap(&trap);
     }
@@ -764,8 +764,8 @@ static void validate_peer_cache_context(Channel * c, void * args, int error) {
         else {
             set_rc_error(p, error = read_errno(&c->inp));
             json_read_struct(&c->inp, read_run_control_context_property, x);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
             if (error || find_context_cache(p, x->id) != NULL) {
                 free_context_cache(x);
             }
@@ -811,14 +811,14 @@ static void validate_peer_cache_state(Channel * c, void * args, int error) {
             set_rc_error(p, error = read_errno(&c->inp));
             clear_context_suspended_data(x);
             x->pc_valid = json_read_boolean(&c->inp);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             x->suspend_pc = json_read_uint64(&c->inp);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             x->suspend_reason = json_read_alloc_string(&c->inp);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             json_read_struct(&c->inp, read_context_suspended_data, x);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
 
             if (error || find_context_cache(p, x->id) != NULL) {
                 free_context_cache(x);
@@ -902,10 +902,10 @@ static void validate_memory_cache(Channel * c, void * args, int error) {
                 pos += rd;
             }
             json_read_binary_end(&state);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             error = read_errno(&c->inp);
             while (read_stream(&c->inp) != 0) {}
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOM);
         }
         clear_trap(&trap);
     }
@@ -1043,8 +1043,8 @@ static void validate_memory_map_cache(Channel * c, void * args, int error) {
             cache->mmap.regions = (MemoryRegion *)loc_realloc(cache->mmap.regions, sizeof(MemoryRegion) * mem_buf_pos);
             memcpy(cache->mmap.regions, mem_buf, sizeof(MemoryRegion) * mem_buf_pos);
 
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
         }
         clear_trap(&trap);
     }
@@ -1171,8 +1171,8 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
                 ids_buf_pos = 0;
                 str_buf_pos = 0;
                 json_read_array(&c->inp, read_ids_item, NULL);
-                if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-                if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+                json_test_char(&c->inp, MARKER_EOA);
+                json_test_char(&c->inp, MARKER_EOM);
                 for (i = 0; i < ids_buf_pos; i++) {
                     cache->pending_regs_cnt++;
                     protocol_send_command(c, "Registers", "getContext", validate_registers_cache, cache);
@@ -1190,8 +1190,8 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
                 props.def.dwarf_id = -1;
                 props.def.eh_frame_id = -1;
                 json_read_struct(&c->inp, read_register_property, &props);
-                if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-                if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+                json_test_char(&c->inp, MARKER_EOA);
+                json_test_char(&c->inp, MARKER_EOM);
                 i = get_reg_index(cache, props.id);
                 if (i >= cache->reg_max) {
                     unsigned pos = cache->reg_max;
@@ -1301,8 +1301,8 @@ static void validate_reg_values_cache(Channel * c, void * args, int error) {
                 }
             }
             json_read_binary_end(&state);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
         }
         clear_trap(&trap);
     }
@@ -1329,8 +1329,8 @@ static void validate_reg_children_cache(Channel * c, void * args, int error) {
             str_buf_pos = 0;
             error = read_errno(&c->inp);
             json_read_array(&c->inp, read_ids_item, NULL);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
             if (!error && !s->disposed) {
                 unsigned n = 0;
                 s->reg_cnt = ids_buf_pos;
@@ -1400,9 +1400,9 @@ static void validate_stack_frame_cache(Channel * c, void * args, int error) {
         s->pending = NULL;
         if (!error) {
             json_read_array(&c->inp, read_stack_frame, s);
-            if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOA);
             error = read_errno(&c->inp);
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(&c->inp, MARKER_EOM);
             if (!error && !s->disposed) {
                 if (s->info.is_top_frame) {
                     unsigned cnt = 0;

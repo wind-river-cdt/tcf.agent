@@ -218,8 +218,8 @@ static void command_get_context(char * token, Channel * c) {
     Context * ctx = NULL;
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     ctx = id2ctx(id);
 
@@ -243,8 +243,8 @@ static void command_get_children(char * token, Channel * c) {
     char id[256];
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -294,16 +294,16 @@ static MemoryCommandArgs * read_command_args(char * token, Channel * c, int cmd)
     memset(&buf, 0, sizeof(buf));
 
     json_read_string(&c->inp, id, sizeof(id));
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     buf.addr = json_read_ulong(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     buf.word_size = (int)json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     buf.size = (int)json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
     buf.mode = (int)json_read_long(&c->inp);
-    if (read_stream(&c->inp) != 0) exception(ERR_JSON_SYNTAX);
-    if (cmd == CMD_GET && read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+    json_test_char(&c->inp, MARKER_EOA);
+    if (cmd == CMD_GET) json_test_char(&c->inp, MARKER_EOM);
 
     buf.ctx = id2ctx(id);
     if (buf.ctx == NULL) err = ERR_INV_CONTEXT;
@@ -313,10 +313,8 @@ static MemoryCommandArgs * read_command_args(char * token, Channel * c, int cmd)
     if (err != 0) {
         if (cmd != CMD_GET) {
             int ch;
-            while ((ch = read_stream(&c->inp)) != 0) {
-                if (ch < 0) exception(ERR_JSON_SYNTAX);
-            }
-            if (read_stream(&c->inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            do ch = read_stream(&c->inp);
+            while (ch != MARKER_EOM && ch != MARKER_EOS);
         }
 
         write_stringz(&c->out, "R");
@@ -412,8 +410,8 @@ static void safe_memory_set(void * parm) {
                 size += rd;
             }
             json_read_binary_end(&state);
-            if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(inp, MARKER_EOA);
+            json_test_char(inp, MARKER_EOM);
 
             send_event_memory_changed(ctx, addr0, size);
 
@@ -559,8 +557,8 @@ static void safe_memory_fill(void * parm) {
                     exception(ERR_JSON_SYNTAX);
                 }
             }
-            if (read_stream(inp) != 0) exception(ERR_JSON_SYNTAX);
-            if (read_stream(inp) != MARKER_EOM) exception(ERR_JSON_SYNTAX);
+            json_test_char(inp, MARKER_EOA);
+            json_test_char(inp, MARKER_EOM);
 
             while (err == 0 && buf_pos < (int)size && buf_pos <= (int)(sizeof(buf) / 2)) {
                 if (buf_pos == 0) {
