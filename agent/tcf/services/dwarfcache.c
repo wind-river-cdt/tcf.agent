@@ -818,7 +818,7 @@ static void load_addr_ranges(void) {
                         dio_SetPos(next);
                     }
                     else {
-                        U8_T offs = dwarf64 ? dio_ReadU8() : (U8_T)dio_ReadU4();
+                        U8_T offs = dio_ReadAddressX(NULL, dwarf64 ? 8 : 4);
                         U1_T addr_size = dio_ReadU1();
                         U1_T segm_size = dio_ReadU1();
                         if (segm_size != 0) str_exception(ERR_INV_DWARF, "segment descriptors are not supported");
