@@ -311,9 +311,20 @@ static int is_json(const char * s) {
 }
 #endif
 
+static const char * get_suspend_reason(Context * ctx) {
+    const char * reason = NULL;
+    ContextExtensionRC * ext = EXT(ctx);
+    if (ext->intercepted_by_bp == 1 && get_context_breakpoint_ids(ctx) != NULL) return REASON_BREAKPOINT;
+    if (ctx->exception_description != NULL) return ctx->exception_description;
+    if (ext->step_error != NULL) return errno_to_str(set_error_report_errno(ext->step_error));
+    if (ext->step_done != NULL) return ext->step_done;
+    reason = context_suspend_reason(ctx);
+    if (reason != NULL)  return reason;
+    return REASON_USER_REQUEST;
+}
+
 static void write_context_state(OutputStream * out, Context * ctx) {
     int fst = 1;
-    const char * reason = NULL;
     char ** bp_ids = NULL;
     ContextExtensionRC * ext = EXT(ctx);
     ContextAddress pc = 0;
@@ -333,14 +344,10 @@ static void write_context_state(OutputStream * out, Context * ctx) {
         write_stream(out, 0);
 
         /* String: Reason */
-        if (ext->intercepted_by_bp == 1) bp_ids = get_context_breakpoint_ids(ctx);
-        if (bp_ids != NULL) reason = REASON_BREAKPOINT;
-        else if (ctx->exception_description != NULL) reason = ctx->exception_description;
-        else if (ext->step_error != NULL) reason = errno_to_str(set_error_report_errno(ext->step_error));
-        else if (ext->step_done != NULL) reason = ext->step_done;
-        else reason = context_suspend_reason(ctx);
-        json_write_string(out, reason);
+        json_write_string(out, get_suspend_reason(ctx));
         write_stream(out, 0);
+
+        if (ext->intercepted_by_bp == 1) bp_ids = get_context_breakpoint_ids(ctx);
     }
 
     /* Object: Additional context state info */
@@ -965,7 +972,7 @@ static void send_event_context_suspended(void) {
             e->intercepted = 1;
             x->pending_intercept = 0;
             if (get_context_breakpoint_ids(x) != NULL) e->intercepted_by_bp++;
-            if (e->intercepted_by_bp || x->stopped_by_exception || e->step_done) n = &p0;
+            if (strcmp(get_suspend_reason(x), REASON_USER_REQUEST)) n = &p0;
             list_add_last(&e->link, n);
         }
     }
