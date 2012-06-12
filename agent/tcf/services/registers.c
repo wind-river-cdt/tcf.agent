@@ -541,6 +541,7 @@ static void command_getm_cache_client(void * x) {
     Trap trap;
 
     bbf_pos = 0;
+    if (bbf == NULL) bbf = (uint8_t *)loc_alloc(bbf_len = 0x100);
     if (set_trap(&trap)) {
         unsigned locs_pos = 0;
         check_location_list(args->locs, args->locs_cnt, 0);
