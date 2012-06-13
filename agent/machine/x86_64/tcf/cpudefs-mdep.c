@@ -438,6 +438,7 @@ int mdep_set_other_regs(pid_t pid, REG_SET * data,
 #define MOVE_mr     0x89
 #define MOVE_rm     0x8b
 #define REXW        0x48
+#define POP_EBP     0x5d
 
 static int read_stack(Context * ctx, ContextAddress addr, void * buf, size_t size) {
     if (addr == 0) {
@@ -485,7 +486,7 @@ static int read_reg(StackFrame * frame, RegisterDefinition * def, ContextAddress
  *
  * RETURNS: The address that a chain of branches points to.
  */
-static ContextAddress trace_jump(Context * ctx, ContextAddress addr) {
+static ContextAddress trace_jump(Context * ctx, ContextAddress addr, uint32_t * reg_mask) {
     int cnt = 0;
     /* while instruction is a JMP, get destination adrs */
     while (cnt < 100) {
@@ -516,6 +517,11 @@ static ContextAddress trace_jump(Context * ctx, ContextAddress addr) {
             unsigned char mod = 0;
             unsigned char reg = 0;
             unsigned char rm = 0;
+#if defined(__i386__)
+            static int reg_to_dwarf_id[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+#else
+            static int reg_to_dwarf_id[] = { 0, 2, 1, 3, 7, 6, 4, 5 };
+#endif
             if (context_read_mem(ctx, addr + 1, &modrm, 1) < 0) break;
             mod = modrm >> 6;
             reg = (modrm >> 3) & 7u;
@@ -545,6 +551,7 @@ static ContextAddress trace_jump(Context * ctx, ContextAddress addr) {
             else {
                 break;
             }
+            *reg_mask |= (uint32_t)1 << reg_to_dwarf_id[reg];
         }
         else {
             break;
@@ -562,6 +569,13 @@ static int is_func_entry(unsigned char * code) {
     if (*code == REXW) code++;
     if (code[0] == MOVE_mr && code[1] == 0xe5) return 1;
     if (code[0] == MOVE_rm && code[1] == 0xec) return 1;
+    return 0;
+}
+
+static int is_func_exit(unsigned char * code) {
+    if (code[1] == POP_EBP && (code[2] == RET || code[2] == RETADD)) return 1;
+    if (code[1] == MOVE_rm && code[2] == 0xe5 &&
+        code[3] == POP_EBP && (code[4] == RET || code[4] == RETADD)) return 1;
     return 0;
 }
 
@@ -594,13 +608,16 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
 
     if (frame->is_top_frame) {
         /* Top frame */
+        int copy_regs = 0;
+        uint32_t reg_mask = 0;
         ContextAddress reg_sp = 0;
-        ContextAddress addr = trace_jump(ctx, reg_pc);
+        ContextAddress addr = trace_jump(ctx, reg_pc, &reg_mask);
 #if ENABLE_Symbols
         ContextAddress plt = is_plt_section(ctx, addr);
 #else
         ContextAddress plt = 0;
 #endif
+        RegisterDefinition * reg = NULL;
 
         if (read_reg(frame, sp_def, &reg_sp) < 0) return 0;
         /*
@@ -625,23 +642,48 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
                 dwn_sp = reg_sp + sizeof(ContextAddress) * 2;
             }
             dwn_bp = reg_bp;
+            copy_regs = 1;
         }
         else {
             unsigned char code[5];
 
             if (context_read_mem(ctx, addr - 1, code, sizeof(code)) < 0) return -1;
 
-            if (is_func_entry(code + 1) || code[1] == ENTER || code[1] == RET || code[1] == RETADD) {
+            if (code[1] == RET || code[1] == RETADD) {
                 dwn_sp = reg_sp + sizeof(ContextAddress);
                 dwn_bp = reg_bp;
+                copy_regs = 1;
+                reg_mask = 0;
+            }
+            else if (is_func_entry(code + 1) || code[1] == ENTER) {
+                dwn_sp = reg_sp + sizeof(ContextAddress);
+                dwn_bp = reg_bp;
+                copy_regs = 1;
             }
             else if (is_func_entry(code)) {
                 dwn_sp = reg_sp + sizeof(ContextAddress) * 2;
                 dwn_bp = reg_bp;
+                copy_regs = 1;
             }
             else if (reg_bp != 0) {
                 dwn_sp = reg_bp + sizeof(ContextAddress) * 2;
                 if (read_stack(ctx, reg_bp, &dwn_bp, sizeof(ContextAddress)) < 0) dwn_bp = 0;
+                if (is_func_exit(code + 1)) {
+                    copy_regs = 1;
+                    reg_mask = 0;
+                }
+            }
+        }
+        if (copy_regs) {
+            /* Copy registers that are known to have same value in the down frame */
+            for (reg = regs_index; reg->name; reg++) {
+                uint8_t buf[16];
+                if (reg->dwarf_id < 0) continue;
+                if (reg->size == 0 || reg->size > sizeof(buf)) continue;
+                if (reg == pc_def || reg == sp_def || reg == bp_def) continue;
+                if (reg->dwarf_id < 32 && (reg_mask & ((uint32_t)1 << reg->dwarf_id))) continue;
+                if (context_read_reg(ctx, reg, 0, reg->size, buf) < 0) continue;
+                write_reg_bytes(down, reg, 0, reg->size, buf);
             }
         }
     }
