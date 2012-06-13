@@ -903,6 +903,7 @@ static void post_location_evaluation_request(Context * ctx, BreakpointInfo * bp)
             EXT(ext->bp_grp)->empty_bp_grp = 1;
         }
     }
+    assert(id2ctx(ctx->id) == ctx);
     ext->bp_grp = grp;
     if (grp != NULL) {
         EvaluationRequest * req = create_evaluation_request(grp);
@@ -1031,7 +1032,8 @@ static void notify_breakpoint_status(BreakpointInfo * bp) {
                 assert(bi->refs[i].cnt > 0);
                 if (bi->refs[i].bp == bp) {
                     instruction_cnt++;
-                    assert(check_context_ids_location(bp, bi->refs[i].ctx));
+                    assert(id2ctx(bi->refs[i].ctx->id) == NULL ||
+                        check_context_ids_location(bp, bi->refs[i].ctx));
                 }
             }
         }
@@ -1545,6 +1547,8 @@ static void replant_breakpoint(BreakpointInfo * bp) {
             for (i = 0; i < bi->ref_cnt; i++) {
                 InstructionRef * ref = bi->refs + i;
                 if (ref->bp != bp) continue;
+                /* Check for fork child that is going to be detached */
+                if (id2ctx(ref->ctx->id) == NULL) continue;
                 post_location_evaluation_request(ref->ctx, bp);
             }
             l = l->next;
