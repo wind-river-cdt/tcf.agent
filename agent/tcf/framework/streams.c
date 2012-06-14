@@ -18,6 +18,11 @@
  */
 
 #include <tcf/config.h>
+#ifdef ENABLE_STREAM_MACROS
+#undef ENABLE_STREAM_MACROS
+#endif
+#define ENABLE_STREAM_MACROS 1
+
 #include <stddef.h>
 #include <string.h>
 #include <tcf/framework/myalloc.h>

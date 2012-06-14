@@ -76,15 +76,19 @@ pid_t id2pid(const char * id, pid_t * parent) {
     pid_t pid = 0;
     if (parent != NULL) *parent = 0;
     if (id == NULL) return 0;
-    if (id[0] != 'P') return 0;
-    if (id[1] == 0) return 0;
-    pid = (pid_t)strtol(id + 1, (char **)&id, 10);
-    if (id[0] == '.') {
-        if (id[1] == 0) return 0;
-        if (parent != NULL) *parent = pid;
-        pid = (pid_t)strtol(id + 1, (char **)&id, 10);
+    if (*id++ != 'P') return 0;
+    while (*id >= '0' && *id <= '9') {
+        pid = pid * 10 + (*id++ - '0');
     }
-    if (id[0] != 0) return 0;
+    if (*id == '.') {
+        if (parent != NULL) *parent = pid;
+        id++;
+        pid = 0;
+        while (*id >= '0' && *id <= '9') {
+            pid = pid * 10 + (*id++ - '0');
+        }
+    }
+    if (*id != 0) return 0;
     return pid;
 }
 

@@ -157,13 +157,14 @@ struct EvaluationRequest {
 };
 
 struct ContextExtensionBP {
-    int                 step_over_bp_cnt;
-    BreakInstruction *  stepping_over_bp;   /* if not NULL, the context is stepping over a breakpoint instruction */
-    char **             bp_ids;             /* if stopped by breakpoint, contains NULL-terminated list of breakpoint IDs */
+    int step_over_bp_cnt;
+    BreakInstruction * stepping_over_bp;    /* if not NULL, the context is stepping over a breakpoint instruction */
+    char ** bp_ids;                         /* if stopped by breakpoint, contains NULL-terminated list of breakpoint IDs */
     EvaluationRequest * req;
-    Context *           bp_grp;
-    int                 empty_bp_grp;
-    LINK                link_hit_count;
+    Context * bp_grp;
+    int empty_bp_grp;
+    int instruction_cnt;
+    LINK link_hit_count;
 };
 
 static const char * BREAKPOINTS = "Breakpoints";
@@ -415,6 +416,7 @@ static void flush_instructions(void) {
             if (ref->cnt == 0 || ref->ctx->exiting || ref->ctx->exited) {
                 ref->bp->instruction_cnt--;
                 ref->bp->status_changed = 1;
+                EXT(ref->ctx)->instruction_cnt--;
                 context_unlock(ref->ctx);
                 memmove(ref, ref + 1, sizeof(InstructionRef) * (bi->ref_cnt - i - 1));
                 bi->ref_cnt--;
@@ -491,6 +493,7 @@ static void reset_bp_hit_count(BreakpointInfo * bp) {
 void clone_breakpoints_on_process_fork(Context * parent, Context * child) {
     Context * mem = context_get_group(parent, CONTEXT_GROUP_PROCESS);
     LINK * l = instructions.next;
+    assert(child == context_get_group(child, CONTEXT_GROUP_PROCESS));
     while (l != &instructions) {
         int i;
         BreakInstruction * ci = NULL;
@@ -510,6 +513,7 @@ void clone_breakpoints_on_process_fork(Context * parent, Context * child) {
             ci->refs[i] = bi->refs[i];
             ci->refs[i].ctx = child;
             context_lock(child);
+            EXT(child)->instruction_cnt++;
             bp->instruction_cnt++;
             bp->status_changed = 1;
         }
@@ -528,10 +532,12 @@ void unplant_breakpoints(Context * ctx) {
         if (bi->planted) remove_instruction(bi);
         for (i = 0; i < bi->ref_cnt; i++) {
             BreakpointInfo * bp = bi->refs[i].bp;
+            Context * bx = bi->refs[i].ctx;
             assert(bp->instruction_cnt > 0);
             bp->instruction_cnt--;
             bp->status_changed = 1;
-            context_unlock(bi->refs[i].ctx);
+            EXT(bx)->instruction_cnt--;
+            context_unlock(bx);
         }
         bi->ref_cnt = 0;
         free_instruction(bi);
@@ -791,13 +797,14 @@ static BreakInstruction * link_breakpoint_instruction(
         bi->refs = (InstructionRef *)loc_realloc(bi->refs, sizeof(InstructionRef) * bi->ref_size);
     }
     ref = bi->refs + bi->ref_cnt++;
-    context_lock(ctx);
     memset(ref, 0, sizeof(InstructionRef));
     ref->bp = bp;
     ref->ctx = ctx;
     ref->addr = ctx_addr;
     ref->cnt = 1;
     bi->valid = 0;
+    context_lock(ctx);
+    EXT(ctx)->instruction_cnt++;
     bp->instruction_cnt++;
     bp->status_changed = 1;
     return bi;
@@ -880,6 +887,8 @@ static void post_evaluation_request(EvaluationRequest * req) {
     }
 }
 
+static int check_context_ids_location(BreakpointInfo * bp, Context * ctx);
+
 static void post_location_evaluation_request(Context * ctx, BreakpointInfo * bp) {
     ContextExtensionBP * ext = EXT(ctx);
     Context * grp = context_get_group(ctx, CONTEXT_GROUP_BREAKPOINT);
@@ -902,6 +911,20 @@ static void post_location_evaluation_request(Context * ctx, BreakpointInfo * bp)
             post_evaluation_request(req);
             EXT(ext->bp_grp)->empty_bp_grp = 1;
         }
+    }
+    else if (bp == NULL && grp != NULL && EXT(grp)->instruction_cnt == 0) {
+        /* Optimization: if no breakpoints to replant, ignore the request */
+        int bp_found = 0;
+        LINK * l = breakpoints.next;
+        while (l != &breakpoints) {
+            BreakpointInfo * bp = link_all2bp(l);
+            if (!is_disabled(bp) && check_context_ids_location(bp, grp)) {
+                bp_found = 1;
+                break;
+            }
+            l = l->next;
+        }
+        if (!bp_found) return;
     }
     assert(id2ctx(ctx->id) == ctx);
     ext->bp_grp = grp;
@@ -1013,7 +1036,6 @@ static void free_bp(BreakpointInfo * bp) {
 
 static void remove_ref(BreakpointRef * br);
 static void send_event_context_removed(BreakpointInfo * bp);
-static int check_context_ids_location(BreakpointInfo * bp, Context * ctx);
 
 static void notify_breakpoint_status(BreakpointInfo * bp) {
     assert(generation_done == generation_posted);
