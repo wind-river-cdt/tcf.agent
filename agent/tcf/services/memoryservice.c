@@ -428,8 +428,7 @@ static void safe_memory_set(void * parm) {
             clear_trap(&trap);
         }
         else {
-            trace(LOG_ALWAYS, "Exception in message handler: %d %s",
-                  trap.error, errno_to_str(trap.error));
+            trace(LOG_ALWAYS, "Exception in Memory.set: %s", errno_to_str(trap.error));
             channel_close(c);
         }
     }
@@ -501,8 +500,7 @@ static void safe_memory_get(void * parm) {
             clear_trap(&trap);
         }
         else {
-            trace(LOG_ALWAYS, "Exception in message handler: %d %s",
-                  trap.error, errno_to_str(trap.error));
+            trace(LOG_ALWAYS, "Exception in Memory.get: %s", errno_to_str(trap.error));
             channel_close(c);
         }
     }
@@ -579,7 +577,7 @@ static void safe_memory_fill(void * parm) {
                 if (context_write_mem(ctx, addr, tmp, wr) < 0) {
                     err = errno;
 #if ENABLE_ExtendedMemoryErrorReports
-                        context_get_mem_error_info(&err_info);
+                    context_get_mem_error_info(&err_info);
 #endif
                 }
                 else {
@@ -602,8 +600,7 @@ static void safe_memory_fill(void * parm) {
             clear_trap(&trap);
         }
         else {
-            trace(LOG_ALWAYS, "Exception in message handler: %d %s",
-                  trap.error, errno_to_str(trap.error));
+            trace(LOG_ALWAYS, "Exception in Memory.fill: %s", errno_to_str(trap.error));
             channel_close(c);
         }
     }

@@ -370,8 +370,7 @@ static void handle_channel_msg(void * x) {
         clear_trap(&trap);
     }
     else {
-        trace(LOG_ALWAYS, "Exception in message handler: %d %s",
-              trap.error, errno_to_str(trap.error));
+        trace(LOG_ALWAYS, "Exception in message handler: %s", errno_to_str(trap.error));
         send_eof_and_close(&c->chan, trap.error);
     }
 }

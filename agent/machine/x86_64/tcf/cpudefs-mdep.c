@@ -723,41 +723,38 @@ RegisterDefinition * get_PC_definition(Context * ctx) {
 static void ini_xmm_regs(void) {
     static int sub_xmm_sizes[] = {8, 16, 32, 64, -1};
     char sub_xmm_name[256];
-    int ix = 0, jx = 0, max_sub_xmm = 0, xmm_ix = 0, sub_xmm_sizes_ix = 0;
+    int ix = 0, max_sub_xmm = 0, xmm_ix = 0, sub_xmm_sizes_ix = 0;
     RegisterDefinition * cur_reg_def = NULL;
 
     /* seek xmm0 definition */
     regs_index = regs_def;
-    while (regs_index[xmm_ix].name != NULL && (strcmp(regs_index[xmm_ix].name, "xmm0") != 0)) xmm_ix ++;
+    while (regs_index[xmm_ix].name != NULL && (strcmp(regs_index[xmm_ix].name, "xmm0") != 0)) xmm_ix++;
     if (regs_index[xmm_ix].name == NULL) return;
 
     /* allocate a new register definition array */
-    for (ix = 0; sub_xmm_sizes[ix] != -1; ix ++) {
-        max_sub_xmm += XMM_SIZE / sub_xmm_sizes[ix];
-    }
-    regs_index = (RegisterDefinition *)loc_alloc_zero(sizeof(regs_def) + (max_sub_xmm + ix)* XMM_REGS * sizeof(RegisterDefinition));
+    for (ix = 0; sub_xmm_sizes[ix] != -1; ix++) max_sub_xmm += XMM_SIZE / sub_xmm_sizes[ix] + 1;
+    regs_index = (RegisterDefinition *)loc_alloc_zero(sizeof(regs_def) + max_sub_xmm * XMM_REGS * sizeof(RegisterDefinition));
 
-    for (ix = 0; regs_def[ix].name != NULL; ix ++) {
+    for (ix = 0; regs_def[ix].name != NULL; ix++) {
         regs_index[ix] = regs_def[ix]; /* keep references to regs_def array (name, role), as it is a static array */
-        if (regs_def[ix].parent != NULL) {
-            regs_index[ix].parent = regs_index + (regs_def[ix].parent - regs_def);
-        }
+        if (regs_def[ix].parent != NULL) regs_index[ix].parent = regs_index + (regs_def[ix].parent - regs_def);
     }
 
     /* add the xmm sub-registers combinations */
     cur_reg_def = regs_index + ix;
-    for (ix = 0; ix < XMM_REGS; ix ++) {
-        for (sub_xmm_sizes_ix = 0; sub_xmm_sizes[sub_xmm_sizes_ix] != -1; sub_xmm_sizes_ix ++) {
+    for (ix = 0; ix < XMM_REGS; ix++) {
+        for (sub_xmm_sizes_ix = 0; sub_xmm_sizes[sub_xmm_sizes_ix] != -1; sub_xmm_sizes_ix++) {
             int sub_xmm_ix = 0;
             int nb_sub_xmm = XMM_SIZE / sub_xmm_sizes[sub_xmm_sizes_ix];
             sprintf(sub_xmm_name, "w%d", sub_xmm_sizes[sub_xmm_sizes_ix]);
             cur_reg_def->name = loc_strdup(sub_xmm_name);
             cur_reg_def->dwarf_id = -1;
+            cur_reg_def->eh_frame_id = -1;
             cur_reg_def->no_read = 1;
             cur_reg_def->no_write = 1;
             cur_reg_def->parent = regs_index + xmm_ix;
-            cur_reg_def ++;
-            for (sub_xmm_ix = 0; sub_xmm_ix < nb_sub_xmm; sub_xmm_ix ++) {
+            cur_reg_def++;
+            for (sub_xmm_ix = 0; sub_xmm_ix < nb_sub_xmm; sub_xmm_ix++) {
                 sprintf(sub_xmm_name, "f%d", sub_xmm_ix);
                 cur_reg_def->name = loc_strdup(sub_xmm_name);
                 cur_reg_def->size = sub_xmm_sizes[sub_xmm_sizes_ix] / 8;
@@ -775,11 +772,14 @@ static void ini_xmm_regs(void) {
                 cur_reg_def->left_to_right = regs_index[xmm_ix].left_to_right;
                 cur_reg_def->first_bit = regs_index[xmm_ix].first_bit;
                 cur_reg_def->parent = cur_reg_def - sub_xmm_ix - 1;
-                cur_reg_def ++; jx ++;
+                cur_reg_def++;
             }
-            if (jx % max_sub_xmm == 0) xmm_ix ++;
         }
+        xmm_ix++;
     }
+    assert((unsigned)((char *)cur_reg_def - (char *)regs_index) ==
+        sizeof(regs_def) + (max_sub_xmm * XMM_REGS - 1) * sizeof(RegisterDefinition));
+    assert(cur_reg_def->name == NULL);
 }
 
 #if ENABLE_HardwareBreakpoints
