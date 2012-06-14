@@ -573,9 +573,9 @@ static int is_func_entry(unsigned char * code) {
 }
 
 static int is_func_exit(unsigned char * code) {
-    if (code[1] == POP_EBP && (code[2] == RET || code[2] == RETADD)) return 1;
-    if (code[1] == MOVE_rm && code[2] == 0xe5 &&
-        code[3] == POP_EBP && (code[4] == RET || code[4] == RETADD)) return 1;
+    if (code[0] == POP_EBP && (code[1] == RET || code[1] == RETADD)) return 1;
+    if (code[0] == MOVE_rm && code[1] == 0xe5 &&
+        code[2] == POP_EBP && (code[3] == RET || code[3] == RETADD)) return 1;
     return 0;
 }
 
