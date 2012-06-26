@@ -671,10 +671,7 @@ static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
                         json_write_string(out, errno_to_str(set_error_report_errno(bi->planting_error)));
                     }
                     else if (bi->planted) {
-                        write_stream(out, ',');
-                        json_write_string(out, "BreakpointType");
-                        write_stream(out, ':');
-                        json_write_string(out, bi->saved_size ? "Software" : "Hardware");
+                        int bp_type_is_set = 0;
 #if ENABLE_ExtendedBreakpointStatus
                         if (bi->saved_size == 0) {
                             /* Back-end context breakpoint status */
@@ -684,6 +681,7 @@ static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
                             if (context_get_breakpoint_status(&bi->cb, &names, &values, &cnt) == 0) {
                                 while (cnt > 0) {
                                     if (*values != NULL) {
+                                        if (strcmp (*names, "BreakpointType") == 0) bp_type_is_set = 1;
                                         write_stream(out, ',');
                                         json_write_string(out, *names);
                                         write_stream(out, ':');
@@ -696,6 +694,12 @@ static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
                             }
                         }
 #endif
+                        if (bp_type_is_set == 0) {
+                            write_stream(out, ',');
+                            json_write_string(out, "BreakpointType");
+                            write_stream(out, ':');
+                            json_write_string(out, bi->saved_size ? "Software" : "Hardware");
+                        }
                     }
                 }
                 write_stream(out, '}');
