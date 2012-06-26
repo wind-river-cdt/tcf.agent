@@ -234,7 +234,6 @@ static int update_rule(PathMapRule * r, PathMapRuleAttribute * new_attrs) {
                 loc_free(new_attr);
                 continue;
             }
-            diff++;
             loc_free(old_attr->value);
             loc_free(old_attr->name);
             loc_free(old_attr);
@@ -243,6 +242,7 @@ static int update_rule(PathMapRule * r, PathMapRuleAttribute * new_attrs) {
 
         *new_ref = new_attr;
         new_ref = &new_attr->next;
+        diff++;
 
         buf_inp = create_byte_array_input_stream(&buf, new_attr->value, strlen(new_attr->value));
 
