@@ -8,7 +8,10 @@ agent/*.opt
 agent/*.plg
 agent/*.user
 agent/*.suo
+agent/*.sdf
+agent/*.opensdf
 agent/obj
+agent/ipch
 agent/vc++
 
 # cmake/

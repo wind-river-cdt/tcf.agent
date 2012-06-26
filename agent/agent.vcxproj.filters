@@ -1,0 +1,553 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="framework">
+      <UniqueIdentifier>{3f590ac0-c92d-4ccf-b0dd-c50988864162}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="services">
+      <UniqueIdentifier>{01220ad5-83c5-4ed1-be6a-4818a834ad78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="main">
+      <UniqueIdentifier>{2bf77fba-db8b-4d14-9238-fdb1ab1f6515}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system">
+      <UniqueIdentifier>{ace62428-6d94-499c-9883-65f8a42078eb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\Windows">
+      <UniqueIdentifier>{61a6daeb-dee9-4c1f-9d28-0a0e539477b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\GNU">
+      <UniqueIdentifier>{f35ca704-5a89-4817-9f8c-a549430dc3bf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\GNU\Linux">
+      <UniqueIdentifier>{23a11244-9d04-4a77-b3fe-666fca119fa5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\Darwin">
+      <UniqueIdentifier>{83277769-86c8-4668-b969-8dc01831459a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\FreeBSD">
+      <UniqueIdentifier>{9d9b09ef-9ace-432a-877e-5d065d8fe3ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\VxWorks">
+      <UniqueIdentifier>{bf7a4e42-18cd-4a49-9b48-de055d920a02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\Cygwin">
+      <UniqueIdentifier>{cdf2065c-d395-40d0-b7b3-e44051ac6369}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\Msys">
+      <UniqueIdentifier>{418e00a5-aca5-4814-b4c9-b66000f53d0f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="machine">
+      <UniqueIdentifier>{d83b5bfb-6644-46b1-bc4f-3b81164ff43a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="machine\x86_64">
+      <UniqueIdentifier>{1a694d59-1ab6-44bf-b603-1a3500f41a93}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="machine\i386">
+      <UniqueIdentifier>{90cdea01-0ab4-4898-8d12-f1ca88491261}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="machine\i686">
+      <UniqueIdentifier>{cbf9f4ad-9e90-4991-9dc4-8feec90e1ac3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="tcf\framework\asyncreq.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\base64.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\cache.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\channel.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\channel_pipe.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\channel_tcp.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\context.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\cpudefs.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\errors.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\events.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\exceptions.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\inputbuf.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\ip_ifc.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\json.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\mdep.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\myalloc.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\outputbuf.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\peer.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\plugins.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\protocol.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\proxy.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\signames.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\streams.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\trace.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\framework\waitpid.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\breakpoints.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\contextquery.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\diagnostics.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\discovery.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\discovery_udp.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\dwarfcache.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\dwarfecomp.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\dwarfexpr.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\dwarfframe.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\dwarfio.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\dwarfreloc.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\elf-loader.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\expressions.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\filesystem.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\funccall.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\linenumbers.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\linenumbers_elf.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\linenumbers_proxy.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\linenumbers_win32.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\memorymap.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\memoryservice.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\pathmap.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\processes.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\registers.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\runctrl.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\stacktrace.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\streamsservice.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\symbols.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\symbols_common.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\symbols_elf.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\symbols_proxy.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\symbols_win32.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\sysmon.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\tcf_elf.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\terminals.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\vm.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\cmdline.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\main.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\main_client.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\main_log.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\main_lua.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\main_reg.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\main_va.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\server.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\services.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\test.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="system\Windows\tcf\context-win32.c">
+      <Filter>system\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="system\Windows\tcf\pthreads-win32.c">
+      <Filter>system\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="system\Windows\tcf\windbgcache.c">
+      <Filter>system\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="system\GNU\Linux\tcf\context-linux.c">
+      <Filter>system\GNU\Linux</Filter>
+    </ClCompile>
+    <ClCompile Include="system\Darwin\tcf\context-darwin.c">
+      <Filter>system\Darwin</Filter>
+    </ClCompile>
+    <ClCompile Include="system\FreeBSD\tcf\context-freebsd.c">
+      <Filter>system\FreeBSD</Filter>
+    </ClCompile>
+    <ClCompile Include="system\VxWorks\tcf\context-vxworks.c">
+      <Filter>system\VxWorks</Filter>
+    </ClCompile>
+    <ClCompile Include="machine\x86_64\tcf\cpudefs-mdep.c">
+      <Filter>machine\x86_64</Filter>
+    </ClCompile>
+    <ClCompile Include="machine\i386\tcf\cpudefs-mdep.c">
+      <Filter>machine\i386</Filter>
+    </ClCompile>
+    <ClCompile Include="machine\i686\tcf\cpudefs-mdep.c">
+      <Filter>machine\i686</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="tcf\framework\asyncreq.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\base64.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\cache.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\channel.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\channel_pipe.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\channel_tcp.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\context.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\cpudefs-ext.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\cpudefs.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\errors.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\events.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\exceptions.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\inputbuf.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\ip_ifc.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\json.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\link.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\mdep-inet.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\mdep-threads.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\mdep.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\myalloc.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\outputbuf.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\peer.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\pid-hash.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\plugins.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\protocol.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\proxy.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\signames.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\streams.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\tcf.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\trace.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\waitpid.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\breakpoints.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\contextquery.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\diagnostics.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\discovery.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\discovery_udp.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dwarf.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dwarfcache.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dwarfecomp.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dwarfexpr.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dwarfframe.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dwarfio.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dwarfreloc.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\elf-loader.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\expressions.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\filesystem.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\funccall.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\linenumbers.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\memorymap.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\memoryservice.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\pathmap.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\processes.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\registers.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\runctrl.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\stacktrace.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\streamsservice.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\symbols.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\sysmon.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\tcf_elf.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\terminals.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\vm.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\main\cmdline.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\main\server.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\main\services-ext.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\main\services.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\main\test.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="system\Windows\tcf\context-win32.h">
+      <Filter>system\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="system\Windows\tcf\pthreads-win32.h">
+      <Filter>system\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="system\Windows\tcf\regset.h">
+      <Filter>system\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="system\Windows\tcf\windbgcache.h">
+      <Filter>system\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="system\GNU\Linux\tcf\regset.h">
+      <Filter>system\GNU\Linux</Filter>
+    </ClInclude>
+    <ClInclude Include="system\Darwin\tcf\regset.h">
+      <Filter>system\Darwin</Filter>
+    </ClInclude>
+    <ClInclude Include="system\FreeBSD\tcf\regset.h">
+      <Filter>system\FreeBSD</Filter>
+    </ClInclude>
+    <ClInclude Include="system\VxWorks\tcf\context-vxworks.h">
+      <Filter>system\VxWorks</Filter>
+    </ClInclude>
+    <ClInclude Include="system\VxWorks\tcf\regset.h">
+      <Filter>system\VxWorks</Filter>
+    </ClInclude>
+    <ClInclude Include="system\Cygwin\tcf\regset.h">
+      <Filter>system\Cygwin</Filter>
+    </ClInclude>
+    <ClInclude Include="system\Msys\tcf\regset.h">
+      <Filter>system\Msys</Filter>
+    </ClInclude>
+    <ClInclude Include="machine\x86_64\tcf\cpudefs-mdep.h">
+      <Filter>machine\x86_64</Filter>
+    </ClInclude>
+    <ClInclude Include="machine\x86_64\tcf\regset-mdep.h">
+      <Filter>machine\x86_64</Filter>
+    </ClInclude>
+    <ClInclude Include="machine\i386\tcf\cpudefs-mdep.h">
+      <Filter>machine\i386</Filter>
+    </ClInclude>
+    <ClInclude Include="machine\i386\tcf\dwarfreloc-mdep.h">
+      <Filter>machine\i386</Filter>
+    </ClInclude>
+    <ClInclude Include="machine\i386\tcf\regset-mdep.h">
+      <Filter>machine\i386</Filter>
+    </ClInclude>
+    <ClInclude Include="machine\i686\tcf\cpudefs-mdep.h">
+      <Filter>machine\i686</Filter>
+    </ClInclude>
+    <ClInclude Include="machine\i686\tcf\regset-mdep.h">
+      <Filter>machine\i686</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\config.h" />
+  </ItemGroup>
+</Project>
