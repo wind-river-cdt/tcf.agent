@@ -224,12 +224,13 @@ static void op_implicit_pointer(void) {
     ContextAddress ref_id = 0;
     U8_T offset = 0;
     U8_T dio_pos = 0;
+    ELF_Section * DummySect = NULL;
 
     expr_pos++;
     if (op == OP_GNU_implicit_pointer && unit->mDesc.mVersion < 3) arg_size = unit->mDesc.mAddressSize;
     dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
     dio_EnterSection(&expr->unit->mDesc, expr->section, dio_pos);
-    ref_id = dio_ReadUX(arg_size);
+    ref_id = dio_ReadAddressX(&DummySect, arg_size);
     offset = dio_ReadU8LEB128();
     expr_pos += (size_t)(dio_GetPos() - dio_pos);
     dio_ExitSection();

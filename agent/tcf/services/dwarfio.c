@@ -254,20 +254,6 @@ I8_T dio_ReadS8LEB128(void) {
     return (I8_T)Res;
 }
 
-U8_T dio_ReadUX(int Size) {
-    switch (Size) {
-    case 2:
-        return dio_ReadU2();
-    case 4:
-        return dio_ReadU4();
-    case 8:
-        return dio_ReadU8();
-    default:
-        str_exception(ERR_INV_DWARF, "Invalid data size");
-        return 0;
-    }
-}
-
 U8_T dio_ReadAddressX(ELF_Section ** s, int size) {
     U8_T pos = sDataPos;
     switch (size) {

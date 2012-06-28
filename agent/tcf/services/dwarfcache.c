@@ -829,7 +829,7 @@ static void load_addr_ranges(void) {
                         for (;;) {
                             ELF_Section * range_sec = NULL;
                             ContextAddress addr = (ContextAddress)dio_ReadAddressX(&range_sec, addr_size);
-                            ContextAddress size = (ContextAddress)dio_ReadUX(addr_size);
+                            ContextAddress size = (ContextAddress)dio_ReadAddressX(&range_sec, addr_size);
                             if (addr == 0 && size == 0) break;
                             if (size == 0) continue;
                             add_addr_range(range_sec, sCompUnit, addr, size);

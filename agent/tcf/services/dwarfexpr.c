@@ -48,11 +48,12 @@ void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo *
         U8_T Offset = 0;
         U8_T AddrMax = ~(U8_T)0;
         DWARFCache * Cache = (DWARFCache *)Unit->mFile->dwarf_dt_cache;
+	ELF_Section * DummySect = NULL;
 
         assert(Cache->magic == DWARF_CACHE_MAGIC);
         if (Cache->mDebugLoc == NULL) str_exception(ERR_INV_DWARF, "Missing .debug_loc section");
         dio_EnterSection(&Unit->mDesc, Unit->mDesc.mSection, Value->mAddr - (U1_T *)Unit->mDesc.mSection->data);
-        Offset = dio_ReadUX(Value->mSize);
+        Offset = dio_ReadAddressX(&DummySect, Value->mSize);
         dio_ExitSection();
         Base = Unit->mObject->u.mCode.mLowPC;
         if (Unit->mDesc.mAddressSize < 8) AddrMax = ((U8_T)1 << Unit->mDesc.mAddressSize * 8) - 1;
