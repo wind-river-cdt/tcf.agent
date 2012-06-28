@@ -380,7 +380,7 @@ static void dio_ReadFormString(void) {
 }
 
 static void dio_ReadFormStringRef(void) {
-    U8_T Offset = dio_ReadUX(sUnit->m64bit ? 8 : 4);
+    U8_T Offset = dio_ReadAddressX(&dio_gFormSection, sUnit->m64bit ? 8 : 4);
     U4_T StringTableSize = 0;
     U1_T * StringTable = dio_LoadStringTable(&StringTableSize);
     dio_gFormDataAddr = StringTable + Offset;
