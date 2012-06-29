@@ -1197,16 +1197,69 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * call_
     return 0;
 }
 
-const char * symbol2id(const Symbol * sym) {
-    static char id[256];
+static char tmp_buf[256];
+static size_t tmp_len = 0;
 
+#define tmp_app_char(ch) { \
+    if (tmp_len < sizeof(tmp_buf) - 1) tmp_buf[tmp_len++] = ch; \
+}
+
+static void tmp_app_str(char ch, const char * s) {
+    tmp_app_char(ch);
+    for (;;) {
+        ch = *s++;
+        if (ch == 0) break;
+        tmp_app_char(ch);
+    }
+}
+
+static void tmp_app_hex(char ch, uint64_t n) {
+    char buf[32];
+    unsigned i = 0;
+    tmp_app_char(ch);
+    do {
+        int d = (int)(n & 0xf);
+        buf[i++] = d < 10 ? '0' + d : 'A' + d - 10;
+        n = n >> 4;
+    }
+    while (n != 0);
+    while (i > 0) {
+        ch = buf[--i];
+        tmp_app_char(ch);
+    }
+}
+
+static void tmp_app_int(char ch, int n) {
+    char buf[32];
+    unsigned i = 0;
+    tmp_app_char(ch);
+    if (n < 0) {
+        tmp_app_char('-');
+        n = -n;
+    }
+    do {
+        buf[i++] = '0' + n % 10;
+        n = n / 10;
+    }
+    while (n != 0);
+    while (i > 0) {
+        ch = buf[--i];
+        tmp_app_char(ch);
+    }
+}
+
+const char * symbol2id(const Symbol * sym) {
     assert(sym->magic == SYMBOL_MAGIC);
     if (sym->base) {
         char base[256];
         assert(sym->ctx == sym->base->ctx);
         assert(sym->frame == STACK_NO_FRAME);
-        strcpy(base, symbol2id(sym->base));
-        snprintf(id, sizeof(id), "@P%X.%"PRIX64".%s", sym->sym_class, (uint64_t)sym->length, base);
+        strlcpy(base, symbol2id(sym->base), sizeof(base));
+        tmp_len = 0;
+        tmp_app_char('@');
+        tmp_app_hex('P', sym->sym_class);
+        tmp_app_hex('.', sym->length);
+        tmp_app_str('.', base);
     }
     else {
         ELF_File * file = NULL;
@@ -1221,17 +1274,23 @@ const char * symbol2id(const Symbol * sym) {
         if (sym->tbl != NULL) tbl_index = sym->tbl->index;
         if (frame == STACK_TOP_FRAME) frame = get_top_frame(sym->ctx);
         assert(sym->var == NULL || sym->var->mCompUnit->mFile == file);
-        snprintf(id, sizeof(id), "@S%X.%lX.%lX.%"PRIX64".%"PRIX64".%"PRIX64".%X.%d.%X.%X.%X.%s",
-            sym->sym_class,
-            file ? (unsigned long)file->dev : 0ul,
-            file ? (unsigned long)file->ino : 0ul,
-            file ? file->mtime : (int64_t)0,
-            obj_index, var_index, tbl_index,
-            frame, sym->index,
-            sym->dimension, sym->cardinal,
-            sym->ctx->id);
+        tmp_len = 0;
+        tmp_app_char('@');
+        tmp_app_hex('S', sym->sym_class);
+        tmp_app_hex('.', file ? file->dev : (dev_t)0);
+        tmp_app_hex('.', file ? file->ino : (ino_t)0);
+        tmp_app_hex('.', file ? file->mtime : (int64_t)0);
+        tmp_app_hex('.', obj_index);
+        tmp_app_hex('.', var_index);
+        tmp_app_hex('.', tbl_index);
+        tmp_app_int('.', frame);
+        tmp_app_hex('.', sym->index);
+        tmp_app_hex('.', sym->dimension);
+        tmp_app_hex('.', sym->cardinal);
+        tmp_app_str('.', sym->ctx->id);
     }
-    return id;
+    tmp_buf[tmp_len++] = 0;
+    return tmp_buf;
 }
 
 static uint64_t read_hex(const char ** s) {
