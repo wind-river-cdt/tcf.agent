@@ -50,18 +50,19 @@ static void gc_event(void * args) {
 
 void tmp_gc(void) {
 #if ENABLE_FastMemAlloc
-    if (!list_is_empty(&tmp_alloc_list) && tmp_pool_max < POOL_SIZE) {
-        tmp_pool_max += tmp_pool_max > tmp_alloc_size ? tmp_pool_max : tmp_alloc_size;
-        if (tmp_pool_max > POOL_SIZE) tmp_pool_max = POOL_SIZE;
-        tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
-    }
     if (tmp_pool_pos + tmp_alloc_size >= tmp_pool_avr) {
         tmp_pool_avr = tmp_pool_pos + tmp_alloc_size;
     }
-    else if (tmp_pool_avr > POOL_SIZE / 100) {
-        tmp_pool_avr -= POOL_SIZE / 100;
+    else if (tmp_pool_avr > POOL_SIZE / 0x10) {
+        tmp_pool_avr -= POOL_SIZE / 0x10000;
     }
-    if (tmp_pool_avr < tmp_pool_max / 4) {
+    if (tmp_pool_max < tmp_pool_avr && tmp_pool_max < POOL_SIZE) {
+        if (tmp_pool_max < POOL_SIZE / 0x10) tmp_pool_max = POOL_SIZE / 0x10;
+        while (tmp_pool_max < tmp_pool_avr) tmp_pool_max *= 2;
+        if (tmp_pool_max > POOL_SIZE) tmp_pool_max = POOL_SIZE;
+        tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
+    }
+    else if (tmp_pool_avr < tmp_pool_max / 4 && tmp_pool_max > POOL_SIZE / 0x10) {
         tmp_pool_max /= 2;
         tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
     }
@@ -83,6 +84,11 @@ void * tmp_alloc(size_t size) {
         tmp_gc_posted = 1;
     }
 #if ENABLE_FastMemAlloc
+    if (tmp_pool_max == 0) {
+        assert(tmp_pool_pos == 0);
+        tmp_pool_max = POOL_SIZE / 0x10;
+        tmp_pool = (char *)loc_alloc(tmp_pool_max);
+    }
     if (tmp_pool_pos + size + ALIGNMENT + sizeof(size_t *) <= tmp_pool_max) {
         tmp_pool_pos += sizeof(size_t *);
         tmp_pool_pos = (tmp_pool_pos + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
@@ -95,7 +101,7 @@ void * tmp_alloc(size_t size) {
     {
         LINK * l = (LINK *)loc_alloc(sizeof(LINK) + size);
         list_add_last(l, &tmp_alloc_list);
-        tmp_alloc_size += size;
+        tmp_alloc_size += size + ALIGNMENT + sizeof(size_t *);
         p = l + 1;
     }
     return p;
