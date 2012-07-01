@@ -276,7 +276,12 @@ char * channel_peer_to_json(PeerServer * ps) {
 ChannelServer * channel_server(PeerServer * ps) {
     const char * transportname = peer_server_getprop(ps, "TransportName", NULL);
 
-    if (transportname == NULL || strcmp(transportname, "TCP") == 0 || strcmp(transportname, "SSL") == 0) {
+    if (transportname == NULL) {
+        transportname = "TCP";
+        peer_server_addprop(ps, "TransportName", transportname);
+    }
+
+    if (strcmp(transportname, "TCP") == 0 || strcmp(transportname, "SSL") == 0) {
         return channel_tcp_server(ps);
     }
     else if (strcmp(transportname, "PIPE") == 0) {
