@@ -1947,9 +1947,12 @@ static BreakpointInfo * add_breakpoint(Channel * c, BreakpointAttribute * attrs)
         list_init(&bp->link_hit_count);
         list_add_last(&bp->link_all, &breakpoints);
         list_add_last(&bp->link_id, id2bp + hash);
+        set_breakpoint_attributes(bp, attrs);
     }
-    chng = set_breakpoint_attributes(bp, attrs);
-    if (chng) bp->attrs_changed = 1;
+    else {
+        chng = set_breakpoint_attributes(bp, attrs);
+        if (chng) bp->attrs_changed = 1;
+    }
     if (list_is_empty(&bp->link_clients)) added = 1;
     else r = find_breakpoint_ref(bp, c);
     if (r == NULL) {
