@@ -41,6 +41,8 @@
 #define LOG_STACK       0x2000
 #define LOG_PLUGIN      0x4000
 
+#define LOG_NAME_STDERR "-"
+
 extern int log_mode;
 
 #if ENABLE_Trace

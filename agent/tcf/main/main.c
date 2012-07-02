@@ -117,7 +117,7 @@ static BOOL CtrlHandler(DWORD ctrl) {
 static const char * help_text[] = {
     "Usage: agent [OPTION]...",
     "Start Target Communication Framework agent.",
-    "  -d               run in daemon mode",
+    "  -d               run in daemon mode (output is sent to system logger)",
 #if ENABLE_Cmdline
     "  -i               run in interactive mode",
 #endif
@@ -272,6 +272,12 @@ int main(int argc, char ** argv) {
                 exit(1);
             }
         }
+    }
+
+    if (daemon && strcmp (log_name, LOG_NAME_STDERR) != 0 && log_name != NULL) {
+        fprintf(stderr, "%s: error: can only log to stderr when in daemon "
+                "mode.\n", progname);
+        exit (1);
     }
 
     if (daemon) become_daemon();
