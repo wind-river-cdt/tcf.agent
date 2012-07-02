@@ -221,6 +221,10 @@ int main(int argc, char ** argv) {
                 print_server_properties = 1;
                 break;
 
+            case 'h':
+                show_help();
+                exit(0);
+
             case 'I':
             case 'l':
             case 'L':
