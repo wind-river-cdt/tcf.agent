@@ -81,6 +81,7 @@ typedef struct ContextExtensionRC {
     Channel * step_channel;
     int step_continue_mode;
     int safe_single_step;   /* not zero if the context is performing a "safe" single instruction step */
+    int cannot_stop;
     LINK link;
 } ContextExtensionRC;
 
@@ -1111,6 +1112,7 @@ int is_all_stopped(Context * ctx) {
     for (l = context_root.next; l != &context_root; l = l->next) {
         Context * ctx = ctxl2ctxp(l);
         if (ctx->stopped || ctx->exited || ctx->exiting) continue;
+        if (EXT(ctx)->cannot_stop) continue;
         if (!context_has_state(ctx)) continue;
         if (context_get_group(ctx, CONTEXT_GROUP_STOP) != grp) continue;
         return 0;
@@ -1662,12 +1664,12 @@ static void run_safe_events(void * arg) {
         ContextExtensionRC * ext = EXT(ctx);
         l = l->next;
         ext->pending_safe_event = 0;
-        if (ctx->exited || ctx->exiting) continue;
+        if (ctx->exited || ctx->exiting || ext->cannot_stop) continue;
         if (ctx->stopped || !context_has_state(ctx)) continue;
         if (!ext->safe_single_step && context_get_group(ctx, CONTEXT_GROUP_STOP) != grp) continue;
         if (stop_all_timer_cnt >= STOP_ALL_MAX_CNT) {
-            trace(LOG_ALWAYS, "can't stop %s; error: timeout", ctx->id);
-            ctx->exiting = 1;
+            trace(LOG_ALWAYS, "can't stop %s: timeout", ctx->id);
+            ext->cannot_stop = 1;
         }
         else {
             if (stop_all_timer_cnt == STOP_ALL_MAX_CNT / 2) {
@@ -1676,8 +1678,7 @@ static void run_safe_events(void * arg) {
             }
             if (!ext->safe_single_step || stop_all_timer_cnt >= STOP_ALL_MAX_CNT / 2) {
                 if (context_stop(ctx) < 0) {
-                    trace(LOG_ALWAYS, "can't stop %s; error %d: %s",
-                        ctx->id, errno, errno_to_str(errno));
+                    trace(LOG_ALWAYS, "can't stop %s: %s", ctx->id, errno_to_str(errno));
                 }
                 assert(!ctx->stopped);
             }
@@ -1834,6 +1835,7 @@ static void event_context_stopped(Context * ctx, void * client_data) {
     assert(!ctx->exited);
     assert(!ext->intercepted);
     ext->safe_single_step = 0;
+    ext->cannot_stop = 0;
     if (ext->step_mode) {
         ext->step_cnt++;
     }
