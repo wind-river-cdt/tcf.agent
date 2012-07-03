@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -44,7 +44,8 @@ struct trace_mode trace_mode_table[MAX_TRACE_MODES + 1] = {
     { LOG_WAITPID, "waitpid", "waitpid() events" },
     { LOG_EVENTS, "events", "low-level debugger events" },
     { LOG_PROTOCOL, "protocol", "communication protocol" },
-    { LOG_CONTEXT, "context", "debugger actions" },
+    { LOG_CONTEXT, "context", "debug context actions" },
+    { LOG_CHILD, "children", "debug context children" },
     { LOG_DISCOVERY, "discovery", "discovery" },
     { LOG_ASYNCREQ, "asyncreq", "async I/O" },
     { LOG_PROXY, "proxy", "proxy state" },
