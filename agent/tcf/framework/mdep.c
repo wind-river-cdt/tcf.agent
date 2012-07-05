@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -1040,12 +1040,12 @@ int loc_getaddrinfo(const char * nodename, const char * servname,
     int flags = 0;
     int socktype = 0;
     int protocol = 0;
-    int err = 0;
+    int err;
     int port = 0;
     char * canonname = NULL;
-    const char * host = NULL;
-    struct addrinfo * ai = NULL;
-    union sockaddr_union * sa = NULL;
+    const char * host;
+    struct addrinfo * ai;
+    union sockaddr_union * sa;
 
     *res = NULL;
 
@@ -1070,7 +1070,7 @@ int loc_getaddrinfo(const char * nodename, const char * servname,
     }
     if (servname != NULL && servname[0] != 0) {
         char * p = NULL;
-        port = strtol(servname, &p, 10);
+        port = (unsigned int) strtoul(servname, &p, 10);
         if (port < 0 || port > 0xffff || *p != '\0' || p == servname) {
             return 1;
         }
@@ -1102,12 +1102,12 @@ int loc_getaddrinfo(const char * nodename, const char * servname,
     switch (family) {
     case AF_INET:
         assert(sa->sin.sin_family == AF_INET);
-        sa->sin.sin_port = htons(port);
+        sa->sin.sin_port = (unsigned short) htons(port);
         ai->ai_addrlen = sizeof(struct sockaddr_in);
         break;
     case AF_INET6:
         assert(sa->sin6.sin6_family == AF_INET6);
-        sa->sin6.sin6_port = htons(port);
+        sa->sin6.sin6_port = (unsigned short) htons(port);
         ai->ai_addrlen = sizeof(struct sockaddr_in6);
         break;
     default:

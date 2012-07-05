@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -90,7 +90,7 @@ static void channel_connected(Channel * c) {
 }
 
 static void channel_disconnected(Channel * c) {
-    size_t i = 0;
+    size_t i;
     if (chan == c) chan = NULL;
     protocol_release(c->protocol);
     for (i = 0; i < disconnect_hnd_count; ++i) disconnect_hnds[i](c);
@@ -264,7 +264,7 @@ static void connect_callback(void * args, int error, Channel * c) {
         cmd_done(error);
     }
     else {
-        size_t i = 0;
+        size_t i;
         c->connected = channel_connected;
         c->disconnected = channel_disconnected;
         c->protocol = proto;
@@ -278,7 +278,7 @@ static void connect_callback(void * args, int error, Channel * c) {
 }
 
 static int cmd_connect(char * s) {
-    PeerServer * ps = NULL;
+    PeerServer * ps;
 
     ps = channel_peer_from_url(s);
     if (ps == NULL) {

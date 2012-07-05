@@ -237,6 +237,7 @@ extern char * canonicalize_file_name(const char * path);
 #include <version.h>
 #include <unistd.h>
 #include <socket.h>
+#include <string.h>  /* for memset(), strlcpy(), strcmp() */
 #include <strings.h>
 #include <sys/ioctl.h>
 #include <selectLib.h>

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -163,9 +163,9 @@ static OpenFileInfo * create_open_file_info(Channel * ch, char * path, int file,
 }
 
 static OpenFileInfo * find_open_file_info(char * id) {
-    unsigned long handle = 0;
-    LINK * list_head = NULL;
-    LINK * list_next = NULL;
+    unsigned long handle;
+    LINK * list_head;
+    LINK * list_next;
 
     if (id == NULL || id[0] != 'F' || id[1] != 'S' || id[2] == 0) return NULL;
     handle = strtoul(id + 2, &id, 10);
@@ -186,7 +186,7 @@ static void delete_open_file_info(OpenFileInfo * h) {
 
 static void channel_close_listener(Channel * c) {
     LINK list;
-    LINK * list_next = NULL;
+    LINK * list_next;
 
     list_init(&list);
     for (list_next = file_info_ring.next; list_next != &file_info_ring; list_next = list_next->next) {
@@ -349,7 +349,9 @@ static void write_file_attrs(OutputStream * out, FileAttrs * attrs) {
         json_write_string(out, "MTime");
         write_stream(out, ':');
         json_write_uint64(out, attrs->mtime);
+#if defined(_WIN32)
         cnt++;
+#endif
     }
 
 #if defined(_WIN32)
@@ -377,7 +379,7 @@ static int to_local_open_flags(int flags) {
 }
 
 static void read_path(InputStream * inp, char * path, int size) {
-    int i = 0;
+    int i;
     char buf[FILE_PATH_SIZE];
     json_read_string(inp, path, size);
     if (path[0] == 0) strlcpy(path, get_user_home(), size);
@@ -424,15 +426,15 @@ static void read_path(InputStream * inp, char * path, int size) {
 
 static void command_open(char * token, Channel * c) {
     char path[FILE_PATH_SIZE];
-    unsigned long flags = 0;
+    unsigned int flags;
     FileAttrs attrs;
-    int file = -1;
+    int file;
     int err = 0;
     OpenFileInfo * handle = NULL;
 
     read_path(&c->inp, path, sizeof(path));
     json_test_char(&c->inp, MARKER_EOA);
-    flags = json_read_ulong(&c->inp);
+    flags = (unsigned int) json_read_ulong(&c->inp);
     json_test_char(&c->inp, MARKER_EOA);
     memset(&attrs, 0, sizeof(FileAttrs));
 #if defined(_WIN32)
@@ -474,7 +476,7 @@ static void reply_close(char * token, OutputStream * out, int err) {
     write_stream(out, MARKER_EOM);
 }
 
-static void reply_read(char * token, OutputStream * out, int err, void * buf, unsigned len, int eof) {
+static void reply_read(char * token, OutputStream * out, int err, void * buf, size_t len, int eof) {
     write_stringz(out, "R");
     write_stringz(out, token);
     json_write_binary(out, buf, len);
@@ -677,7 +679,7 @@ static IORequest * create_io_request(char * token, OpenFileInfo * handle, int ty
 
 static void command_close(char * token, Channel * c) {
     char id[256];
-    OpenFileInfo * h = NULL;
+    OpenFileInfo * h;
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
@@ -709,7 +711,7 @@ static void command_close(char * token, Channel * c) {
 
 static void command_read(char * token, Channel * c) {
     char id[256];
-    OpenFileInfo * h = NULL;
+    OpenFileInfo * h;
     int64_t offset;
     unsigned long len;
 
@@ -743,7 +745,7 @@ static void command_read(char * token, Channel * c) {
 
 static void command_write(char * token, Channel * c) {
     char id[256];
-    OpenFileInfo * h = NULL;
+    OpenFileInfo * h;
     int64_t offset;
     size_t len = 0;
     JsonReadBinaryState state;
@@ -825,7 +827,7 @@ static void command_lstat(char * token, Channel * c) {
 
 static void command_fstat(char * token, Channel * c) {
     char id[256];
-    OpenFileInfo * h = NULL;
+    OpenFileInfo * h;
 
     json_read_string(&c->inp, id, sizeof(id));
     json_test_char(&c->inp, MARKER_EOA);
@@ -886,7 +888,7 @@ static void command_setstat(char * token, Channel * c) {
 static void command_fsetstat(char * token, Channel * c) {
     char id[256];
     FileAttrs attrs;
-    OpenFileInfo * h = NULL;
+    OpenFileInfo * h;
 
     json_read_string(&c->inp, id, sizeof(id));
     json_test_char(&c->inp, MARKER_EOA);
@@ -911,7 +913,7 @@ static void command_fsetstat(char * token, Channel * c) {
 
 static void command_opendir(char * token, Channel * c) {
     char path[FILE_PATH_SIZE];
-    DIR * dir = NULL;
+    DIR * dir;
     int err = 0;
     OpenFileInfo * handle = NULL;
 
@@ -936,7 +938,7 @@ static void command_opendir(char * token, Channel * c) {
 
 static void command_readdir(char * token, Channel * c) {
     char id[256];
-    OpenFileInfo * h = NULL;
+    OpenFileInfo * h;
     int err = 0;
     int eof = 0;
 
@@ -1035,7 +1037,9 @@ static void command_mkdir(char * token, Channel * c) {
     char path[FILE_PATH_SIZE];
     FileAttrs attrs;
     int err = 0;
-    int mode = 0777;
+#if !defined(_WRS_KERNEL)
+    int mode;
+#endif
 
     read_path(&c->inp, path, sizeof(path));
     json_test_char(&c->inp, MARKER_EOA);
@@ -1047,12 +1051,10 @@ static void command_mkdir(char * token, Channel * c) {
     json_test_char(&c->inp, MARKER_EOA);
     json_test_char(&c->inp, MARKER_EOM);
 
-    if (attrs.flags & ATTR_PERMISSIONS) {
-        mode = attrs.permissions;
-    }
 #if defined(_WRS_KERNEL)
     if (mkdir(path) < 0) err = errno;
 #else
+    mode = (attrs.flags & ATTR_PERMISSIONS) ? attrs.permissions : 0777;
     if (mkdir(path, mode) < 0) err = errno;
 #endif
 #if defined(_WIN32)
@@ -1070,7 +1072,7 @@ static void command_mkdir(char * token, Channel * c) {
 
 static void command_realpath(char * token, Channel * c) {
     char path[FILE_PATH_SIZE];
-    char * real = NULL;
+    char * real;
     int err = 0;
 
     read_path(&c->inp, path, sizeof(path));
@@ -1119,7 +1121,7 @@ static void command_rename(char * token, Channel * c) {
 static void command_readlink(char * token, Channel * c) {
     char path[FILE_PATH_SIZE];
     char link[FILE_PATH_SIZE];
-    int err = 0;
+    int err;
 
     read_path(&c->inp, path, sizeof(path));
     json_test_char(&c->inp, MARKER_EOA);
@@ -1129,7 +1131,7 @@ static void command_readlink(char * token, Channel * c) {
 #if defined(_WIN32) || defined(_WRS_KERNEL)
     err = ENOSYS;
 #else
-    if (readlink(path, link, sizeof(link)) < 0) err = errno;
+    err = (readlink(path, link, sizeof(link)) < 0) ? errno : 0;
 #endif
 
     write_stringz(&c->out, "R");
@@ -1143,7 +1145,7 @@ static void command_readlink(char * token, Channel * c) {
 static void command_symlink(char * token, Channel * c) {
     char link[FILE_PATH_SIZE];
     char target[FILE_PATH_SIZE];
-    int err = 0;
+    int err;
 
     read_path(&c->inp, link, sizeof(link));
     json_test_char(&c->inp, MARKER_EOA);
@@ -1154,7 +1156,7 @@ static void command_symlink(char * token, Channel * c) {
 #if defined(_WIN32) || defined(_WRS_KERNEL)
     err = ENOSYS;
 #else
-    if (symlink(target, link) < 0) err = errno;
+    err = (symlink(target, link) < 0) ? errno : 0;
 #endif
 
     write_stringz(&c->out, "R");
@@ -1190,7 +1192,7 @@ static void command_copy(char * token, Channel * c) {
 
     while (err == 0 && pos < st.st_size) {
         char buf[BUF_SIZE];
-        ssize_t wr = 0;
+        ssize_t wr;
         ssize_t rd = read(fi, buf, sizeof(buf));
         if (rd == 0) break;
         if (rd < 0) {

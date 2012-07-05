@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2009, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2009, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -342,10 +342,10 @@ static void send_read_reply(StreamClient * client, char * token, size_t size) {
     VirtualStream * stream = client->stream;
     Channel * c = client->channel;
     size_t lost = 0;
-    size_t read1 = 0;
+    size_t read1;
     size_t read2 = 0;
     int eos = 0;
-    char * data1 = NULL;
+    char * data1;
     char * data2 = NULL;
     size_t pos;
     size_t len = (stream->buf_inp + stream->buf_len - stream->buf_out) % stream->buf_len;
@@ -626,8 +626,8 @@ static void command_unsubscribe(char * token, Channel * c) {
 
 static void command_read(char * token, Channel * c) {
     char id[256];
-    size_t size = 0;
-    StreamClient * client = NULL;
+    size_t size;
+    StreamClient * client;
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
@@ -672,8 +672,8 @@ static void command_read(char * token, Channel * c) {
 
 static void command_write(char * token, Channel * c) {
     char id[256];
-    StreamClient * client = NULL;
-    long size = 0;
+    StreamClient * client;
+    long size;
     long offs = 0;
     char * data = NULL;
     int err = 0;
@@ -742,7 +742,7 @@ static void command_write(char * token, Channel * c) {
 
 static void command_eos(char * token, Channel * c) {
     char id[256];
-    StreamClient * client = NULL;
+    StreamClient * client;
     size_t done = 0;
     WriteRequest * r = NULL;
     int err = 0;
@@ -794,7 +794,7 @@ static void command_connect(char * token, Channel * c) {
 
 static void command_disconnect(char * token, Channel * c) {
     char id[256];
-    StreamClient * client = NULL;
+    StreamClient * client;
     int err = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
@@ -812,7 +812,7 @@ static void command_disconnect(char * token, Channel * c) {
 }
 
 static void channel_close_listener(Channel * c) {
-    LINK * l = NULL;
+    LINK * l;
 
     for (l = clients.next; l != &clients;) {
         StreamClient * client = all2client(l);

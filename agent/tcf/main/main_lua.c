@@ -1441,6 +1441,7 @@ static const luaL_Reg posteventfuncs[] = {
  */
 
 #if defined(_WRS_KERNEL)
+int tcf_lua(void);
 int tcf_lua(void) {
 #else
 int main(int argc, char ** argv) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -63,9 +63,8 @@ size_t write_base64(OutputStream * out, const char * buf0, size_t len) {
     const unsigned char * buf = (const unsigned char *)buf0;
 
     char obf[OBF_SIZE + 8];
-    size_t obf_len;
+    size_t obf_len = 0;
 
-    obf_len = 0;
     while (pos < len) {
         int byte0 = buf[pos++];
         obf[obf_len++] = int2char[byte0 >> 2];
@@ -94,7 +93,6 @@ size_t write_base64(OutputStream * out, const char * buf0, size_t len) {
     }
     if (obf_len > 0) {
         write_block_stream(out, obf, obf_len);
-        obf_len = 0;
     }
     assert(pos == len);
     return ((len + 2) / 3) * 4;
@@ -106,7 +104,7 @@ size_t read_base64(InputStream * inp, char * buf, size_t buf_size) {
 
     assert(buf_size >= 3);
     while (pos + 3 <= buf_size) {
-        int n0 = 0, n1 = 0, n2 = 0, n3 = 0;
+        int n0, n1 = 0, n2 = 0, n3 = 0;
         int ch0, ch1, ch2, ch3;
 
         ch0 = peek_stream(inp);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -93,7 +93,7 @@ struct RunTestDoneArgs {
 static void command_echo(char * token, Channel * c) {
     char str[0x1000];
     int len = json_read_string(&c->inp, str, sizeof(str));
-    if (len >= (int)sizeof(str)) exception(ERR_JSON_SYNTAX);
+    if ((len < 0) || (len >= (int)sizeof(str))) exception(ERR_JSON_SYNTAX);
     json_test_char(&c->inp, MARKER_EOA);
     json_test_char(&c->inp, MARKER_EOM);
     write_stringz(&c->out, "R");
@@ -115,7 +115,7 @@ static void command_echo_fp(char * token, Channel * c) {
 }
 
 static void command_echo_err(char * token, Channel * c) {
-    int no = 0;
+    int no;
     for (;;) {
         no = read_errno(&c->inp);
         if (peek_stream(&c->inp) == MARKER_EOM) break;
@@ -168,7 +168,7 @@ static void run_test_done(int error, Context * ctx, void * arg) {
 #endif
 
 static void command_run_test(char * token, Channel * c) {
-    int err = 0;
+    int err;
     char id[256];
 
     json_read_string(&c->inp, id, sizeof(id));
@@ -203,14 +203,14 @@ static void command_run_test(char * token, Channel * c) {
 
 static void command_cancel_test(char * token, Channel * c) {
     char id[256];
-    int err = 0;
+    int err;
 
     json_read_string(&c->inp, id, sizeof(id));
     json_test_char(&c->inp, MARKER_EOA);
     json_test_char(&c->inp, MARKER_EOM);
 
 #if ENABLE_RCBP_TEST
-    if (terminate_debug_context(id2ctx(id)) != 0) err = errno;
+    err = (terminate_debug_context(id2ctx(id)) != 0) ? errno : 0;
 #else
     err = ERR_UNSUPPORTED;
 #endif
@@ -280,8 +280,8 @@ static void get_symbol_cache_client(void * x) {
 
 static void command_get_symbol(char * token, Channel * c) {
     char id[256];
-    char * name = NULL;
-    int error = 0;
+    char * name;
+    int error;
     ContextAddress addr = 0;
 
     json_read_string(&c->inp, id, sizeof(id));
@@ -311,7 +311,7 @@ static void command_get_symbol(char * token, Channel * c) {
 #elif ENABLE_RCBP_TEST
             void * ptr = NULL;
             int cls = 0;
-            if (find_test_symbol(ctx, name, &ptr, &cls) < 0) error = errno;
+            error = (find_test_symbol(ctx, name, &ptr, &cls) < 0) ? errno : 0;
             addr = (ContextAddress)ptr;
 #else
             error = ERR_UNSUPPORTED;

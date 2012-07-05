@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -66,7 +66,7 @@ void json_write_ulong(OutputStream * out, unsigned long n) {
         json_write_ulong(out, n / 10);
         n = n % 10;
     }
-    write_stream(out, n + '0');
+    write_stream(out, (unsigned int) n + '0');
 }
 
 void json_write_long(OutputStream * out, long n) {
@@ -257,7 +257,7 @@ int json_read_string(InputStream * inp, char * str, size_t size) {
 }
 
 char * json_read_alloc_string(InputStream * inp) {
-    char * str = NULL;
+    char * str;
     int ch = read_stream(inp);
     if (ch == 'n') {
         json_test_char(inp, 'u');
@@ -307,7 +307,7 @@ int json_read_boolean(InputStream * inp) {
 }
 
 long json_read_long(InputStream * inp) {
-    long res = 0;
+    long res;
     int neg = 0;
     int ch = read_stream(inp);
     if (ch == '-') {
@@ -327,7 +327,7 @@ long json_read_long(InputStream * inp) {
 }
 
 unsigned long json_read_ulong(InputStream * inp) {
-    unsigned long res = 0;
+    unsigned long res;
     int neg = 0;
     int ch = read_stream(inp);
     if (ch == '-') {
@@ -347,7 +347,7 @@ unsigned long json_read_ulong(InputStream * inp) {
 }
 
 int64_t json_read_int64(InputStream * inp) {
-    int64_t res = 0;
+    int64_t res;
     int neg = 0;
     int ch = read_stream(inp);
     if (ch == '-') {
@@ -367,7 +367,7 @@ int64_t json_read_int64(InputStream * inp) {
 }
 
 uint64_t json_read_uint64(InputStream * inp) {
-    uint64_t res = 0;
+    uint64_t res;
     int neg = 0;
     int ch = read_stream(inp);
     if (ch == '-') {
@@ -389,7 +389,7 @@ uint64_t json_read_uint64(InputStream * inp) {
 double json_read_double(InputStream * inp) {
     char buf[256];
     int pos = 0;
-    double n = 0;
+    double n;
     char * end = buf;
 
     for (;;) {
@@ -417,7 +417,7 @@ double json_read_double(InputStream * inp) {
         break;
     }
     if (pos == 0) exception(ERR_JSON_SYNTAX);
-    buf[pos++] = 0;
+    buf[pos] = 0;
     n = strtod(buf, &end);
     if (*end != 0) exception(ERR_JSON_SYNTAX);
     return n;
@@ -472,8 +472,8 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
 
         unsigned i;
         size_t j;
-        char * str = NULL;
-        char ** arr = NULL;
+        char * str;
+        char ** arr;
 
         buf_pos = 0;
 
@@ -770,7 +770,7 @@ void json_splice_binary_offset(OutputStream * out, int fd, size_t size, int64_t 
         json_write_binary_start(&state, out, size);
 
         while (size > 0) {
-            ssize_t rd = 0;
+            ssize_t rd;
             if (offset != NULL) {
                 rd = pread(fd, buffer, size < sizeof(buffer) ? size : sizeof(buffer), (off_t)*offset);
                 if (rd > 0) *offset += rd;
@@ -880,7 +880,7 @@ static void skip_object(InputStream * inp) {
 }
 
 char * json_read_object(InputStream * inp) {
-    char * str = NULL;
+    char * str;
     buf_pos = 0;
     skip_object(inp);
     buf_add(0);
@@ -930,7 +930,7 @@ int read_errno(InputStream * inp) {
             json_test_char(inp, ':');
             if (err == NULL) err = create_error_report();
             if (strcmp(name, "Code") == 0) {
-                err->code = json_read_long(inp);
+                err->code = (int) json_read_long(inp);
             }
             else if (strcmp(name, "Time") == 0) {
                 err->time_stamp = json_read_uint64(inp);
@@ -979,7 +979,7 @@ static void write_error_props(OutputStream * out, ErrorReport * rep) {
     }
 
     if (rep->param_cnt > 0) {
-        int n = 0;
+        int n;
         write_stream(out, ',');
         json_write_string(out, "Params");
         write_stream(out, ':');

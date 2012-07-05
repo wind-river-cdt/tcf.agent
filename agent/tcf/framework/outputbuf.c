@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (q) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (q) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -36,7 +36,7 @@ void output_queue_add(OutputQueue * q, const void * buf, size_t size) {
     if (q->error) return;
     if (q->queue.next != q->queue.prev) {
         /* Append data to the last pending buffer */
-        size_t gap = 0;
+        size_t gap;
         OutputBuffer * bf = link2buf(q->queue.prev);
         assert(bf->buf_pos == 0);
         gap = sizeof(bf->buf) - bf->buf_len;
@@ -51,7 +51,7 @@ void output_queue_add(OutputQueue * q, const void * buf, size_t size) {
     }
     while (size > 0) {
         size_t len = size;
-        OutputBuffer * bf = NULL;
+        OutputBuffer * bf;
         if (list_is_empty(&q->pool)) {
             bf = (OutputBuffer *)loc_alloc_zero(sizeof(OutputBuffer));
             bf->queue = q;

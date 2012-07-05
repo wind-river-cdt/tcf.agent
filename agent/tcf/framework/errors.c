@@ -267,7 +267,7 @@ static const char * format_error_report_message(const char * fmt, char ** params
             in_quotes = 1;
         }
         else if (ch == '{') {
-            size_t j = 0;
+            size_t j;
             int index = 0;
             char type[16];
             char style[16];
@@ -282,7 +282,7 @@ static const char * format_error_report_message(const char * fmt, char ** params
                     ch = fmt[fmt_pos++];
                     if (j < sizeof(type) - 1) type[j++] = ch;
                 }
-                type[j++] = 0;
+                type[j] = 0;
                 if (fmt[fmt_pos] == ',') {
                     fmt_pos++;
                     j = 0;
@@ -290,7 +290,7 @@ static const char * format_error_report_message(const char * fmt, char ** params
                         ch = fmt[fmt_pos++];
                         if (j < sizeof(style) - 1) style[j++] = ch;
                     }
-                    style[j++] = 0;
+                    style[j] = 0;
                 }
             }
             if (index < param_cnt) append_format_parameter(type, style, params[index]);

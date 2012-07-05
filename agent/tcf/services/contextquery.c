@@ -291,7 +291,7 @@ static void command_query(char * token, Channel * c) {
 
 static void command_get_attr_names(char * token, Channel * c) {
     unsigned cnt = 0;
-    Comparator * l = NULL;
+    Comparator * l;
 
     json_test_char(&c->inp, MARKER_EOM);
 

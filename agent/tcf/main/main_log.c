@@ -70,8 +70,8 @@ static void connect_done(void * args, int error, Channel * c2) {
 
 static void connect_dest(void * x) {
     Channel * c1 = (Channel *)x;
-    PeerServer * ps = NULL;
-    ConnectInfo * info = NULL;
+    PeerServer * ps;
+    ConnectInfo * info;
 
     ps = channel_peer_from_url(dest_url);
     if (ps == NULL) {
@@ -155,6 +155,7 @@ static void show_help(void) {
 #endif
 
 #if defined(_WRS_KERNEL)
+int tcf_log(void);
 int tcf_log(void) {
 #else
 int main(int argc, char ** argv) {

@@ -27,11 +27,11 @@
 #include <tcf/services/pathmap.h>
 
 char * canonic_path_map_file_name(const char * fnm) {
-    char * buf = NULL;
+    char * buf;
     size_t buf_pos = 0;
-    size_t buf_max = 0;
+    size_t buf_max = 0x100;
 
-    buf = (char *)tmp_alloc(buf_max = 0x100);
+    buf = (char *)tmp_alloc(buf_max);
     for (;;) {
         char ch = *fnm++;
         if (ch == 0) break;
@@ -44,7 +44,7 @@ char * canonic_path_map_file_name(const char * fnm) {
                 continue;
             }
             if (buf_pos > 0 && *fnm == '.' && (fnm[1] == '/' || fnm[1] == '\\')) {
-                unsigned j = buf_pos - 1;
+                size_t j = buf_pos - 1;
                 if (j > 0 && buf[j - 1] != '/') {
                     buf[buf_pos] = 0;
                     while (j > 0 && buf[j - 1] != '/') j--;
@@ -57,7 +57,7 @@ char * canonic_path_map_file_name(const char * fnm) {
             }
         }
         if (buf_pos == 0 && ch >= 'a' && ch <= 'z' && *fnm == ':') {
-            ch = ch - 'a' + 'A';
+            ch = (char) (ch - 'a' + 'A');
         }
         if (buf_pos + 1 >= buf_max) {
             buf_max += 0x100;
@@ -138,7 +138,7 @@ static void path_map_event_mapping_changed(Channel * c) {
 }
 
 void add_path_map_event_listener(PathMapEventListener * listener, void * args) {
-    Listener * l = NULL;
+    Listener * l;
     if (listener_cnt >= listener_max) {
         listener_max += 8;
         listeners = (Listener *)loc_realloc(listeners, listener_max * sizeof(Listener));
@@ -211,7 +211,7 @@ static int update_rule(PathMapRule * r, PathMapRuleAttribute * new_attrs) {
         PathMapRuleAttribute * new_attr = new_attrs;
         PathMapRuleAttribute * old_attr = old_attrs;
         PathMapRuleAttribute ** old_ref = &old_attrs;
-        InputStream * buf_inp = NULL;
+        InputStream * buf_inp;
         ByteArrayInputStream buf;
         char * name = new_attr->name;
 
@@ -237,7 +237,6 @@ static int update_rule(PathMapRule * r, PathMapRuleAttribute * new_attrs) {
             loc_free(old_attr->value);
             loc_free(old_attr->name);
             loc_free(old_attr);
-            old_attr = NULL;
         }
 
         *new_ref = new_attr;
@@ -343,7 +342,7 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
         }
         if (r->query != NULL && !context_query(ctx, r->query)) continue;
         src = canonic_path_map_file_name(r->src);
-        k = strlen(src);
+        k = (unsigned int) strlen(src);
         if (strncmp(src, fnm, k)) continue;
         if (fnm[k] != 0 && fnm[k] != '/' && fnm[k] != '\\') {
             /* skip this rule only if it's not re-rooting the file-system */
@@ -372,7 +371,7 @@ char * apply_path_map(Channel * c, Context * ctx, char * fnm, int mode) {
         }
     }
     else {
-        PathMap * m = NULL;
+        PathMap * m;
 #if ENABLE_ContextProxy
         Channel * h = proxy_get_host_channel(c);
         if (h != NULL) {
@@ -407,7 +406,7 @@ PathMapRuleAttribute * get_path_mapping_attributes(PathMapRule * map) {
 }
 
 PathMapRule * create_path_mapping(PathMapRuleAttribute * attrs) {
-    PathMapRule * r = NULL;
+    PathMapRule * r;
     PathMap * m = find_map(NULL);
 
     if (m == NULL) {
@@ -471,7 +470,7 @@ static void read_rule_attrs(InputStream * inp, const char * name, void * args) {
 
 static void read_rule(InputStream * inp, void * args) {
     PathMap * m = (PathMap *)args;
-    PathMapRule * r = NULL;
+    PathMapRule * r;
     PathMapRuleAttribute * attrs = NULL;
     PathMapRuleAttribute ** attr_list = &attrs;
 
@@ -543,7 +542,7 @@ static void command_set(char * token, Channel * c) {
 
 static void channel_close_listener(Channel * c) {
     unsigned i;
-    PathMap * m = NULL;
+    PathMap * m;
     /* Keep path map over channel redirection */
     if (c->state == ChannelStateHelloReceived) return;
     m = find_map(c);

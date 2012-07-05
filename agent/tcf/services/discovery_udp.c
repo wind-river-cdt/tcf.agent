@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -111,10 +111,10 @@ static void app_strz(const char * str) {
 static int get_slave_addr(char * buf, ssize_t * pos, struct sockaddr_in * addr, uint64_t * timestamp) {
     char * port = buf + *pos;
     char * stmp = buf + *pos;
-    char * host = buf + *pos;
+    char * host;
     size_t len = strlen(buf + *pos);
     uint64_t ts = 0;
-    int n = 0;
+    int n;
 
     while (*port && *port != ':') port++;
     if (*port == ':') *port++ = 0;
@@ -179,12 +179,12 @@ static void trigger_recv(void) {
 
 static int create_server_socket(void) {
     int sock = -1;
-    int error = 0;
+    int error;
     const char * reason = NULL;
     const int i = 1;
     struct addrinfo hints;
     struct addrinfo * reslist = NULL;
-    struct addrinfo * res = NULL;
+    struct addrinfo * res;
     struct sockaddr_in local_addr;
 #if defined(_WRS_KERNEL)
     int local_addr_size = sizeof(local_addr);
@@ -309,7 +309,7 @@ static int send_packet(ip_ifc_info * ifc, struct sockaddr_in * addr) {
     if (log_file != NULL && (log_mode & LOG_DISCOVERY) != 0) {
         int i;
         char buf[sizeof(send_buf) + 32];
-        size_t pos = 0;
+        size_t pos;
         char ch;
         switch (send_buf[4]) {
         case UDP_ACK_INFO:
@@ -373,7 +373,7 @@ static int send_packet(ip_ifc_info * ifc, struct sockaddr_in * addr) {
 static int udp_send_peer_info(PeerServer * ps, void * arg) {
     struct sockaddr_in * addr = (struct sockaddr_in *)arg;
     const char * host = NULL;
-    const char * prot = NULL;
+    const char * prot;
     struct in_addr peer_addr;
     int n;
 
@@ -558,7 +558,7 @@ static void udp_send_all(struct sockaddr_in * addr, SlaveInfo * s) {
 
 static SlaveInfo * add_slave(struct sockaddr_in * addr, time_t timestamp) {
     int i = 0;
-    SlaveInfo * s = NULL;
+    SlaveInfo * s;
     while (i < slave_cnt) {
         s = slave_info + i++;
         if (memcmp(&s->addr, addr, sizeof(struct sockaddr_in)) == 0) {
@@ -655,7 +655,7 @@ static void udp_receive_ack_info(void) {
     assert(is_dispatch_thread());
     while (p < e) {
         char * name = p;
-        char * value = NULL;
+        char * value;
         while (p < e && *p != '\0' && *p != '=') p++;
         if (p >= e || *p != '=') {
             p = NULL;
@@ -714,7 +714,7 @@ static void udp_receive_ack_slaves(time_t timenow) {
         uint64_t timestamp;
         if (get_slave_addr(recv_buf, &pos, &addr, &timestamp)) {
             time_t delta = 60 * 10; /* 10 minutes */
-            time_t timeval = 0;
+            time_t timeval;
             if (timestamp < 3600000) {
                 /* Timestamp is "time to live" in milliseconds */
                 timeval = timenow + (time_t)(timestamp / 1000) - PEER_DATA_RETENTION_PERIOD;
@@ -793,7 +793,7 @@ static void udp_server_recv(void * x) {
                 udp_receive_peer_removed();
             }
             else {
-                int n = 0;
+                int n;
                 time_t timenow = time(NULL);
                 SlaveInfo * s = NULL;
                 if (ntohs(recvreq_addr.sin_port) != DISCOVERY_TCF_PORT) {
@@ -847,7 +847,7 @@ static void local_peer_changed(PeerServer * ps, int type, void * arg) {
 }
 
 int discovery_start_udp(void) {
-    int error = 0;
+    int error;
     assert(!discovery_stopped);
     error = create_server_socket();
     if (error) return error;

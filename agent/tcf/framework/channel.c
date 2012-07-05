@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -92,7 +92,7 @@ static void write_block_all(OutputStream * out, const char * bytes, size_t size)
 
 static ssize_t splice_block_all(OutputStream * out, int fd, size_t size, int64_t * offset) {
     char buffer[0x400];
-    ssize_t rd = 0;
+    ssize_t rd;
 
     assert(is_dispatch_thread());
     if (size > sizeof(buffer)) size = sizeof(buffer);

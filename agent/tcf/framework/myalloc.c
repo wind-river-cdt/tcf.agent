@@ -77,7 +77,7 @@ void tmp_gc(void) {
 }
 
 void * tmp_alloc(size_t size) {
-    void * p = NULL;
+    void * p;
     assert(is_dispatch_thread());
     if (!tmp_gc_posted) {
         post_event(gc_event, NULL);

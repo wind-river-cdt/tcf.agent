@@ -116,7 +116,7 @@ int parse_trace_mode(const char * mode, int * result) {
     for(;;) {
         if (*mode >= '0' && *mode <= '9') {
             char * endptr;
-            *result |= strtoul(mode, &endptr, 0);
+            *result |= (int) strtoul(mode, &endptr, 0);
             mode = endptr;
         }
         else {

@@ -509,7 +509,7 @@ static ssize_t tcp_splice_block_stream(OutputStream * out, int fd, size_t size, 
     }
 #endif /* ENABLE_Splice */
     {
-        ssize_t rd = 0;
+        ssize_t rd;
         char buffer[BUF_SIZE];
         if (size > BUF_SIZE) size = BUF_SIZE;
         if (offset != NULL) {
@@ -752,7 +752,7 @@ static void start_channel(Channel * channel) {
 
 static ChannelTCP * create_channel(int sock, int en_ssl, int server, int unix_domain) {
     const int i = 1;
-    ChannelTCP * c = NULL;
+    ChannelTCP * c;
     SSL * ssl = NULL;
 
     assert(sock >= 0);
@@ -1154,7 +1154,7 @@ ChannelServer * channel_tcp_server(PeerServer * ps) {
     const char * reason = NULL;
     struct addrinfo hints;
     struct addrinfo * reslist = NULL;
-    struct addrinfo * res = NULL;
+    struct addrinfo * res;
     const char * host = peer_server_getprop(ps, "Host", NULL);
     const char * port = peer_server_getprop(ps, "Port", NULL);
     int def_port = 0;
@@ -1184,7 +1184,7 @@ ChannelServer * channel_tcp_server(PeerServer * ps) {
         return NULL;
     }
     sock = -1;
-    reason = NULL;
+
     for (res = reslist; res != NULL; res = res->ai_next) {
         sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
         if (sock < 0) {
@@ -1292,12 +1292,11 @@ static void channel_tcp_connect_done(void * args) {
 }
 
 void channel_tcp_connect(PeerServer * ps, ChannelConnectCallBack callback, void * callback_args) {
-    int error = 0;
+    int error;
     const char * host = peer_server_getprop(ps, "Host", NULL);
     const char * port = peer_server_getprop(ps, "Port", NULL);
     struct addrinfo hints;
     struct addrinfo * reslist = NULL;
-    struct addrinfo * res = NULL;
     ChannelConnectInfo * info = NULL;
     char port_str[16];
 
@@ -1312,6 +1311,7 @@ void channel_tcp_connect(PeerServer * ps, ChannelConnectCallBack callback, void 
     error = loc_getaddrinfo(host, port, &hints, &reslist);
     if (error) error = set_gai_errno(error);
     if (!error) {
+        struct addrinfo * res;
         info = (ChannelConnectInfo *)loc_alloc_zero(sizeof(ChannelConnectInfo));
         info->sock = -1;
         for (res = reslist; res != NULL; res = res->ai_next) {
@@ -1366,11 +1366,9 @@ void channel_unix_connect(PeerServer * ps, ChannelConnectCallBack callback, void
     if (!error) set_socket_buffer_sizes(info->sock);
 
     if (error) {
-        if (info != NULL) {
-            if (info->sock >= 0) closesocket(info->sock);
-            loc_free(info->addr_buf);
-            loc_free(info);
-        }
+        if (info->sock >= 0) closesocket(info->sock);
+        loc_free(info->addr_buf);
+        loc_free(info);
         callback(callback_args, error, NULL);
     }
     else {

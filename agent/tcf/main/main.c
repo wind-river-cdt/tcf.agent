@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -158,6 +158,7 @@ static void show_help(void) {
 #endif
 
 #if defined(_WRS_KERNEL)
+int tcf(void);
 int tcf(void) {
 #else
 int main(int argc, char ** argv) {
@@ -170,8 +171,8 @@ int main(int argc, char ** argv) {
     int interactive = 0;
     int print_server_properties = 0;
     const char * url = "TCP:";
-    Protocol * proto = NULL;
-    TCFBroadcastGroup * bcg = NULL;
+    Protocol * proto;
+    TCFBroadcastGroup * bcg;
 
     ini_mdep();
     ini_trace();

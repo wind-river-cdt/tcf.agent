@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -103,7 +103,7 @@ void add_context_event_listener(ContextEventListener * listener, void * client_d
 }
 
 size_t context_extension(size_t size) {
-    size_t offs = 0;
+    size_t offs;
     assert(!context_created);
     while (extension_size % sizeof(void *) != 0) extension_size++;
     offs = sizeof(Context) + extension_size;

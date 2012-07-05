@@ -139,7 +139,7 @@ void dio_EnterSection(DIO_UnitDescriptor * Unit, ELF_Section * Section, U8_T Off
     assert(sDataPos < sDataLen);
 }
 
-void dio_ExitSection() {
+void dio_ExitSection(void) {
     sSection = NULL;
     sDataPos = 0;
     sDataLen = 0;
@@ -147,7 +147,7 @@ void dio_ExitSection() {
     sUnit = NULL;
 }
 
-U8_T dio_GetPos() {
+U8_T dio_GetPos(void) {
     return sDataPos;
 }
 
