@@ -128,6 +128,7 @@ struct BreakInstruction {
     uint8_t virtual_addr;
     uint8_t valid;
     uint8_t planted;
+    uint8_t unsupported; /* context_plant_breakpoint() returned ERR_UNSUPPORTED */
     BreakInstruction * ph_addr_bi;
 };
 
@@ -274,8 +275,9 @@ static void plant_instruction(BreakInstruction * bi) {
     bi->cb.access_types = get_bi_access_types(bi);
 
     if (context_plant_breakpoint(&bi->cb) < 0) error = errno;
+    bi->unsupported = get_error_code(error) == ERR_UNSUPPORTED;
 
-    if (error && is_software_break_instruction(bi) && get_error_code(error) == ERR_UNSUPPORTED) {
+    if (bi->unsupported && is_software_break_instruction(bi)) {
         uint8_t * break_inst = get_break_instruction(bi->cb.ctx, &bi->saved_size);
         assert(sizeof(bi->saved_code) >= bi->saved_size);
         assert(!bi->virtual_addr);
@@ -834,6 +836,7 @@ static void plant_breakpoint(Context * ctx, BreakpointInfo * bp, ContextAddress 
         v_bi = link_breakpoint_instruction(bp, ctx, addr, size, ctx, 1, addr, NULL);
         if (!v_bi->planted) plant_instruction(v_bi);
         if (v_bi->planted) return;
+        if (v_bi->unsupported == 0) return;
     }
 
     if (context_get_canonical_addr(ctx, addr, &mem, &mem_addr, NULL, NULL) < 0) {
