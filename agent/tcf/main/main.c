@@ -274,7 +274,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if (daemon && strcmp (log_name, LOG_NAME_STDERR) != 0 && log_name != NULL) {
+    if (daemon && log_name != NULL && strcmp (log_name, LOG_NAME_STDERR) != 0) {
         fprintf(stderr, "%s: error: can only log to stderr when in daemon "
                 "mode.\n", progname);
         exit (1);
