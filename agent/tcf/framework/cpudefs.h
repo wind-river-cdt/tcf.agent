@@ -70,6 +70,7 @@ struct RegisterDefinition {
     ContextAddress  memory_address;/* the address of a memory mapped register */
     const char *    memory_context;/* the context ID of a memory context in which a memory mapped register is located */
     const char *    role;          /* the role the register plays in a program execution */
+    const char *    description;   /* the description of the register */
 };
 
 typedef struct RegisterIdScope {

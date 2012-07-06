@@ -202,6 +202,13 @@ static void write_context(OutputStream * out, char * id,
         json_write_string(out, "PC");
     }
 
+    if (reg_def->description != NULL) {
+        write_stream(out, ',');
+        json_write_string(out, "Description");
+        write_stream(out, ':');
+        json_write_string(out, reg_def->description);
+    }
+
     parent_reg_def = reg_def->parent;
     while (parent_reg_def != NULL && parent_reg_def->size == 0) parent_reg_def = parent_reg_def->parent;
     if (parent_reg_def != NULL) {
