@@ -71,7 +71,7 @@ struct Symbol {
 };
 
 #define is_array_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base != NULL)
-#define is_cardinal_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base == NULL)
+#define is_int_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base == NULL)
 #define is_constant_pseudo_symbol(s) (s->sym_class == SYM_CLASS_VALUE && s->obj == NULL && s->base != NULL)
 
 static Context * sym_ctx;
@@ -87,7 +87,23 @@ static struct ConstantPseudoSymbol {
 } constant_pseudo_symbols[] = {
     { "false", "bool", 0 },
     { "true", "bool", 1 },
-    { NULL, NULL, 0 },
+    { NULL },
+};
+
+static struct TypePseudoSymbol {
+    const char * name;
+    unsigned size;
+    unsigned sign;
+} type_pseudo_symbols[] = {
+    { "uint8_t",  1, 0 },
+    { "uint16_t", 2, 0 },
+    { "uint32_t", 4, 0 },
+    { "uint64_t", 8, 0 },
+    { "int8_t",   1, 1 },
+    { "int16_t",  2, 1 },
+    { "int32_t",  4, 1 },
+    { "int64_t",  8, 1 },
+    { NULL },
 };
 
 static struct BaseTypeAlias {
@@ -396,6 +412,17 @@ static int is_modified_type(ObjectInfo * obj) {
         }
     }
     return 0;
+}
+
+static void alloc_int_type_pseudo_symbol(Context * ctx, unsigned size, unsigned sign, Symbol ** type) {
+    Symbol * sym = alloc_symbol();
+    sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
+    sym->frame = STACK_NO_FRAME;
+    sym->sym_class = SYM_CLASS_TYPE;
+    sym->cardinal = size;
+    sym->dimension = sign;
+    assert(is_int_type_pseudo_symbol(sym));
+    *type = sym;
 }
 
 /* Get object original type, skipping typedefs and all modifications like const, volatile, etc. */
@@ -859,10 +886,27 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                                 sym->frame = STACK_NO_FRAME;
                                 sym->sym_class = SYM_CLASS_VALUE;
                                 sym->base = type;
-                                sym->length = i;
+                                sym->index = i;
+                                assert(is_constant_pseudo_symbol(sym));
                                 *res = sym;
                                 break;
                             }
+                        }
+                        i++;
+                    }
+                }
+                if (!found) {
+                    i = 0;
+                    while (type_pseudo_symbols[i].name) {
+                        if (strcmp(name, type_pseudo_symbols[i].name) == 0) {
+                            Symbol * type = NULL;
+                            alloc_int_type_pseudo_symbol(
+                                context_get_group(ctx, CONTEXT_GROUP_SYMBOLS),
+                                type_pseudo_symbols[i].size, type_pseudo_symbols[i].sign, &type);
+                            type->index = i + 1;
+                            *res = type;
+                            found = 1;
+                            break;
                         }
                         i++;
                     }
@@ -1258,6 +1302,7 @@ const char * symbol2id(const Symbol * sym) {
         tmp_len = 0;
         tmp_app_char('@');
         tmp_app_hex('P', sym->sym_class);
+        tmp_app_hex('.', sym->index);
         tmp_app_hex('.', sym->length);
         tmp_app_str('.', base);
     }
@@ -1339,6 +1384,8 @@ int id2symbol(const char * id, Symbol ** res) {
     if (id != NULL && id[0] == '@' && id[1] == 'P') {
         p = id + 2;
         sym->sym_class = (int)read_hex(&p);
+        if (*p == '.') p++;
+        sym->index = (unsigned)read_hex(&p);
         if (*p == '.') p++;
         sym->length = (ContextAddress)read_hex(&p);
         if (*p == '.') p++;
@@ -1519,7 +1566,7 @@ void ini_symbols_lib(void) {
 static int unpack(const Symbol * sym) {
     assert(sym->base == NULL);
     assert(!is_array_type_pseudo_symbol(sym));
-    assert(!is_cardinal_type_pseudo_symbol(sym));
+    assert(!is_int_type_pseudo_symbol(sym));
     assert(!is_constant_pseudo_symbol(sym));
     assert(sym->obj == NULL || sym->obj->mTag != 0);
     assert(sym->obj == NULL || sym->obj->mCompUnit->mFile->dwarf_dt_cache != NULL);
@@ -1556,14 +1603,6 @@ static U8_T get_array_index_length(ObjectInfo * obj) {
         return x;
     }
     return 0;
-}
-
-static void alloc_cardinal_type_pseudo_symbol(Context * ctx, unsigned size, Symbol ** type) {
-    *type = alloc_symbol();
-    (*type)->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
-    (*type)->frame = STACK_NO_FRAME;
-    (*type)->sym_class = SYM_CLASS_TYPE;
-    (*type)->cardinal = size;
 }
 
 static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
@@ -1822,8 +1861,8 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
         else *type_class = TYPE_CLASS_POINTER;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym)) {
-        *type_class = TYPE_CLASS_CARDINAL;
+    if (is_int_type_pseudo_symbol(sym)) {
+        *type_class = sym->dimension ? TYPE_CLASS_INTEGER : TYPE_CLASS_CARDINAL;
         return 0;
     }
     if (unpack(sym) < 0) return -1;
@@ -1974,11 +2013,14 @@ int get_symbol_update_policy(const Symbol * sym, char ** id, int * policy) {
 
 int get_symbol_name(const Symbol * sym, char ** name) {
     assert(sym->magic == SYMBOL_MAGIC);
-    if (is_array_type_pseudo_symbol(sym) || is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_array_type_pseudo_symbol(sym)) {
         *name = NULL;
     }
+    else if (is_int_type_pseudo_symbol(sym)) {
+        *name = sym->index > 0 ? (char *)type_pseudo_symbols[sym->index - 1].name : NULL;
+    }
     else if (is_constant_pseudo_symbol(sym)) {
-        *name = (char *)constant_pseudo_symbols[(int)sym->length].name;
+        *name = (char *)constant_pseudo_symbols[sym->index].name;
     }
     else if (sym->obj != NULL) {
         *name = (char *)sym->obj->mName;
@@ -2053,7 +2095,7 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
         }
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym)) {
+    if (is_int_type_pseudo_symbol(sym)) {
         *size = sym->cardinal;
         return 0;
     }
@@ -2144,7 +2186,7 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
         *base_type = sym->base;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
+    if (is_int_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
         return err_wrong_obj();
     }
     if (unpack(sym) < 0) return -1;
@@ -2185,10 +2227,10 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_array_type_pseudo_symbol(sym)) {
         if (sym->base->sym_class != SYM_CLASS_TYPE) return err_wrong_obj();
-        alloc_cardinal_type_pseudo_symbol(sym->ctx, context_word_size(sym->ctx), index_type);
+        alloc_int_type_pseudo_symbol(sym->ctx, context_word_size(sym->ctx), 0, index_type);
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) ||
+    if (is_int_type_pseudo_symbol(sym) ||
             is_constant_pseudo_symbol(sym) ||
             sym->sym_class == SYM_CLASS_FUNCTION) {
         return err_wrong_obj();
@@ -2209,7 +2251,7 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
             }
         }
         if (obj->mTag == TAG_string_type) {
-            alloc_cardinal_type_pseudo_symbol(sym->ctx, obj->mCompUnit->mDesc.mAddressSize, index_type);
+            alloc_int_type_pseudo_symbol(sym->ctx, obj->mCompUnit->mDesc.mAddressSize, 0, index_type);
             return 0;
         }
         return err_wrong_obj();
@@ -2260,7 +2302,7 @@ int get_symbol_length(const Symbol * sym, ContextAddress * length) {
         *length = sym->length == 0 ? 1 : sym->length;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) ||
+    if (is_int_type_pseudo_symbol(sym) ||
             is_constant_pseudo_symbol(sym) ||
             sym->sym_class == SYM_CLASS_FUNCTION) {
         return err_wrong_obj();
@@ -2303,7 +2345,7 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
         *value = 0;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) ||
+    if (is_int_type_pseudo_symbol(sym) ||
             is_constant_pseudo_symbol(sym) ||
             sym->sym_class == SYM_CLASS_FUNCTION) {
         return err_wrong_obj();
@@ -2386,7 +2428,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
         *count = 0;
         return 0;
     }
-    if (is_cardinal_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
+    if (is_int_type_pseudo_symbol(sym) || is_constant_pseudo_symbol(sym)) {
         *children = NULL;
         *count = 0;
         return 0;
@@ -2515,7 +2557,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
         info->big_endian = big_endian_host();
         cmd->args.piece.bit_size = (unsigned)(size * 8);
         cmd->args.piece.value = tmp_alloc((size_t)size);
-        value = &constant_pseudo_symbols[(int)sym->length].value;
+        value = &constant_pseudo_symbols[sym->index].value;
         if (big_endian_host() && size < sizeof(ConstantValueType)) {
             value = (uint8_t *)value + (sizeof(ConstantValueType) - size);
         }
@@ -2524,7 +2566,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
     }
 
     if (is_array_type_pseudo_symbol(sym) ||
-        is_cardinal_type_pseudo_symbol(sym) ||
+        is_int_type_pseudo_symbol(sym) ||
         is_constant_pseudo_symbol(sym)) {
         return err_wrong_obj();
     }
@@ -2786,7 +2828,7 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
     ObjectInfo * obj = sym->obj;
     *flags = 0;
     assert(sym->magic == SYMBOL_MAGIC);
-    if (sym->base || is_cardinal_type_pseudo_symbol(sym)) {
+    if (sym->base || is_int_type_pseudo_symbol(sym)) {
         if (is_array_type_pseudo_symbol(sym) && sym->base->sym_class == SYM_CLASS_REFERENCE) {
             *flags |= SYM_FLAG_VARARG;
         }
