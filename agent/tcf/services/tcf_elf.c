@@ -838,7 +838,7 @@ int elf_load(ELF_Section * s) {
             int err = errno;
             loc_free(s->data);
             s->data = NULL;
-            errno = err;
+            set_errno(err, "Cannot read symbol file");
             return -1;
         }
         trace(LOG_ELF, "Section %s in ELF file %s is loaded", s->name, s->file->name);
