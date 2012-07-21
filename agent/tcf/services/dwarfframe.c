@@ -176,6 +176,10 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             else if (n == 13) { /* Stack pointer */
                 regs->regs[n].rule = RULE_VAL_OFFSET;
             }
+            else if (n == rules.return_address_register) {
+                regs->regs[n].rule = RULE_REGISTER;
+                regs->regs[n].offset = rules.return_address_register;
+            }
             break;
         }
     }
