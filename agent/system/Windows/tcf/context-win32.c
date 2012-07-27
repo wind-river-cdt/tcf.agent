@@ -1079,22 +1079,29 @@ int context_read_mem(Context * ctx, ContextAddress address, void * buf, size_t s
     mem_err_info.error = 0;
     if (ReadProcessMemory(ext->handle, (LPCVOID)address, buf, size, &bcnt) == 0 || bcnt != size) {
         DWORD error = GetLastError();
-        size_t size_next = size;
         size_t size_error = 1;
-        /* Check if a smaller block is readable */
-        while (bcnt == 0) {
-            if (size_next <= 1) break;
-            size_next /= 2;
-            ReadProcessMemory(ext->handle, (LPCVOID)address, buf, size_next, &bcnt);
+        if (error == 0x3e6 || bcnt >= size) {
+            /* Bug in Windows 7: invalid bcnt */
+            bcnt = 0;
         }
-        /* Find upper bound of the readable memory */
-        while (bcnt < size) {
-            if (!ReadProcessMemory(ext->handle, (LPCVOID)(address + bcnt),
-                    (char *)buf + bcnt, 1, NULL)) {
-                error = GetLastError();
-                break;
+        if (size > 1) {
+            size_t size_next = size;
+            /* Check if a smaller block is readable */
+            while (bcnt == 0) {
+                if (size_next <= 1) break;
+                size_next /= 2;
+                if (ReadProcessMemory(ext->handle,
+                    (LPCVOID)address, buf, size_next, NULL)) bcnt = size_next;
             }
-            bcnt++;
+            /* Find upper bound of the readable memory */
+            while (bcnt < size) {
+                if (!ReadProcessMemory(ext->handle, (LPCVOID)(address + bcnt),
+                        (char *)buf + bcnt, 1, NULL)) {
+                    error = GetLastError();
+                    break;
+                }
+                bcnt++;
+            }
         }
         if (check_breakpoints_on_memory_read(ctx, address, buf, bcnt) < 0) return -1;
         /* Find number of unreadable bytes */
