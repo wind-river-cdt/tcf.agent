@@ -461,6 +461,7 @@ static void safe_memory_get(void * parm) {
             MemoryErrorInfo err_info;
             JsonWriteBinaryState state;
 
+            memset(&err_info, 0, sizeof(err_info));
             if (ctx->exiting || ctx->exited) err = ERR_ALREADY_EXITED;
 
             write_stringz(out, "R");
@@ -533,6 +534,7 @@ static void safe_memory_fill(void * parm) {
             int buf_pos = 0;
             int err = 0;
 
+            memset(&err_info, 0, sizeof(err_info));
             if (ctx->exiting || ctx->exited) err = ERR_ALREADY_EXITED;
 
             if (read_stream(inp) != '[') exception(ERR_JSON_SYNTAX);
