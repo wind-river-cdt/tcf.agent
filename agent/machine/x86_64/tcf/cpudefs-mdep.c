@@ -89,14 +89,26 @@ RegisterDefinition regs_def[] = {
     { "status",  REG_OFFSET(FloatSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
     { "tag",     REG_OFFSET(FloatSave.TagWord),      1, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
 
-    { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 36 */
+    { "xmm",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 36 */
 
-    { "dr0",    REG_OFFSET(Dr0), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr1",    REG_OFFSET(Dr1), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr2",    REG_OFFSET(Dr2), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr3",    REG_OFFSET(Dr3), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "mxcsr",  REG_OFFSET(ExtendedRegisters) + 24, 4, 64, 64, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm0",   REG_OFFSET(ExtendedRegisters) + 10 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm1",   REG_OFFSET(ExtendedRegisters) + 11 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm2",   REG_OFFSET(ExtendedRegisters) + 12 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm3",   REG_OFFSET(ExtendedRegisters) + 13 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm4",   REG_OFFSET(ExtendedRegisters) + 14 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm5",   REG_OFFSET(ExtendedRegisters) + 15 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm6",   REG_OFFSET(ExtendedRegisters) + 16 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "xmm7",   REG_OFFSET(ExtendedRegisters) + 17 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+
+    { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 46 */
+
+    { "dr0",    REG_OFFSET(Dr0), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
+    { "dr1",    REG_OFFSET(Dr1), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
+    { "dr2",    REG_OFFSET(Dr2), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
+    { "dr3",    REG_OFFSET(Dr3), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
+    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
+    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
 
 #elif defined(_WIN32) && defined(__x86_64__)
 #   define REG_SP Rsp

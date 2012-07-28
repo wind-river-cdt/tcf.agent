@@ -195,7 +195,7 @@ static void get_registers(Context * ctx) {
     assert(ctx->stopped);
 
     ext->regs->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER |
-        CONTEXT_FLOATING_POINT | CONTEXT_DEBUG_REGISTERS;
+        CONTEXT_FLOATING_POINT | CONTEXT_EXTENDED_REGISTERS | CONTEXT_DEBUG_REGISTERS;
     if (GetThreadContext(ext->handle, ext->regs) == 0) {
         ext->regs_error = get_error_report(log_error("GetThreadContext", 0));
     }
