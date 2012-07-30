@@ -60,6 +60,7 @@ static pthread_mutex_t mutex;
 
 int print_trace(int mode, const char * fmt, ...) {
     va_list ap;
+    int error = errno;
 
     if (log_file == NULL) return 0;
     if (mode != LOG_ALWAYS && (log_mode & mode) == 0) return 0;
@@ -100,6 +101,7 @@ int print_trace(int mode, const char * fmt, ...) {
         }
     }
     va_end(ap);
+    errno = error;
     return 1;
 }
 
