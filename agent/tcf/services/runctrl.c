@@ -1515,12 +1515,12 @@ static void resume_error(Context * ctx, int error) {
     send_context_changed_event(ctx);
 }
 
-static void sync_run_state(void) {
+static void sync_run_state(void * args) {
     int err_cnt = 0;
     LINK * l;
     LINK p;
 
-    assert(run_ctrl_lock_cnt == 0);
+    if (run_ctrl_lock_cnt != 0) return;
     assert(safe_event_list == NULL);
     stop_all_timer_cnt = 0;
 
@@ -1650,7 +1650,7 @@ static void run_safe_events(void * arg) {
     safe_event_pid_count = 0;
 
     if (run_ctrl_lock_cnt == 0) {
-        sync_run_state();
+        post_event(sync_run_state, NULL);
         return;
     }
 
