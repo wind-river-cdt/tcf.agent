@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -28,7 +28,8 @@ struct RegisterData {
 };
 
 RegisterDefinition * get_reg_definitions(Context * ctx) {
-    return regs_index;
+    if (context_has_state(ctx)) return regs_index;
+    return NULL;
 }
 
 uint8_t * get_break_instruction(Context * ctx, size_t * size) {
@@ -72,9 +73,11 @@ static RegisterDefinition * get_reg_by_eh_frame_id(unsigned id) {
 
 RegisterDefinition * get_reg_by_id(Context * ctx, unsigned id, RegisterIdScope * scope) {
     RegisterDefinition * def = NULL;
-    switch (scope->id_type) {
-    case REGNUM_DWARF: def = get_reg_by_dwarf_id(id); break;
-    case REGNUM_EH_FRAME: def = get_reg_by_eh_frame_id(id); break;
+    if (context_has_state(ctx)) {
+        switch (scope->id_type) {
+        case REGNUM_DWARF: def = get_reg_by_dwarf_id(id); break;
+        case REGNUM_EH_FRAME: def = get_reg_by_eh_frame_id(id); break;
+        }
     }
     if (def == NULL) set_errno(ERR_OTHER, "Invalid register ID");
     return def;

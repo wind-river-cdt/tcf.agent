@@ -133,7 +133,7 @@ int id2frame(const char * id, Context ** ctx, int * frame) {
     }
     id++;
     c = id2ctx(id);
-    if (c == NULL) {
+    if (c == NULL || !context_has_state(c)) {
         errno = ERR_INV_CONTEXT;
         return -1;
     }

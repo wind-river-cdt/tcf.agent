@@ -311,7 +311,7 @@ static void command_get_children_cache_client(void * x) {
         RegisterDefinition * reg_def;
         for (reg_def = defs; reg_def->name != NULL; reg_def++) {
             if (reg_def->parent != parent) continue;
-            if (frame == STACK_TOP_FRAME || frame_info->is_top_frame ||
+            if (frame < 0 || frame_info->is_top_frame ||
                     reg_def->size == 0 || read_reg_value(frame_info, reg_def, NULL) == 0) {
                 if (cnt > 0) write_stream(&c->out, ',');
                 json_write_string(&c->out, register2id(ctx, frame, reg_def));
@@ -380,9 +380,8 @@ static void command_get_cache_client(void * x) {
         RegisterDefinition * reg_def = NULL;
 
         if (id2register(args->id, &ctx, &frame, &reg_def) < 0) exception(errno);
-        if (!context_has_state(ctx)) exception(ERR_INV_CONTEXT);
         if (ctx->exited) exception(ERR_ALREADY_EXITED);
-        if (!ctx->stopped) exception(ERR_IS_RUNNING);
+        if (context_has_state(ctx) && !ctx->stopped) exception(ERR_IS_RUNNING);
 
         if (reg_def->size > bbf_len) {
             bbf_len += 0x100 + reg_def->size;
@@ -390,7 +389,7 @@ static void command_get_cache_client(void * x) {
         }
 
         bbf_pos = reg_def->size;
-        if (is_top_frame(ctx, frame)) {
+        if (frame < 0 || is_top_frame(ctx, frame)) {
             if (context_read_reg(ctx, reg_def, 0, reg_def->size, bbf) < 0) exception(errno);
         }
         else {
@@ -441,9 +440,9 @@ static void command_set_cache_client(void * x) {
         RegisterDefinition * reg_def = NULL;
 
         if (id2register(args->id, &ctx, &frame, &reg_def) < 0) exception(errno);
-        if (!is_top_frame(ctx, frame)) exception(ERR_INV_CONTEXT);
+        if (frame >= 0 && !is_top_frame(ctx, frame)) exception(ERR_INV_CONTEXT);
         if (ctx->exited) exception(ERR_ALREADY_EXITED);
-        if (!ctx->stopped) exception(ERR_IS_RUNNING);
+        if (context_has_state(ctx) && !ctx->stopped) exception(ERR_IS_RUNNING);
         if ((size_t)args->data_len > reg_def->size) exception(ERR_INV_DATA_SIZE);
         if (args->data_len > 0) {
             if (context_write_reg(ctx, reg_def, 0, args->data_len, args->data) < 0) exception(errno);
@@ -524,12 +523,11 @@ static void check_location_list(Location * locs, unsigned cnt, int setm) {
         Location * loc = locs + pos;
 
         if (id2register(loc->id, &loc->ctx, &loc->frame, &loc->reg_def) < 0) exception(errno);
-        if (!context_has_state(loc->ctx)) exception(ERR_INV_CONTEXT);
         if (loc->ctx->exited) exception(ERR_ALREADY_EXITED);
-        if (!loc->ctx->stopped) exception(ERR_IS_RUNNING);
+        if (context_has_state(loc->ctx) && !loc->ctx->stopped) exception(ERR_IS_RUNNING);
         if (loc->offs + loc->size > loc->reg_def->size) exception(ERR_INV_DATA_SIZE);
 
-        if (is_top_frame(loc->ctx, loc->frame)) continue;
+        if (loc->frame < 0 || is_top_frame(loc->ctx, loc->frame)) continue;
 
         if (setm) exception(ERR_INV_CONTEXT);
         if (get_frame_info(loc->ctx, loc->frame, &loc->frame_info) < 0) exception(errno);
