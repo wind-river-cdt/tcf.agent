@@ -678,7 +678,8 @@ static void debug_event_handler(DebugEvent * debug_event) {
                     }
                 }
                 trace(LOG_ALWAYS, "context: already stopped, id %s, exception 0x%08x", ctx->id, exception_code);
-                send_context_started_event(ctx);
+                debug_event->continue_status = DBG_CONTINUE;
+                break;
             }
             ext = EXT(ctx);
             memcpy(&ext->suspend_reason, &win32_event->u.Exception, sizeof(EXCEPTION_DEBUG_INFO));
