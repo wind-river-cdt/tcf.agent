@@ -1,0 +1,325 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="services">
+      <UniqueIdentifier>{922fdf54-9f70-42a3-b4f3-d3f3c9cf028c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="main">
+      <UniqueIdentifier>{d7d09c97-ef67-436c-9900-e888c9a99e5f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="framework">
+      <UniqueIdentifier>{d39f397d-fda2-49d2-a531-26fc13702737}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system">
+      <UniqueIdentifier>{f77c103a-6fae-460b-bd3d-a028b62bae4a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system\Windows">
+      <UniqueIdentifier>{91c3a7f6-3c30-41b7-ace3-eefbe5d5fdca}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="tcf\services\context-proxy.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\contextquery.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\diagnostics.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\discovery.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\discovery_udp.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\dwarfcache.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\dwarfecomp.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\dwarfexpr.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\dwarfframe.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\dwarfio.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\dwarfreloc.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\elf-loader.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\filesystem.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\funccall.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\linenumbers.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\linenumbers_elf.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\memorymap.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\pathmap.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\symbols.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\symbols_common.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\symbols_elf.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\tcf_elf.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\services\vm.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\main\main.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\main\server.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\main\services.c">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\asyncreq.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\base64.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\cache.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\channel.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\channel_pipe.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\channel_tcp.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\context.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\cpudefs.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\errors.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\events.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\exceptions.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\inputbuf.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\ip_ifc.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\json.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\mdep.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\myalloc.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\outputbuf.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\peer.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\protocol.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\proxy.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\streams.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\trace.c">
+      <Filter>framework</Filter>
+    </ClCompile>
+    <ClCompile Include="..\agent\system\Windows\tcf\pthreads-win32.c">
+      <Filter>system\Windows</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="tcf\services\context-proxy.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\contextquery.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\diagnostics.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\discovery.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\discovery_udp.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarf.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarfcache.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarfecomp.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarfexpr.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarfframe.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarfio.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarfreloc-ext.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\dwarfreloc.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\elf-loader.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\filesystem.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\funccall.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\linenumbers.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\memorymap.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\pathmap.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\symbols.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\tcf_elf.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\services\vm.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\main\server.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\main\services.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\asyncreq.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\base64.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\cache.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\channel.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\channel_pipe.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\channel_tcp.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\context.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\cpudefs-ext.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\cpudefs.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\errors.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\events.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\exceptions.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\inputbuf.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\ip_ifc.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\json.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\link.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\mdep.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\myalloc.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\outputbuf.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\peer.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\plugins.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\protocol.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\proxy.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\signames.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\streams.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\tcf.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\trace.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\config.h" />
+  </ItemGroup>
+</Project>

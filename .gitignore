@@ -5,7 +5,7 @@
 # agent
 agent/*.ncb
 agent/*.opt
-agent/*.plg
+agent/*.plt
 agent/*.user
 agent/*.suo
 agent/*.sdf
@@ -21,36 +21,48 @@ agent/cmake/gcc-release
 agent/cmake/gcc-debug
 
 # server/
-server/obj
 server/*.ncb
 server/*.opt
 server/*.plt
-server/*.suo
 server/*.user
+server/*.suo
+server/*.sdf
+server/*.opensdf
+server/obj
+server/ipch
 
 # examples/daytime/
 examples/daytime/obj
 
 # tests/mem-leaks/
-tests/mem-leaks/obj
 tests/mem-leaks/*.ncb
 tests/mem-leaks/*.opt
 tests/mem-leaks/*.plt
-tests/mem-leaks/*.suo
 tests/mem-leaks/*.user
+tests/mem-leaks/*.suo
+tests/mem-leaks/*.sdf
+tests/mem-leaks/*.opensdf
+tests/mem-leaks/obj
+tests/mem-leaks/ipch
 
 # tests/test-dwarf/
-tests/test-dwarf/obj
 tests/test-dwarf/*.ncb
 tests/test-dwarf/*.opt
 tests/test-dwarf/*.plt
-tests/test-dwarf/*.suo
 tests/test-dwarf/*.user
+tests/test-dwarf/*.suo
+tests/test-dwarf/*.sdf
+tests/test-dwarf/*.opensdf
+tests/test-dwarf/obj
+tests/test-dwarf/ipch
 
 # tests/cmd-line/
-tests/cmd-line/obj
 tests/cmd-line/*.ncb
 tests/cmd-line/*.opt
 tests/cmd-line/*.plt
-tests/cmd-line/*.suo
 tests/cmd-line/*.user
+tests/cmd-line/*.suo
+tests/cmd-line/*.sdf
+tests/cmd-line/*.opensdf
+tests/cmd-line/obj
+tests/cmd-line/ipch

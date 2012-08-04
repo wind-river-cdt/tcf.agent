@@ -1,0 +1,286 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{4EBA43E4-98C0-4F00-ADA7-21758F1BAE77}</ProjectGuid>
+    <RootNamespace>server</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)\obj\MSVC\$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.;../agent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>WS2_32.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Midl>
+      <TargetEnvironment>X64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.;../agent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>WS2_32.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>.;../agent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>WS2_32.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Midl>
+      <TargetEnvironment>X64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>.;../agent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>WS2_32.lib;Iphlpapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="tcf\services\context-proxy.c" />
+    <ClCompile Include="..\agent\tcf\services\contextquery.c" />
+    <ClCompile Include="..\agent\tcf\services\diagnostics.c" />
+    <ClCompile Include="..\agent\tcf\services\discovery.c" />
+    <ClCompile Include="..\agent\tcf\services\discovery_udp.c" />
+    <ClCompile Include="..\agent\tcf\services\dwarfcache.c" />
+    <ClCompile Include="..\agent\tcf\services\dwarfecomp.c" />
+    <ClCompile Include="..\agent\tcf\services\dwarfexpr.c" />
+    <ClCompile Include="..\agent\tcf\services\dwarfframe.c" />
+    <ClCompile Include="..\agent\tcf\services\dwarfio.c" />
+    <ClCompile Include="..\agent\tcf\services\dwarfreloc.c" />
+    <ClCompile Include="..\agent\tcf\services\elf-loader.c" />
+    <ClCompile Include="..\agent\tcf\services\filesystem.c" />
+    <ClCompile Include="..\agent\tcf\services\funccall.c" />
+    <ClCompile Include="..\agent\tcf\services\linenumbers.c" />
+    <ClCompile Include="..\agent\tcf\services\linenumbers_elf.c" />
+    <ClCompile Include="..\agent\tcf\services\memorymap.c" />
+    <ClCompile Include="..\agent\tcf\services\pathmap.c" />
+    <ClCompile Include="..\agent\tcf\services\symbols.c" />
+    <ClCompile Include="..\agent\tcf\services\symbols_common.c" />
+    <ClCompile Include="..\agent\tcf\services\symbols_elf.c" />
+    <ClCompile Include="..\agent\tcf\services\tcf_elf.c" />
+    <ClCompile Include="..\agent\tcf\services\vm.c" />
+    <ClCompile Include="..\agent\tcf\main\main.c" />
+    <ClCompile Include="tcf\main\server.c" />
+    <ClCompile Include="..\agent\tcf\main\services.c" />
+    <ClCompile Include="..\agent\tcf\framework\asyncreq.c" />
+    <ClCompile Include="..\agent\tcf\framework\base64.c" />
+    <ClCompile Include="..\agent\tcf\framework\cache.c" />
+    <ClCompile Include="..\agent\tcf\framework\channel.c" />
+    <ClCompile Include="..\agent\tcf\framework\channel_pipe.c" />
+    <ClCompile Include="..\agent\tcf\framework\channel_tcp.c" />
+    <ClCompile Include="..\agent\tcf\framework\context.c" />
+    <ClCompile Include="..\agent\tcf\framework\cpudefs.c" />
+    <ClCompile Include="..\agent\tcf\framework\errors.c" />
+    <ClCompile Include="..\agent\tcf\framework\events.c" />
+    <ClCompile Include="..\agent\tcf\framework\exceptions.c" />
+    <ClCompile Include="..\agent\tcf\framework\inputbuf.c" />
+    <ClCompile Include="..\agent\tcf\framework\ip_ifc.c" />
+    <ClCompile Include="..\agent\tcf\framework\json.c" />
+    <ClCompile Include="..\agent\tcf\framework\mdep.c" />
+    <ClCompile Include="..\agent\tcf\framework\myalloc.c" />
+    <ClCompile Include="..\agent\tcf\framework\outputbuf.c" />
+    <ClCompile Include="..\agent\tcf\framework\peer.c" />
+    <ClCompile Include="..\agent\tcf\framework\protocol.c" />
+    <ClCompile Include="..\agent\tcf\framework\proxy.c" />
+    <ClCompile Include="..\agent\tcf\framework\streams.c" />
+    <ClCompile Include="..\agent\tcf\framework\trace.c" />
+    <ClCompile Include="..\agent\system\Windows\tcf\pthreads-win32.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="tcf\services\context-proxy.h" />
+    <ClInclude Include="..\agent\tcf\services\contextquery.h" />
+    <ClInclude Include="..\agent\tcf\services\diagnostics.h" />
+    <ClInclude Include="..\agent\tcf\services\discovery.h" />
+    <ClInclude Include="..\agent\tcf\services\discovery_udp.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarf.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarfcache.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarfecomp.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarfexpr.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarfframe.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarfio.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarfreloc-ext.h" />
+    <ClInclude Include="..\agent\tcf\services\dwarfreloc.h" />
+    <ClInclude Include="..\agent\tcf\services\elf-loader.h" />
+    <ClInclude Include="..\agent\tcf\services\filesystem.h" />
+    <ClInclude Include="..\agent\tcf\services\funccall.h" />
+    <ClInclude Include="..\agent\tcf\services\linenumbers.h" />
+    <ClInclude Include="..\agent\tcf\services\memorymap.h" />
+    <ClInclude Include="..\agent\tcf\services\pathmap.h" />
+    <ClInclude Include="..\agent\tcf\services\symbols.h" />
+    <ClInclude Include="..\agent\tcf\services\tcf_elf.h" />
+    <ClInclude Include="..\agent\tcf\services\vm.h" />
+    <ClInclude Include="..\agent\tcf\main\server.h" />
+    <ClInclude Include="..\agent\tcf\main\services.h" />
+    <ClInclude Include="..\agent\tcf\framework\asyncreq.h" />
+    <ClInclude Include="..\agent\tcf\framework\base64.h" />
+    <ClInclude Include="..\agent\tcf\framework\cache.h" />
+    <ClInclude Include="..\agent\tcf\framework\channel.h" />
+    <ClInclude Include="..\agent\tcf\framework\channel_pipe.h" />
+    <ClInclude Include="..\agent\tcf\framework\channel_tcp.h" />
+    <ClInclude Include="..\agent\tcf\framework\context.h" />
+    <ClInclude Include="tcf\framework\cpudefs-ext.h" />
+    <ClInclude Include="..\agent\tcf\framework\cpudefs.h" />
+    <ClInclude Include="..\agent\tcf\framework\errors.h" />
+    <ClInclude Include="..\agent\tcf\framework\events.h" />
+    <ClInclude Include="..\agent\tcf\framework\exceptions.h" />
+    <ClInclude Include="..\agent\tcf\framework\inputbuf.h" />
+    <ClInclude Include="..\agent\tcf\framework\ip_ifc.h" />
+    <ClInclude Include="..\agent\tcf\framework\json.h" />
+    <ClInclude Include="..\agent\tcf\framework\link.h" />
+    <ClInclude Include="..\agent\tcf\framework\mdep.h" />
+    <ClInclude Include="..\agent\tcf\framework\myalloc.h" />
+    <ClInclude Include="..\agent\tcf\framework\outputbuf.h" />
+    <ClInclude Include="..\agent\tcf\framework\peer.h" />
+    <ClInclude Include="..\agent\tcf\framework\plugins.h" />
+    <ClInclude Include="..\agent\tcf\framework\protocol.h" />
+    <ClInclude Include="..\agent\tcf\framework\proxy.h" />
+    <ClInclude Include="..\agent\tcf\framework\signames.h" />
+    <ClInclude Include="..\agent\tcf\framework\streams.h" />
+    <ClInclude Include="..\agent\tcf\framework\tcf.h" />
+    <ClInclude Include="..\agent\tcf\framework\trace.h" />
+    <ClInclude Include="tcf\config.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
