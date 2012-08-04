@@ -720,6 +720,7 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
 
 RegisterDefinition * get_PC_definition(Context * ctx) {
     static RegisterDefinition * reg_def = NULL;
+    if (!context_has_state(ctx)) return NULL;
     if (reg_def == NULL) {
         RegisterDefinition * defs = get_reg_definitions(ctx);
         if (defs != NULL) {
@@ -729,7 +730,6 @@ RegisterDefinition * get_PC_definition(Context * ctx) {
                     reg_def = r;
                     break;
                 }
-            
             }
         }
     }

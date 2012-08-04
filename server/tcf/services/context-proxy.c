@@ -72,6 +72,7 @@ struct ContextCache {
     RegisterDefinition * reg_defs;
     RegisterDefinition * pc_def;
     int pending_regs_cnt;
+    int regs_done;
 
     /* Run Control Properties */
     int has_state;
@@ -80,6 +81,7 @@ struct ContextCache {
     long can_resume;
     long can_count;
     int can_terminate;
+    unsigned word_size;
 
     /* Run Control State */
     int pc_valid;
@@ -339,6 +341,7 @@ static void read_run_control_context_property(InputStream * inp, const char * na
     else if (strcmp(name, "File") == 0) ctx->file = json_read_alloc_string(inp);
     else if (strcmp(name, "HasState") == 0) ctx->has_state = json_read_boolean(inp);
     else if (strcmp(name, "IsContainer") == 0) ctx->is_container = json_read_boolean(inp);
+    else if (strcmp(name, "WordSize") == 0) ctx->word_size = json_read_long(inp);
     else if (strcmp(name, "CanSuspend") == 0) ctx->can_suspend = json_read_boolean(inp);
     else if (strcmp(name, "CanResume") == 0) ctx->can_resume = json_read_long(inp);
     else if (strcmp(name, "CanCount") == 0) ctx->can_count = json_read_long(inp);
@@ -1237,6 +1240,7 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
             }
         }
         cache->reg_size = offs;
+        cache->regs_done = 1;
         cache_notify(&cache->regs_cache);
     }
     context_unlock(cache->ctx);
@@ -1245,7 +1249,7 @@ static void validate_registers_cache(Channel * c, void * args, int error) {
 static void check_registers_cache(ContextCache * cache) {
     if (cache->pending_regs_cnt > 0) cache_wait(&cache->regs_cache);
     if (cache->reg_error != NULL) exception(set_error_report_errno(cache->reg_error));
-    if (cache->reg_defs == NULL) {
+    if (!cache->regs_done) {
         Channel * c = cache->peer->target;
         cache->pending_regs_cnt++;
         protocol_send_command(c, "Registers", "getChildren", validate_registers_cache, cache);
@@ -1521,8 +1525,12 @@ int get_next_frame(Context * ctx, int frame) {
 }
 
 unsigned context_word_size(Context * ctx) {
-    RegisterDefinition * pc = get_PC_definition(ctx);
-    return pc->size;
+    ContextCache * cache = *EXT(ctx);
+    if (cache->word_size == 0) {
+        RegisterDefinition * pc = get_PC_definition(ctx);
+        cache->word_size = pc == NULL ? 4 : pc->size;
+    }
+    return cache->word_size;
 }
 
 static void channel_close_listener(Channel * c) {

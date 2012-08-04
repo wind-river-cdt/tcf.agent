@@ -219,6 +219,11 @@ static void write_context(OutputStream * out, Context * ctx) {
         json_write_boolean(out, 1);
     }
 
+    write_stream(out, ',');
+    json_write_string(out, "WordSize");
+    write_stream(out, ':');
+    json_write_long(out, context_word_size(ctx));
+
     if (context_can_resume(ctx, RM_TERMINATE)) {
         write_stream(out, ',');
         json_write_string(out, "CanTerminate");
