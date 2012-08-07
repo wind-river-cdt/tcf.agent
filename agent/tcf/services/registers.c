@@ -153,7 +153,7 @@ static void write_context(OutputStream * out, char * id,
         write_stream(out, '[');
         while (reg_def->values[i] != NULL) {
             NamedRegisterValue * v = reg_def->values[i++];
-            if (i > 0) write_stream(out, ',');
+            if (i > 1) write_stream(out, ',');
             write_stream(out, '{');
             json_write_string(out, "Value");
             write_stream(out, ':');
