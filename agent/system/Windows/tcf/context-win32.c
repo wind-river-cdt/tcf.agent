@@ -46,6 +46,10 @@
 #define EXCEPTION_WX86_SINGLE_STEP 0x4000001e
 #define EXCEPTION_WX86_BREAKPOINT 0x4000001f
 
+#ifndef CONTEXT_ALL
+#define CONTEXT_ALL CONTEXT_FULL
+#endif
+
 #if defined(_M_IX86)
 #  define reg_ip Eip
 #  define reg_sp Esp
