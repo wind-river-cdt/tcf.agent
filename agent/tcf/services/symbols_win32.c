@@ -1095,7 +1095,8 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
 
     if (is_frame_relative(info)) {
         add_location_command(SFT_CMD_FP);
-        add_location_command(SFT_CMD_NUMBER)->args.num = info->Address - sizeof(ContextAddress) * 2;
+        add_location_command(SFT_CMD_NUMBER)->args.num =
+            info->Address - context_word_size(sym->ctx) * 2;
         add_location_command(SFT_CMD_ADD);
         return 0;
     }

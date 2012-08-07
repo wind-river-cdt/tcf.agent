@@ -43,6 +43,9 @@
 
 #define BREAK_TIMEOUT 100000
 
+#define EXCEPTION_WX86_SINGLE_STEP 0x4000001e
+#define EXCEPTION_WX86_BREAKPOINT 0x4000001f
+
 #if defined(_M_IX86)
 #  define reg_ip Eip
 #  define reg_sp Esp
@@ -97,6 +100,7 @@ typedef struct DebugState {
     unsigned            debug_event_generation;
     HANDLE              file_handle;
     DWORD64             base_address;
+    int                 wow64;
     HANDLE              module_handle;
     DWORD64             module_address;
     ContextAttachCallBack * attach_callback;
@@ -194,8 +198,7 @@ static void get_registers(Context * ctx) {
     assert(context_has_state(ctx));
     assert(ctx->stopped);
 
-    ext->regs->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER |
-        CONTEXT_FLOATING_POINT | CONTEXT_EXTENDED_REGISTERS | CONTEXT_DEBUG_REGISTERS;
+    ext->regs->ContextFlags = CONTEXT_ALL;
     if (GetThreadContext(ext->handle, ext->regs) == 0) {
         ext->regs_error = get_error_report(log_error("GetThreadContext", 0));
     }
@@ -255,6 +258,7 @@ static DWORD event_win32_context_stopped(Context * ctx) {
         ctx->stopped_by_exception = 0;
         switch (exception_code) {
         case EXCEPTION_SINGLE_STEP:
+        case EXCEPTION_WX86_SINGLE_STEP:
             get_registers(ctx);
             if (!ext->regs_error) {
                 cpu_bp_on_suspend(ctx, &cb_found);
@@ -275,29 +279,30 @@ static DWORD event_win32_context_stopped(Context * ctx) {
                         }
                     }
                 }
+                if (!cb_found && ext->step_opcodes_len == 0) {
+                    continue_status = DBG_EXCEPTION_NOT_HANDLED;
+                }
+                else if (is_breakpoint_address(ctx, ext->regs->reg_ip)) {
+                    ctx->stopped_by_bp = 1;
+                }
             }
-            if ((!cb_found && ext->step_opcodes_len == 0) || ext->regs_error) {
+            else {
                 continue_status = DBG_EXCEPTION_NOT_HANDLED;
             }
             ext->step_opcodes_len = 0;
             ext->step_opcodes_addr = 0;
             break;
         case EXCEPTION_BREAKPOINT:
+        case EXCEPTION_WX86_BREAKPOINT:
             get_registers(ctx);
-            if (!ext->regs_error) {
-                if (is_breakpoint_address(ctx, exception_addr)) {
-                    ext->regs->reg_ip = exception_addr;
-                    ext->regs_dirty = 1;
-                    ctx->stopped_by_bp = 1;
-                    if (!debug_state->ok_to_use_hw_bp) {
-                        debug_state->ok_to_use_hw_bp = 1;
-                        send_context_changed_event(ctx->mem);
-                        memory_map_event_mapping_changed(ctx->mem);
-                    }
-                }
-                else {
-                    ext->regs->reg_ip = exception_addr;
-                    ext->regs_dirty = 1;
+            if (!ext->regs_error && is_breakpoint_address(ctx, exception_addr)) {
+                ext->regs->reg_ip = exception_addr;
+                ext->regs_dirty = 1;
+                ctx->stopped_by_bp = 1;
+                if (!debug_state->ok_to_use_hw_bp) {
+                    debug_state->ok_to_use_hw_bp = 1;
+                    send_context_changed_event(ctx->mem);
+                    memory_map_event_mapping_changed(ctx->mem);
                 }
             }
             else {
@@ -376,7 +381,7 @@ static void event_win32_context_exited(Context * ctx, int detach) {
     ext->regs = NULL;
     send_context_exited_event(ctx);
     if (ext->handle != NULL) {
-        assert(!detach || ctx->parent == NULL || ResumeThread(ext->handle) <= 0);
+        while (detach && ctx->parent != NULL && ResumeThread(ext->handle) > 0) {}
         if (!detach) {
             if (ctx->mem != ctx) {
                 log_error("CloseHandle", CloseHandle(ext->handle));
@@ -590,6 +595,13 @@ static void debug_event_handler(DebugEvent * debug_event) {
             debug_state->main_thread_handle = win32_event->u.CreateProcessInfo.hThread;
             debug_state->file_handle = win32_event->u.CreateProcessInfo.hFile;
             debug_state->base_address = (uintptr_t)win32_event->u.CreateProcessInfo.lpBaseOfImage;
+#if defined(_AMD64_)
+            {
+                BOOL wow64 = FALSE;
+                IsWow64Process(win32_event->u.CreateProcessInfo.hProcess, &wow64);
+                debug_state->wow64 = wow64;
+            }
+#endif
             assert(prs == NULL);
             assert(ctx == NULL);
             ext = EXT(prs = create_context(pid2id(win32_event->dwProcessId, 0)));
@@ -637,7 +649,9 @@ static void debug_event_handler(DebugEvent * debug_event) {
         ext->debug_event = *win32_event;
         break;
     case EXCEPTION_DEBUG_EVENT:
-        if (debug_state->state == DEBUG_STATE_PRS_CREATED && win32_event->u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_BREAKPOINT) {
+        if (debug_state->state == DEBUG_STATE_PRS_CREATED && (
+                win32_event->u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_BREAKPOINT ||
+                win32_event->u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_WX86_BREAKPOINT)) {
             if (debug_state->ini_thread_handle != NULL) ResumeThread(debug_state->ini_thread_handle);
             debug_state->attach_callback(0, prs, debug_state->attach_data);
             debug_state->attach_callback = NULL;
@@ -827,6 +841,8 @@ static void debugger_detach_handler(void * x) {
     DebugState * debug_state = (DebugState *)x;
     Context * prs = context_find_from_pid(debug_state->process_id, 0);
 
+    assert(debug_state->detach);
+    assert(debug_state->break_thread == NULL);
     for (l = prs->children.next; l != &prs->children; l = l->next) {
         Context * ctx = cldl2ctxp(l);
         if (ctx->stopped) win32_resume(ctx, 0);
@@ -1191,6 +1207,8 @@ int context_read_reg(Context * ctx, RegisterDefinition * def, unsigned offs, uns
 }
 
 unsigned context_word_size(Context * ctx) {
+    ContextExtensionWin32 * ext = EXT(ctx->mem);
+    if (ext->debug_state->wow64) return 4;
     return sizeof(void *);
 }
 

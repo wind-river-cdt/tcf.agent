@@ -38,8 +38,6 @@
 
 #define REG_OFFSET(name) offsetof(REG_SET, name)
 
-#define regs_index regs_def
-
 RegisterDefinition regs_def[] = {
 #if defined(_WIN32) && defined(__i386__)
 #   define REG_SP Esp
@@ -58,57 +56,57 @@ RegisterDefinition regs_def[] = {
     { "cs",     REG_OFFSET(SegCs),    2, -1, -1 },
     { "ss",     REG_OFFSET(SegSs),    2, -1, -1 },
 
-    { "ax",     REG_OFFSET(Eax),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 0 },
-    { "al",     REG_OFFSET(Eax),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 12 },
-    { "ah",     REG_OFFSET(Eax) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 12 },
+    { "ax",     REG_OFFSET(Eax),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 0 },
+    { "al",     REG_OFFSET(Eax),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 12 },
+    { "ah",     REG_OFFSET(Eax) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 12 },
 
-    { "bx",     REG_OFFSET(Ebx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 1 },
-    { "bl",     REG_OFFSET(Ebx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 15 },
-    { "bh",     REG_OFFSET(Ebx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 15 },
+    { "bx",     REG_OFFSET(Ebx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 1 },
+    { "bl",     REG_OFFSET(Ebx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 15 },
+    { "bh",     REG_OFFSET(Ebx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 15 },
 
-    { "cx",     REG_OFFSET(Ecx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 2 },
-    { "cl",     REG_OFFSET(Ecx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 18 },
-    { "ch",     REG_OFFSET(Ecx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 18 },
+    { "cx",     REG_OFFSET(Ecx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 2 },
+    { "cl",     REG_OFFSET(Ecx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 18 },
+    { "ch",     REG_OFFSET(Ecx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 18 },
 
-    { "dx",     REG_OFFSET(Edx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 3 },
-    { "dl",     REG_OFFSET(Edx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 21 },
-    { "dh",     REG_OFFSET(Edx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 21 },
+    { "dx",     REG_OFFSET(Edx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 3 },
+    { "dl",     REG_OFFSET(Edx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 21 },
+    { "dh",     REG_OFFSET(Edx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 21 },
 
     { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 24 */
 
-    { "f0", REG_OFFSET(FloatSave.RegisterArea) + 0,  10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f1", REG_OFFSET(FloatSave.RegisterArea) + 10, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f2", REG_OFFSET(FloatSave.RegisterArea) + 20, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f3", REG_OFFSET(FloatSave.RegisterArea) + 30, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f4", REG_OFFSET(FloatSave.RegisterArea) + 40, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f5", REG_OFFSET(FloatSave.RegisterArea) + 50, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f6", REG_OFFSET(FloatSave.RegisterArea) + 60, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f7", REG_OFFSET(FloatSave.RegisterArea) + 70, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f0", REG_OFFSET(FloatSave.RegisterArea) + 0,  10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f1", REG_OFFSET(FloatSave.RegisterArea) + 10, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f2", REG_OFFSET(FloatSave.RegisterArea) + 20, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f3", REG_OFFSET(FloatSave.RegisterArea) + 30, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f4", REG_OFFSET(FloatSave.RegisterArea) + 40, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f5", REG_OFFSET(FloatSave.RegisterArea) + 50, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f6", REG_OFFSET(FloatSave.RegisterArea) + 60, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f7", REG_OFFSET(FloatSave.RegisterArea) + 70, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
 
-    { "control", REG_OFFSET(FloatSave.ControlWord),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "status",  REG_OFFSET(FloatSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "tag",     REG_OFFSET(FloatSave.TagWord),      1, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "control", REG_OFFSET(FloatSave.ControlWord),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "status",  REG_OFFSET(FloatSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "tag",     REG_OFFSET(FloatSave.TagWord),      1, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
 
     { "xmm",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 36 */
 
-    { "mxcsr",  REG_OFFSET(ExtendedRegisters) + 24, 4, 64, 64, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm0",   REG_OFFSET(ExtendedRegisters) + 10 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm1",   REG_OFFSET(ExtendedRegisters) + 11 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm2",   REG_OFFSET(ExtendedRegisters) + 12 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm3",   REG_OFFSET(ExtendedRegisters) + 13 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm4",   REG_OFFSET(ExtendedRegisters) + 14 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm5",   REG_OFFSET(ExtendedRegisters) + 15 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm6",   REG_OFFSET(ExtendedRegisters) + 16 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
-    { "xmm7",   REG_OFFSET(ExtendedRegisters) + 17 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 36 },
+    { "mxcsr",  REG_OFFSET(ExtendedRegisters) + 24, 4, 64, 64, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm0",   REG_OFFSET(ExtendedRegisters) + 10 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm1",   REG_OFFSET(ExtendedRegisters) + 11 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm2",   REG_OFFSET(ExtendedRegisters) + 12 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm3",   REG_OFFSET(ExtendedRegisters) + 13 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm4",   REG_OFFSET(ExtendedRegisters) + 14 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm5",   REG_OFFSET(ExtendedRegisters) + 15 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm6",   REG_OFFSET(ExtendedRegisters) + 16 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
+    { "xmm7",   REG_OFFSET(ExtendedRegisters) + 17 * 16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 36 },
 
     { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 46 */
 
-    { "dr0",    REG_OFFSET(Dr0), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
-    { "dr1",    REG_OFFSET(Dr1), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
-    { "dr2",    REG_OFFSET(Dr2), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
-    { "dr3",    REG_OFFSET(Dr3), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
-    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
-    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 46 },
+    { "dr0",    REG_OFFSET(Dr0), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 46 },
+    { "dr1",    REG_OFFSET(Dr1), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 46 },
+    { "dr2",    REG_OFFSET(Dr2), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 46 },
+    { "dr3",    REG_OFFSET(Dr3), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 46 },
+    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 46 },
+    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 46 },
 
 #elif defined(_WIN32) && defined(__x86_64__)
 #   define REG_SP Rsp
@@ -141,27 +139,27 @@ RegisterDefinition regs_def[] = {
 
     { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 24 */
 
-    { "f0", REG_OFFSET(FltSave.FloatRegisters[0]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f1", REG_OFFSET(FltSave.FloatRegisters[1]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f2", REG_OFFSET(FltSave.FloatRegisters[2]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f3", REG_OFFSET(FltSave.FloatRegisters[3]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f4", REG_OFFSET(FltSave.FloatRegisters[4]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f5", REG_OFFSET(FltSave.FloatRegisters[5]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f6", REG_OFFSET(FltSave.FloatRegisters[6]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "f7", REG_OFFSET(FltSave.FloatRegisters[7]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "f0", REG_OFFSET(FltSave.FloatRegisters[0]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f1", REG_OFFSET(FltSave.FloatRegisters[1]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f2", REG_OFFSET(FltSave.FloatRegisters[2]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f3", REG_OFFSET(FltSave.FloatRegisters[3]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f4", REG_OFFSET(FltSave.FloatRegisters[4]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f5", REG_OFFSET(FltSave.FloatRegisters[5]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f6", REG_OFFSET(FltSave.FloatRegisters[6]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "f7", REG_OFFSET(FltSave.FloatRegisters[7]), 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
 
-    { "control", REG_OFFSET(FltSave.ControlWord),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "status",  REG_OFFSET(FltSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
-    { "tag",     REG_OFFSET(FltSave.TagWord),      1, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 24 },
+    { "control", REG_OFFSET(FltSave.ControlWord),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "status",  REG_OFFSET(FltSave.StatusWord),   2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
+    { "tag",     REG_OFFSET(FltSave.TagWord),      1, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 24 },
 
     { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 36 */
 
-    { "dr0",    REG_OFFSET(Dr0), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr1",    REG_OFFSET(Dr1), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr2",    REG_OFFSET(Dr2), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr3",    REG_OFFSET(Dr3), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
-    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 36 },
+    { "dr0",    REG_OFFSET(Dr0), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 36 },
+    { "dr1",    REG_OFFSET(Dr1), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 36 },
+    { "dr2",    REG_OFFSET(Dr2), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 36 },
+    { "dr3",    REG_OFFSET(Dr3), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 36 },
+    { "dr6",    REG_OFFSET(Dr6), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 36 },
+    { "dr7",    REG_OFFSET(Dr7), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 36 },
 
 #elif defined(__APPLE__) && defined(__i386__)
 #   define REG_SP __esp
@@ -264,52 +262,52 @@ RegisterDefinition regs_def[] = {
 
     { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 },
 
-    { "f0",     REG_OFFSET(fp.st_space) +   0, 10, 33, 33, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "f1",     REG_OFFSET(fp.st_space) +  16, 10, 34, 34, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "f2",     REG_OFFSET(fp.st_space) +  32, 10, 35, 35, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "f3",     REG_OFFSET(fp.st_space) +  48, 10, 36, 36, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "f4",     REG_OFFSET(fp.st_space) +  64, 10, 37, 37, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "f5",     REG_OFFSET(fp.st_space) +  80, 10, 38, 38, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "f6",     REG_OFFSET(fp.st_space) +  96, 10, 39, 39, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "f7",     REG_OFFSET(fp.st_space) + 112, 10, 40, 40, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
+    { "f0",     REG_OFFSET(fp.st_space) +   0, 10, 33, 33, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "f1",     REG_OFFSET(fp.st_space) +  16, 10, 34, 34, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "f2",     REG_OFFSET(fp.st_space) +  32, 10, 35, 35, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "f3",     REG_OFFSET(fp.st_space) +  48, 10, 36, 36, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "f4",     REG_OFFSET(fp.st_space) +  64, 10, 37, 37, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "f5",     REG_OFFSET(fp.st_space) +  80, 10, 38, 38, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "f6",     REG_OFFSET(fp.st_space) +  96, 10, 39, 39, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "f7",     REG_OFFSET(fp.st_space) + 112, 10, 40, 40, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
 
-    { "cwd",    REG_OFFSET(fp.cwd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "swd",    REG_OFFSET(fp.swd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "ftw",    REG_OFFSET(fp.ftw),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "fop",    REG_OFFSET(fp.fop),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "rip",    REG_OFFSET(fp.rip),  8, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "rdp",    REG_OFFSET(fp.rdp),  8, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
+    { "cwd",    REG_OFFSET(fp.cwd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "swd",    REG_OFFSET(fp.swd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "ftw",    REG_OFFSET(fp.ftw),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "fop",    REG_OFFSET(fp.fop),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "rip",    REG_OFFSET(fp.rip),  8, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "rdp",    REG_OFFSET(fp.rdp),  8, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
 
-    { "mxcsr",      REG_OFFSET(fp.mxcsr),       4, 64, 64, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
-    { "mxcr_mask",  REG_OFFSET(fp.mxcr_mask),   4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 26 },
+    { "mxcsr",      REG_OFFSET(fp.mxcsr),       4, 64, 64, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
+    { "mxcr_mask",  REG_OFFSET(fp.mxcr_mask),   4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 26 },
 
     { "xmm",    0, 0, -1, -1, 0, 0, 1, 1 },
 
-    { "xmm0",   REG_OFFSET(fp.xmm_space) +   0, 16, 17, 17, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm1",   REG_OFFSET(fp.xmm_space) +  16, 16, 18, 18, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm2",   REG_OFFSET(fp.xmm_space) +  32, 16, 19, 19, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm3",   REG_OFFSET(fp.xmm_space) +  48, 16, 20, 20, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm4",   REG_OFFSET(fp.xmm_space) +  64, 16, 21, 21, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm5",   REG_OFFSET(fp.xmm_space) +  80, 16, 22, 22, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm6",   REG_OFFSET(fp.xmm_space) +  96, 16, 23, 23, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm7",   REG_OFFSET(fp.xmm_space) + 112, 16, 24, 24, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm8",   REG_OFFSET(fp.xmm_space) + 128, 16, 25, 25, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm9",   REG_OFFSET(fp.xmm_space) + 144, 16, 26, 26, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm10",  REG_OFFSET(fp.xmm_space) + 160, 16, 27, 27, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm11",  REG_OFFSET(fp.xmm_space) + 176, 16, 28, 28, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm12",  REG_OFFSET(fp.xmm_space) + 192, 16, 29, 29, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm13",  REG_OFFSET(fp.xmm_space) + 208, 16, 30, 30, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm14",  REG_OFFSET(fp.xmm_space) + 224, 16, 31, 31, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
-    { "xmm15",  REG_OFFSET(fp.xmm_space) + 240, 16, 32, 32, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 43 },
+    { "xmm0",   REG_OFFSET(fp.xmm_space) +   0, 16, 17, 17, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm1",   REG_OFFSET(fp.xmm_space) +  16, 16, 18, 18, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm2",   REG_OFFSET(fp.xmm_space) +  32, 16, 19, 19, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm3",   REG_OFFSET(fp.xmm_space) +  48, 16, 20, 20, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm4",   REG_OFFSET(fp.xmm_space) +  64, 16, 21, 21, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm5",   REG_OFFSET(fp.xmm_space) +  80, 16, 22, 22, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm6",   REG_OFFSET(fp.xmm_space) +  96, 16, 23, 23, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm7",   REG_OFFSET(fp.xmm_space) + 112, 16, 24, 24, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm8",   REG_OFFSET(fp.xmm_space) + 128, 16, 25, 25, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm9",   REG_OFFSET(fp.xmm_space) + 144, 16, 26, 26, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm10",  REG_OFFSET(fp.xmm_space) + 160, 16, 27, 27, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm11",  REG_OFFSET(fp.xmm_space) + 176, 16, 28, 28, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm12",  REG_OFFSET(fp.xmm_space) + 192, 16, 29, 29, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm13",  REG_OFFSET(fp.xmm_space) + 208, 16, 30, 30, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm14",  REG_OFFSET(fp.xmm_space) + 224, 16, 31, 31, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
+    { "xmm15",  REG_OFFSET(fp.xmm_space) + 240, 16, 32, 32, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 43 },
 
     { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 60 */
 
-    { "dr0",    REG_OFFSET(user.u_debugreg[0]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
-    { "dr1",    REG_OFFSET(user.u_debugreg[1]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
-    { "dr2",    REG_OFFSET(user.u_debugreg[2]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
-    { "dr3",    REG_OFFSET(user.u_debugreg[3]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
-    { "dr6",    REG_OFFSET(user.u_debugreg[6]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
-    { "dr7",    REG_OFFSET(user.u_debugreg[7]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 60 },
+    { "dr0",    REG_OFFSET(user.u_debugreg[0]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 60 },
+    { "dr1",    REG_OFFSET(user.u_debugreg[1]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 60 },
+    { "dr2",    REG_OFFSET(user.u_debugreg[2]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 60 },
+    { "dr3",    REG_OFFSET(user.u_debugreg[3]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 60 },
+    { "dr6",    REG_OFFSET(user.u_debugreg[6]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 60 },
+    { "dr7",    REG_OFFSET(user.u_debugreg[7]), 8, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 60 },
 
 #elif defined(__i386__)
 #   define REG_SP user.regs.esp
@@ -332,72 +330,69 @@ RegisterDefinition regs_def[] = {
     { "cs",     REG_OFFSET(user.regs.xcs),      2, -1, -1},
     { "ss",     REG_OFFSET(user.regs.xss),      2, -1, -1},
 
-    { "ax",     REG_OFFSET(user.regs.eax),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 0 },
-    { "al",     REG_OFFSET(user.regs.eax),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 16 },
-    { "ah",     REG_OFFSET(user.regs.eax) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 16 },
+    { "ax",     REG_OFFSET(user.regs.eax),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 0 },
+    { "al",     REG_OFFSET(user.regs.eax),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 16 },
+    { "ah",     REG_OFFSET(user.regs.eax) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 16 },
 
-    { "bx",     REG_OFFSET(user.regs.ebx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 1 },
-    { "bl",     REG_OFFSET(user.regs.ebx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 19 },
-    { "bh",     REG_OFFSET(user.regs.ebx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 19 },
+    { "bx",     REG_OFFSET(user.regs.ebx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 1 },
+    { "bl",     REG_OFFSET(user.regs.ebx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 19 },
+    { "bh",     REG_OFFSET(user.regs.ebx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 19 },
 
-    { "cx",     REG_OFFSET(user.regs.ecx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 2 },
-    { "cl",     REG_OFFSET(user.regs.ecx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 22 },
-    { "ch",     REG_OFFSET(user.regs.ecx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 22 },
+    { "cx",     REG_OFFSET(user.regs.ecx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 2 },
+    { "cl",     REG_OFFSET(user.regs.ecx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 22 },
+    { "ch",     REG_OFFSET(user.regs.ecx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 22 },
 
-    { "dx",     REG_OFFSET(user.regs.edx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 3 },
-    { "dl",     REG_OFFSET(user.regs.edx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 25 },
-    { "dh",     REG_OFFSET(user.regs.edx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 25 },
+    { "dx",     REG_OFFSET(user.regs.edx),      2, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 3 },
+    { "dl",     REG_OFFSET(user.regs.edx),      1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 25 },
+    { "dh",     REG_OFFSET(user.regs.edx) + 1,  1, -1, -1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 25 },
 
     { "fpu",    0, 0, -1, -1, 0, 0, 1, 1 },
 
-    { "f0",     REG_OFFSET(other.st_space) +   0, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f1",     REG_OFFSET(other.st_space) +  16, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f2",     REG_OFFSET(other.st_space) +  32, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f3",     REG_OFFSET(other.st_space) +  48, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f4",     REG_OFFSET(other.st_space) +  64, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f5",     REG_OFFSET(other.st_space) +  80, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f6",     REG_OFFSET(other.st_space) +  96, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "f7",     REG_OFFSET(other.st_space) + 112, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "f0",     REG_OFFSET(other.st_space) +   0, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "f1",     REG_OFFSET(other.st_space) +  16, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "f2",     REG_OFFSET(other.st_space) +  32, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "f3",     REG_OFFSET(other.st_space) +  48, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "f4",     REG_OFFSET(other.st_space) +  64, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "f5",     REG_OFFSET(other.st_space) +  80, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "f6",     REG_OFFSET(other.st_space) +  96, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "f7",     REG_OFFSET(other.st_space) + 112, 10, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
 
-    { "cwd",    REG_OFFSET(other.cwd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "swd",    REG_OFFSET(other.swd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "twd",    REG_OFFSET(other.twd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fop",    REG_OFFSET(other.fop),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fip",    REG_OFFSET(other.fip),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fcs",    REG_OFFSET(other.fcs),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "foo",    REG_OFFSET(other.foo),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
-    { "fos",    REG_OFFSET(other.fos),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "cwd",    REG_OFFSET(other.cwd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "swd",    REG_OFFSET(other.swd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "twd",    REG_OFFSET(other.twd),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "fop",    REG_OFFSET(other.fop),  2, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "fip",    REG_OFFSET(other.fip),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "fcs",    REG_OFFSET(other.fcs),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "foo",    REG_OFFSET(other.foo),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
+    { "fos",    REG_OFFSET(other.fos),  4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
 
-    { "mxcsr",  REG_OFFSET(other.mxcsr), 4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 28 },
+    { "mxcsr",  REG_OFFSET(other.mxcsr), 4, -1, -1, 0, 0, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 28 },
 
     { "xmm",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 46 */
 
-    { "xmm0",   REG_OFFSET(other.xmm_space) +   0, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm1",   REG_OFFSET(other.xmm_space) +  16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm2",   REG_OFFSET(other.xmm_space) +  32, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm3",   REG_OFFSET(other.xmm_space) +  48, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm4",   REG_OFFSET(other.xmm_space) +  64, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm5",   REG_OFFSET(other.xmm_space) +  80, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm6",   REG_OFFSET(other.xmm_space) +  96, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
-    { "xmm7",   REG_OFFSET(other.xmm_space) + 112, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_index + 46 },
+    { "xmm0",   REG_OFFSET(other.xmm_space) +   0, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
+    { "xmm1",   REG_OFFSET(other.xmm_space) +  16, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
+    { "xmm2",   REG_OFFSET(other.xmm_space) +  32, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
+    { "xmm3",   REG_OFFSET(other.xmm_space) +  48, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
+    { "xmm4",   REG_OFFSET(other.xmm_space) +  64, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
+    { "xmm5",   REG_OFFSET(other.xmm_space) +  80, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
+    { "xmm6",   REG_OFFSET(other.xmm_space) +  96, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
+    { "xmm7",   REG_OFFSET(other.xmm_space) + 112, 16, -1, -1, 0, 1, 0,  0,  0,  0,  0,  0,  0,  0,  0, regs_def + 46 },
 
     { "debug",    0, 0, -1, -1, 0, 0, 1, 1 }, /* 55 */
 
-    { "dr0",    REG_OFFSET(user.u_debugreg[0]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
-    { "dr1",    REG_OFFSET(user.u_debugreg[1]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
-    { "dr2",    REG_OFFSET(user.u_debugreg[2]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
-    { "dr3",    REG_OFFSET(user.u_debugreg[3]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
-    { "dr6",    REG_OFFSET(user.u_debugreg[6]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
-    { "dr7",    REG_OFFSET(user.u_debugreg[7]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_index + 55 },
+    { "dr0",    REG_OFFSET(user.u_debugreg[0]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 55 },
+    { "dr1",    REG_OFFSET(user.u_debugreg[1]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 55 },
+    { "dr2",    REG_OFFSET(user.u_debugreg[2]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 55 },
+    { "dr3",    REG_OFFSET(user.u_debugreg[3]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 55 },
+    { "dr6",    REG_OFFSET(user.u_debugreg[6]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 55 },
+    { "dr7",    REG_OFFSET(user.u_debugreg[7]), 4, -1, -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, regs_def + 55 },
 
 #endif
 
     { NULL,     0,                    0,  0,  0},
 };
 
-#ifdef regs_index
-#undef regs_index
-#endif
 RegisterDefinition * regs_index = NULL;
 
 unsigned char BREAK_INST[] = { 0xcc };
@@ -469,11 +464,18 @@ static int read_stack(Context * ctx, ContextAddress addr, void * buf, size_t siz
     return context_read_mem(ctx, addr, buf, size);
 }
 
-static int read_reg(StackFrame * frame, RegisterDefinition * def, ContextAddress * addr) {
-    uint64_t v = 0;
-    int r = read_reg_value(frame, def, &v);
-    *addr = (ContextAddress)v;
-    return r;
+static int read_reg(StackFrame * frame, RegisterDefinition * def, size_t size, ContextAddress * addr) {
+    size_t i;
+    uint8_t buf[8];
+    uint64_t n = 0;
+    *addr = 0;
+    assert(!def->big_endian);
+    assert(size <= def->size);
+    assert(size <= sizeof(buf));
+    if (read_reg_bytes(frame, def, 0, size, buf) < 0) return -1;
+    for (i = 0; i < size; i++) n |= (uint64_t)buf[i] << (i * 8);
+    *addr = (ContextAddress)n;
+    return 0;
 }
 
 /*
@@ -498,7 +500,7 @@ static int read_reg(StackFrame * frame, RegisterDefinition * def, ContextAddress
  *
  * RETURNS: The address that a chain of branches points to.
  */
-static ContextAddress trace_jump(Context * ctx, ContextAddress addr, uint32_t * reg_mask) {
+static ContextAddress trace_jump(Context * ctx, ContextAddress addr, int x64, uint32_t * reg_mask) {
     int cnt = 0;
     /* while instruction is a JMP, get destination adrs */
     while (cnt < 100) {
@@ -529,11 +531,9 @@ static ContextAddress trace_jump(Context * ctx, ContextAddress addr, uint32_t * 
             unsigned char mod = 0;
             unsigned char reg = 0;
             unsigned char rm = 0;
-#if defined(__i386__)
-            static int reg_to_dwarf_id[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-#else
-            static int reg_to_dwarf_id[] = { 0, 2, 1, 3, 7, 6, 4, 5 };
-#endif
+            static int reg_to_dwarf_id_32[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+            static int reg_to_dwarf_id_64[] = { 0, 2, 1, 3, 7, 6, 4, 5 };
+            int * reg_to_dwarf_id = x64 ? reg_to_dwarf_id_64 : reg_to_dwarf_id_32;
             if (context_read_mem(ctx, addr + 1, &modrm, 1) < 0) break;
             mod = modrm >> 6;
             reg = (modrm >> 3) & 7u;
@@ -605,6 +605,8 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
     ContextAddress dwn_bp = 0;
 
     Context * ctx = frame->ctx;
+    size_t word_size = context_word_size(ctx);
+    int x64 = word_size == 8;
 
     if (pc_def == NULL) {
         RegisterDefinition * r;
@@ -615,15 +617,15 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
         }
     }
 
-    if (read_reg(frame, pc_def, &reg_pc) < 0) return 0;
-    if (read_reg(frame, bp_def, &reg_bp) < 0) return 0;
+    if (read_reg(frame, pc_def, word_size, &reg_pc) < 0) return 0;
+    if (read_reg(frame, bp_def, word_size, &reg_bp) < 0) return 0;
 
     if (frame->is_top_frame) {
         /* Top frame */
         int copy_regs = 0;
         uint32_t reg_mask = 0;
         ContextAddress reg_sp = 0;
-        ContextAddress addr = trace_jump(ctx, reg_pc, &reg_mask);
+        ContextAddress addr = trace_jump(ctx, reg_pc, x64, &reg_mask);
 #if ENABLE_Symbols
         ContextAddress plt = is_plt_section(ctx, addr);
 #else
@@ -631,7 +633,7 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
 #endif
         RegisterDefinition * reg = NULL;
 
-        if (read_reg(frame, sp_def, &reg_sp) < 0) return 0;
+        if (read_reg(frame, sp_def, word_size, &reg_sp) < 0) return 0;
         /*
          * we don't have a stack frame in a few restricted but useful cases:
          *  1) we are at a PUSH %EBP MOV %ESP %EBP or RET or ENTER instruction,
@@ -642,16 +644,16 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
         if (plt) {
             /* TODO: support for large code model PLT */
             if (addr - plt == 0) {
-                dwn_sp = reg_sp + sizeof(ContextAddress) * 2;
+                dwn_sp = reg_sp + word_size * 2;
             }
             else if (addr - plt < 16) {
-                dwn_sp = reg_sp + sizeof(ContextAddress) * 3;
+                dwn_sp = reg_sp + word_size * 3;
             }
             else if ((addr - plt - 16) % 16 < 11) {
-                dwn_sp = reg_sp + sizeof(ContextAddress);
+                dwn_sp = reg_sp + word_size;
             }
             else {
-                dwn_sp = reg_sp + sizeof(ContextAddress) * 2;
+                dwn_sp = reg_sp + word_size * 2;
             }
             dwn_bp = reg_bp;
             copy_regs = 1;
@@ -662,24 +664,24 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
             if (context_read_mem(ctx, addr - 1, code, sizeof(code)) < 0) return -1;
 
             if (code[1] == RET || code[1] == RETADD) {
-                dwn_sp = reg_sp + sizeof(ContextAddress);
+                dwn_sp = reg_sp + word_size;
                 dwn_bp = reg_bp;
                 copy_regs = 1;
                 reg_mask = 0;
             }
             else if (is_func_entry(code + 1) || code[1] == ENTER) {
-                dwn_sp = reg_sp + sizeof(ContextAddress);
+                dwn_sp = reg_sp + word_size;
                 dwn_bp = reg_bp;
                 copy_regs = 1;
             }
             else if (is_func_entry(code)) {
-                dwn_sp = reg_sp + sizeof(ContextAddress) * 2;
+                dwn_sp = reg_sp + word_size * 2;
                 dwn_bp = reg_bp;
                 copy_regs = 1;
             }
             else if (reg_bp != 0) {
-                dwn_sp = reg_bp + sizeof(ContextAddress) * 2;
-                if (read_stack(ctx, reg_bp, &dwn_bp, sizeof(ContextAddress)) < 0) dwn_bp = 0;
+                dwn_sp = reg_bp + word_size * 2;
+                if (read_stack(ctx, reg_bp, &dwn_bp, word_size) < 0) dwn_bp = 0;
                 if (is_func_exit(code + 1)) {
                     copy_regs = 1;
                     reg_mask = 0;
@@ -700,11 +702,11 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
         }
     }
     else {
-        if (read_stack(ctx, reg_bp, &dwn_bp, sizeof(ContextAddress)) < 0) dwn_bp = 0;
-        else dwn_sp = reg_bp + sizeof(ContextAddress) * 2;
+        if (read_stack(ctx, reg_bp, &dwn_bp, word_size) < 0) dwn_bp = 0;
+        else dwn_sp = reg_bp + word_size * 2;
     }
 
-    if (read_stack(ctx, dwn_sp - sizeof(ContextAddress), &dwn_pc, sizeof(ContextAddress)) < 0) dwn_pc = 0;
+    if (read_stack(ctx, dwn_sp - word_size, &dwn_pc, word_size) < 0) dwn_pc = 0;
 
     if (dwn_bp < reg_bp) dwn_bp = 0;
 
