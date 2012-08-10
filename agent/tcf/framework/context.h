@@ -464,6 +464,7 @@ struct ContextBreakpoint {
     ContextAddress length;      /* length of the breakpoint address range */
     unsigned access_types;      /* memory access type, bit set of CTX_BP_ACCESS_* */
     unsigned id;                /* to be used by debug context implementation */
+    void * ext;                 /* to be used by debug context implementation */
 };
 
 #define CTX_BP_ACCESS_DATA_READ      0x01
