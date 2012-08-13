@@ -1015,6 +1015,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         const char * fnm = exe;
         char * cmd = NULL;
         char * env = NULL;
+        char * env_path = NULL;
         SetHandleInformation(hpipes[0][0], HANDLE_FLAG_INHERIT, TRUE);
         SetHandleInformation(hpipes[1][1], HANDLE_FLAG_INHERIT, TRUE);
         SetHandleInformation(hpipes[2][1], HANDLE_FLAG_INHERIT, TRUE);
@@ -1054,10 +1055,14 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
             char ** p = envp;
             size_t env_size = 1;
             char * s = NULL;
+            char * path = getenv("PATH");
+            if (path == NULL) env_path = "PATH=";
+            else env_path = tmp_strdup2("PATH=", path);
             while (*p != NULL) env_size += strlen(*p++) + 1;
             s = env = (char *)tmp_alloc(env_size);
             for (p = envp; *p != NULL; p++) {
                 size_t l = strlen(*p) + 1;
+                if (strncmp(*p, "PATH=", 5) == 0) putenv(*p);
                 memcpy(s, *p, l);
                 s += l;
             }
@@ -1077,6 +1082,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
             if (!CloseHandle(prs_info.hThread)) err = set_win32_errno(GetLastError());
             if (!CloseHandle(prs_info.hProcess)) err = set_win32_errno(GetLastError());
         }
+        if (env_path != NULL) putenv(env_path);
     }
     if (close(fpipes[0][0]) < 0 && !err) err = errno;
     if (close(fpipes[1][1]) < 0 && !err) err = errno;
@@ -1249,7 +1255,8 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                 if (!err && params->attach && context_attach_self() < 0) err = errno;
                 if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
                 if (!err) {
-                    execve(exe, args, envp);
+                    environ = envp;
+                    execvp(exe, args);
                     err = errno;
                 }
                 if (write(p_log[1], &err, sizeof(err)) != sizeof(err)) exit(2);
@@ -1315,7 +1322,8 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                 if (!err && params->attach && context_attach_self() < 0) err = errno;
                 if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
                 if (!err) {
-                    execve(exe, args, envp);
+                    environ = envp;
+                    execvp(exe, args);
                     err = errno;
                 }
                 if (write(p_log[1], &err, sizeof(err)) != sizeof(err)) exit(2);
