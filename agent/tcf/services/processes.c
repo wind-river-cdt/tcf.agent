@@ -1255,7 +1255,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                 if (!err && params->attach && context_attach_self() < 0) err = errno;
                 if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
                 if (!err) {
-                    environ = envp;
+                    if (envp != NULL) environ = envp;
                     execvp(exe, args);
                     err = errno;
                 }
@@ -1322,7 +1322,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
                 if (!err && params->attach && context_attach_self() < 0) err = errno;
                 if (!err && params->dir != NULL && chdir(params->dir) < 0) err = errno;
                 if (!err) {
-                    environ = envp;
+                    if (envp != NULL) environ = envp;
                     execvp(exe, args);
                     err = errno;
                 }
