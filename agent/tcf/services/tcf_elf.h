@@ -117,6 +117,10 @@
 #define STT_FUNC        2
 #define STT_SECTION     3
 #define STT_FILE        4
+#define STT_LOPROC      13
+#define STT_HIPROC      15
+#define STT_ARM_TFUNC   STT_LOPROC
+
 
 #define PT_NULL         0
 #define PT_LOAD         1

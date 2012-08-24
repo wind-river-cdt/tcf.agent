@@ -1389,6 +1389,13 @@ void unpack_elf_symbol_info(ELF_Section * sym_sec, U4_T index, ELF_SymbolInfo * 
         info->value = s.st_value;
         info->size = s.st_size;
     }
+
+    if (file->machine == EM_ARM) {
+        if (info->type == STT_FUNC || info->type == STT_ARM_TFUNC) {
+            info->value = info->value & ~ (U8_T)1;
+            info->type = STT_FUNC;
+        }
+    }
 }
 
 static void create_symbol_names_hash(ELF_Section * tbl) {
@@ -1441,12 +1448,14 @@ static void create_symbol_addr_search_index(ELF_Section * sec) {
         while (n < tbl->sym_count) {
             int add = 0;
             U8_T addr = 0;
+            U1_T type = 0;
             if (elf64) {
                 Elf64_Sym s = ((Elf64_Sym *)tbl->data)[n];
                 if (swap) SWAP(s.st_shndx);
                 if (s.st_shndx == sec->index) {
                     if (swap) SWAP(s.st_value);
                     addr = s.st_value;
+                    type = ELF64_ST_TYPE(s.st_info);
                     if (rel) addr += sec->addr;
                     add = 1;
                 }
@@ -1457,12 +1466,18 @@ static void create_symbol_addr_search_index(ELF_Section * sec) {
                 if (s.st_shndx == sec->index) {
                     if (swap) SWAP(s.st_value);
                     addr = s.st_value;
+                    type = ELF32_ST_TYPE(s.st_info);
                     if (rel) addr += sec->addr;
                     add = 1;
                 }
             }
             if (add) {
                 ELF_SecSymbol * s = NULL;
+                if (file->machine == EM_ARM) {
+                    if (type == STT_FUNC || type == STT_ARM_TFUNC) {
+                        addr = addr & ~(U8_T)1;
+                    }
+                }
                 if (sec->sym_addr_cnt >= sec->sym_addr_max) {
                     sec->sym_addr_max = sec->sym_addr_max * 3 / 2;
                     sec->sym_addr_table = (ELF_SecSymbol *)loc_realloc(sec->sym_addr_table, sec->sym_addr_max * sizeof(ELF_SecSymbol));
