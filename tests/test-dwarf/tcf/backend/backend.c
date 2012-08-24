@@ -980,7 +980,7 @@ static void next_pc(void) {
                     }
                 }
             }
-            if (pc < func_addr || pc >= func_addr + func_size) {
+            if (pc < func_addr || (func_size > 0 && pc >= func_addr + func_size)) {
                 errno = ERR_OTHER;
                 error("invalid symbol address");
             }
