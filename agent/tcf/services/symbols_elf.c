@@ -1113,7 +1113,10 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
             ContextAddress sym_addr = (ContextAddress)sym_info.value;
             if (file->type == ET_REL) sym_addr += (ContextAddress)section->addr;
             assert(sym_addr <= lt_addr);
-            if (sym_addr + sym_info.size > lt_addr) {
+            /* Check if the searched address is part of symbol address range
+             * or if symbol is a label (function + size of 0). */
+            if (sym_addr + sym_info.size > lt_addr ||
+                    (sym_class == SYM_CLASS_FUNCTION && sym_info.size == 0)) {
                 Symbol * sym = alloc_symbol();
                 sym->frame = STACK_NO_FRAME;
                 sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
