@@ -36,6 +36,7 @@
 #include <tcf/services/registers.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/symbols.h>
+#include <tcf/services/memorymap.h>
 
 #define MAX_FRAMES  1000
 
@@ -474,6 +475,21 @@ static void delete_stack_trace(Context * ctx, void * args) {
     memset(EXT(ctx), 0, sizeof(StackTrace));
 }
 
+static void event_map_changed(Context * ctx, void * client_data) {
+    if (ctx->mem_access && context_get_group(ctx, CONTEXT_GROUP_PROCESS) == ctx) {
+        /* If the context is a memory space, we need to update
+         * breakpoints on all members of the group */
+        LINK * l = context_root.next;
+        while (l != &context_root) {
+            Context * x = ctxl2ctxp(l);
+            l = l->next;
+            if (x->exited) continue;
+            if (context_get_group(x, CONTEXT_GROUP_PROCESS) != ctx) continue;
+            flush_stack_trace(x, NULL);
+        }
+    }
+}
+
 void ini_stack_trace_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     static ContextEventListener context_listener = {
         NULL,
@@ -486,8 +502,19 @@ void ini_stack_trace_service(Protocol * proto, TCFBroadcastGroup * bcg) {
     static RegistersEventListener registers_listener = {
         flush_on_register_change,
     };
+#if SERVICE_MemoryMap
+    static MemoryMapEventListener map_listener = {
+        NULL,
+        NULL,
+        NULL,
+        event_map_changed,
+    };
+#endif
     add_context_event_listener(&context_listener, bcg);
     add_registers_event_listener(&registers_listener, bcg);
+#if SERVICE_MemoryMap
+    add_memory_map_event_listener(&map_listener, NULL);
+#endif
     add_command_handler(proto, STACKTRACE, "getContext", command_get_context);
     add_command_handler(proto, STACKTRACE, "getChildren", command_get_children);
     context_extension_offset = context_extension(sizeof(StackTrace));
