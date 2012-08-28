@@ -41,6 +41,10 @@ typedef struct Subscription Subscription;
 
 #define STREAM_MAGIC 0x29465398
 
+#ifndef STREAM_BASE_ID
+#define STREAM_BASE_ID	"VS"
+#endif
+
 struct VirtualStream {
     LINK link_all;
     unsigned magic;
@@ -117,15 +121,17 @@ static unsigned get_client_hash(unsigned id, Channel * c) {
 }
 
 static int str2id(char * s, unsigned * id) {
+    const char * stream_base_id = STREAM_BASE_ID;
     char * p = NULL;
-    if (*s++ != 'V') return 0;
-    if (*s++ != 'S') return 0;
+    while (*stream_base_id != 0) {
+	if (*s++ != *stream_base_id++) return 0;
+    }
     *id = (unsigned)strtoul(s, &p, 10);
     return *p == 0;
 }
 
 void virtual_stream_get_id(VirtualStream * stream, char * id_buf, size_t buf_size) {
-    snprintf(id_buf, buf_size, "VS%u", stream->id);
+    snprintf(id_buf, buf_size, STREAM_BASE_ID"%u", stream->id);
 }
 
 static StreamClient * find_client(char * s, Channel * c) {
@@ -818,7 +824,7 @@ static void channel_close_listener(Channel * c) {
         StreamClient * client = all2client(l);
         l = l->next;
         if (client->channel == c) {
-            trace(LOG_ALWAYS, "Stream is left connected by client: VS%d", client->stream->id);
+            trace(LOG_ALWAYS, "Stream is left connected by client: "STREAM_BASE_ID"%d", client->stream->id);
             delete_client(client);
         }
     }
