@@ -42,7 +42,7 @@ typedef struct Subscription Subscription;
 #define STREAM_MAGIC 0x29465398
 
 #ifndef STREAM_BASE_ID
-#define STREAM_BASE_ID	"VS"
+#define STREAM_BASE_ID  "VS"
 #endif
 
 struct VirtualStream {
@@ -124,7 +124,7 @@ static int str2id(char * s, unsigned * id) {
     const char * stream_base_id = STREAM_BASE_ID;
     char * p = NULL;
     while (*stream_base_id != 0) {
-	if (*s++ != *stream_base_id++) return 0;
+        if (*s++ != *stream_base_id++) return 0;
     }
     *id = (unsigned)strtoul(s, &p, 10);
     return *p == 0;
@@ -673,7 +673,7 @@ int virtual_stream_read (Channel * c, char * token, char * id, size_t size) {
         }
     }
     else errno = err;
-    
+
     return err == 0 ? 0 : -1;
 }
 
@@ -691,10 +691,10 @@ static void command_read(char * token, Channel * c) {
     if (virtual_stream_read (c, token, id, size) < 0) err = errno;
 
     if (err != 0) {
-	/* 
-	 * Handle reply with an error. If none error was detected, the reply 
-	 * was sent back by virtual_stream_read() or delayed.
-	 */
+        /*
+         * Handle reply with an error. If none error was detected, the reply
+         * was sent back by virtual_stream_read() or delayed.
+         */
 
         write_stringz(&c->out, "R");
         write_stringz(&c->out, token);
@@ -768,7 +768,7 @@ int virtual_stream_write (Channel * c, char * token, char * id, size_t size, Inp
 
     if (err != 0) errno = err;
 
-    return err == 0 ? 0 : -1; 
+    return err == 0 ? 0 : -1;
 }
 
 static void command_write(char * token, Channel * c) {
@@ -786,15 +786,15 @@ static void command_write(char * token, Channel * c) {
     json_test_char(&c->inp, MARKER_EOM);
 
     if (err != 0) {
-	/* 
-	 * Handle reply with an error. If none error was detected, the reply 
-	 * was sent back by virtual_stream_write() or delayed.
-	 */
+        /*
+         * Handle reply with an error. If none error was detected, the reply
+         * was sent back by virtual_stream_write() or delayed.
+         */
 
-	write_stringz(&c->out, "R");
-	write_stringz(&c->out, token);
-	write_errno(&c->out, err);
-	write_stream(&c->out, MARKER_EOM);
+        write_stringz(&c->out, "R");
+        write_stringz(&c->out, token);
+        write_errno(&c->out, err);
+        write_stream(&c->out, MARKER_EOM);
     }
 }
 
@@ -839,14 +839,14 @@ static void command_eos(char * token, Channel * c) {
     if (virtual_stream_eos(c, token, id) < 0) err = errno;
 
     if (err != 0) {
-	/* 
-	 * Handle reply with an error. If none error was detected, the reply 
-	 * was sent back by virtual_stream_eos() or delayed.
-	 */
-	write_stringz(&c->out, "R");
-	write_stringz(&c->out, token);
-	write_errno(&c->out, err);
-	write_stream(&c->out, MARKER_EOM);
+        /*
+         * Handle reply with an error. If none error was detected, the reply
+         * was sent back by virtual_stream_eos() or delayed.
+         */
+        write_stringz(&c->out, "R");
+        write_stringz(&c->out, token);
+        write_errno(&c->out, err);
+        write_stream(&c->out, MARKER_EOM);
     }
 }
 
