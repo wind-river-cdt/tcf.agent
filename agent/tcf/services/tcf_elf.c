@@ -957,7 +957,7 @@ static void search_regions(MemoryMap * map, ContextAddress addr0, ContextAddress
     }
 }
 
-static int get_map(Context * ctx, ContextAddress addr0, ContextAddress addr1, MemoryMap * map) {
+int elf_get_map(Context * ctx, ContextAddress addr0, ContextAddress addr1, MemoryMap * map) {
     map->region_cnt = 0;
     ctx = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
 #if SERVICE_MemoryMap
@@ -995,7 +995,7 @@ ELF_File * elf_open_inode(Context * ctx, dev_t dev, ino_t ino, int64_t mtime) {
         set_error_report_errno(file->error);
         return NULL;
     }
-    if (get_map(ctx, 0, ~(ContextAddress)0, &elf_map) < 0) return NULL;
+    if (elf_get_map(ctx, 0, ~(ContextAddress)0, &elf_map) < 0) return NULL;
     for (i = 0; i < elf_map.region_cnt; i++) {
         MemoryRegion * r = elf_map.regions + i;
         file = elf_open_memory_region_file(r, &error);
@@ -1020,7 +1020,7 @@ ELF_File * elf_list_first(Context * ctx, ContextAddress addr_min, ContextAddress
     state->next = elf_list_state;
     elf_list_state = state;
     state->ctx = ctx;
-    if (get_map(ctx, addr_min, addr_max, &state->map) < 0) return NULL;
+    if (elf_get_map(ctx, addr_min, addr_max, &state->map) < 0) return NULL;
     if (state->map.region_cnt > 0) {
         ELF_File * f = files;
         while (f != NULL) {
@@ -1069,7 +1069,7 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
     UnitAddressRange * range = NULL;
     int error = 0;
 
-    if (get_map(ctx, addr_min, addr_max, &elf_map) < 0) return NULL;
+    if (elf_get_map(ctx, addr_min, addr_max, &elf_map) < 0) return NULL;
     for (i = 0; range == NULL && i < elf_map.region_cnt; i++) {
         ContextAddress link_addr_min, link_addr_max;
         MemoryRegion * r = elf_map.regions + i;
@@ -1144,8 +1144,8 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
 ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_Section * sec, ContextAddress addr) {
     unsigned i;
 
-    /* Note: 'addr' is link-time address - it cannot be used as get_map() argument */
-    if (get_map(ctx, 0, ~(ContextAddress)0, &elf_map) < 0) return 0;
+    /* Note: 'addr' is link-time address - it cannot be used as elf_get_map() argument */
+    if (elf_get_map(ctx, 0, ~(ContextAddress)0, &elf_map) < 0) return 0;
     for (i = 0; i < elf_map.region_cnt; i++) {
         MemoryRegion * r = elf_map.regions + i;
         int same_file = 0;
@@ -1200,7 +1200,7 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
 ContextAddress elf_map_to_link_time_address(Context * ctx, ContextAddress addr, ELF_File ** file, ELF_Section ** sec) {
     unsigned i;
 
-    if (get_map(ctx, addr, addr, &elf_map) < 0) return 0;
+    if (elf_get_map(ctx, addr, addr, &elf_map) < 0) return 0;
     for (i = 0; i < elf_map.region_cnt; i++) {
         MemoryRegion * r = elf_map.regions + i;
         ELF_File * f = NULL;

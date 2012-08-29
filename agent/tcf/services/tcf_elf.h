@@ -553,6 +553,13 @@ extern ELF_File * elf_list_next(Context * ctx);
 extern void elf_list_done(Context * ctx);
 
 /*
+ * Get info about ELF files mapped or loaded in the given memory address range.
+ * 'addr0' and 'addr1' are run-time addresses.
+ * The range is inclusive.
+ */
+extern int elf_get_map(Context * ctx, ContextAddress addr0, ContextAddress addr1, MemoryMap * map);
+
+/*
  * Map link-time address in an ELF file to run-time address in a context.
  * Clear errno if no errors found, otherwise set errno and return 0.
  */
