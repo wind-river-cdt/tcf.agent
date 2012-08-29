@@ -477,15 +477,16 @@ static void delete_stack_trace(Context * ctx, void * args) {
 
 static void event_map_changed(Context * ctx, void * client_data) {
     if (ctx->mem_access && context_get_group(ctx, CONTEXT_GROUP_PROCESS) == ctx) {
-        /* If the context is a memory space, we need to update
-         * breakpoints on all members of the group */
+        /* If the context is a memory space, we need to invalidate
+         * stack traces on all members of the group, since they can be
+         * dependent on the symbol information. */
         LINK * l = context_root.next;
         while (l != &context_root) {
             Context * x = ctxl2ctxp(l);
             l = l->next;
             if (x->exited) continue;
             if (context_get_group(x, CONTEXT_GROUP_PROCESS) != ctx) continue;
-            flush_stack_trace(x, NULL);
+            invalidate_stack_trace(EXT(x));
         }
     }
 }
