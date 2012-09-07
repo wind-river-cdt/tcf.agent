@@ -2658,6 +2658,8 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
         }
         if (obj->mTag == TAG_member || obj->mTag == TAG_inheritance) {
             if (set_trap(&trap)) {
+                U8_T bit_size = 0;
+                U8_T bit_offs = 0;
                 read_dwarf_object_property(sym_ctx, sym_frame, obj, AT_data_member_location, &v);
                 switch (v.mForm) {
                 case FORM_DATA1     :
@@ -2669,6 +2671,24 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                     add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
                     add_location_command(SFT_CMD_NUMBER)->args.num = get_numeric_property_value(&v);
                     add_location_command(SFT_CMD_ADD);
+                    if (get_num_prop(obj, AT_bit_size, &bit_size)) {
+                        LocationExpressionCommand * cmd = add_location_command(SFT_CMD_PIECE);
+                        cmd->args.piece.bit_size = (unsigned)bit_size;
+                        if (get_num_prop(obj, AT_bit_offset, &bit_offs)) {
+                            U8_T byte_size = 0;
+                            U8_T type_byte_size = 0;
+                            U8_T type_bit_size = 0;
+                            if (get_num_prop(obj, AT_byte_size, &byte_size)) {
+                                cmd->args.piece.bit_offs = (unsigned)(byte_size * 8 - bit_offs - bit_size);
+                            }
+                            else if (obj->mType != NULL && get_object_size(obj->mType, 0, &type_byte_size, &type_bit_size)) {
+                                cmd->args.piece.bit_offs = (unsigned)(type_byte_size * 8 - bit_offs - bit_size);
+                            }
+                            else {
+                                str_exception(ERR_INV_DWARF, "Unknown field size");
+                            }
+                        }
+                    }
                     break;
                 case FORM_BLOCK1    :
                 case FORM_BLOCK2    :
