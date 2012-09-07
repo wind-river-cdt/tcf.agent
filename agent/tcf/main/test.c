@@ -105,6 +105,24 @@ typedef struct test_struct {
     test_union f_union;
 } test_struct;
 
+typedef struct test_bitfields {
+    unsigned f_0;
+    unsigned f_ubit1 : 1;
+    unsigned f_ubit2 : 2;
+    unsigned f_ubit3 : 3;
+    unsigned f_ubit4 : 4;
+    unsigned f_ubit7 : 7;
+    unsigned f_ubit9 : 9;
+    unsigned f_ubit17: 17;
+    int f_ibit1 : 1;
+    int f_ibit2 : 2;
+    int f_ibit3 : 3;
+    int f_ibit4 : 4;
+    int f_ibit7 : 7;
+    int f_ibit9 : 9;
+    int f_ibit17: 17;
+} test_bitfields;
+
 typedef int test_array[10001];
 
 extern int tcf_test_func_int(int x, int y);
@@ -147,6 +165,7 @@ int tcf_test_func2(void) {
     int func2_local2 = 2;
     test_struct func2_local3 = { enum_val3, 153, NULL, 3.14f, 2.71 };
     int * func2_local4 = NULL;
+    test_bitfields func2_local5 = { 0, 1, 2, 3, 4, 7, 9, 17, 1, 2, 3, 4, 7, 9, 17 };
 
     func2_local3.f_struct = &func2_local3;
     tcf_test_short++;
@@ -155,7 +174,7 @@ int tcf_test_func2(void) {
     tcf_test_func3();
     func2_local1++;
     func2_local2 = func2_local1;
-    return func2_local2 + *func2_local4;
+    return func2_local2 + *func2_local4 + func2_local5.f_0;
 }
 
 void tcf_test_func1(void) {

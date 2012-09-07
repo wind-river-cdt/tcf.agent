@@ -1131,9 +1131,15 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     }
 
     if (get_type_info(sym, TI_GET_OFFSET, &dword) == 0) {
+        DWORD bit = 0;
         add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
         add_location_command(SFT_CMD_NUMBER)->args.num = dword;
         add_location_command(SFT_CMD_ADD);
+        if (get_type_info(sym, TI_GET_BITPOSITION, &bit) == 0) {
+            LocationExpressionCommand * cmd = add_location_command(SFT_CMD_PIECE);
+            cmd->args.piece.bit_offs = bit;
+            cmd->args.piece.bit_size = info->Size;
+        }
         (*loc)->args_cnt = 1;
         return 0;
     }

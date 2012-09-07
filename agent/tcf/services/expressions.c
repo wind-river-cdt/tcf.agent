@@ -153,6 +153,7 @@ static int id_callback_cnt = 0;
 void set_value(Value * v, void * data, size_t size, int big_endian) {
     v->sym = NULL;
     v->reg = NULL;
+    v->loc = NULL;
     v->remote = 0;
     v->address = 0;
     v->function = 0;
@@ -679,6 +680,41 @@ static void set_value_endianness(Value * v, Symbol * sym, Symbol * type) {
     }
 }
 
+static void sign_extend(Value * v, LocationExpressionState * loc) {
+    ContextAddress type_size = 0;
+    assert(v->value != NULL);
+    if (get_symbol_size(v->type, &type_size) < 0) {
+        error(errno, "Cannot retrieve value type size");
+    }
+    if (type_size > v->size) {
+        /* Extend size */
+        uint8_t * buf = (uint8_t *)tmp_alloc_zero(type_size);
+        if (!big_endian) memcpy(buf, v->value, (size_t)v->size);
+        else memcpy(buf + (size_t)(type_size - v->size), v->value, (size_t)v->size);
+        v->size = type_size;
+        v->value = buf;
+    }
+    if (v->type_class == TYPE_CLASS_INTEGER) {
+        /* Extend sign */
+        unsigned i;
+        unsigned bit_cnt = 0;
+        uint8_t * buf = (uint8_t *)v->value;
+        for (i = 0; i < loc->pieces_cnt; i++) {
+            LocationPiece * piece = loc->pieces + i;
+            bit_cnt += piece->bit_size ? piece->bit_size : piece->size * 8;
+        }
+        if (bit_cnt > 0) {
+            if (buf[(bit_cnt - 1) / 8] & (1 << ((bit_cnt - 1) % 8))) {
+                /* Negative integer number */
+                while (bit_cnt < v->size * 8) {
+                    buf[bit_cnt / 8] |= 1 << (bit_cnt % 8);
+                    bit_cnt++;
+                }
+            }
+        }
+    }
+}
+
 /* Note: sym2value() does NOT set v->size if v->sym != NULL */
 static int sym2value(int mode, Symbol * sym, Value * v) {
     int sym_class = 0;
@@ -1089,8 +1125,6 @@ static int type_name(int mode, Symbol ** type) {
 }
 
 static void load_value(Value * v) {
-    v->sym = NULL;
-    v->reg = NULL;
     if (v->remote) {
         size_t size = (size_t)v->size;
         void * buf = tmp_alloc(size);
@@ -1139,13 +1173,12 @@ static void to_host_endianness(Value * v) {
         v->big_endian = big_endian;
         v->sym = NULL;
         v->reg = NULL;
+        v->loc = NULL;
     }
 }
 
 static int64_t to_int(int mode, Value * v) {
     if (mode != MODE_NORMAL) {
-        v->sym = NULL;
-        v->reg = NULL;
         if (v->remote) {
             v->value = tmp_alloc_zero((size_t)v->size);
             v->remote = 0;
@@ -1197,8 +1230,6 @@ static int64_t to_int(int mode, Value * v) {
 
 static uint64_t to_uns(int mode, Value * v) {
     if (mode != MODE_NORMAL) {
-        v->sym = NULL;
-        v->reg = NULL;
         if (v->remote) {
             v->value = tmp_alloc_zero((size_t)v->size);
             v->remote = 0;
@@ -1253,8 +1284,6 @@ static uint64_t to_uns(int mode, Value * v) {
 
 static double to_double(int mode, Value * v) {
     if (mode != MODE_NORMAL) {
-        v->sym = NULL;
-        v->reg = NULL;
         if (v->remote) {
             v->value = tmp_alloc_zero((size_t)v->size);
             v->remote = 0;
@@ -1371,32 +1400,27 @@ static void op_deref(int mode, Value * v) {
 }
 
 #if ENABLE_Symbols
-static void evaluate_symbol_address(Symbol * sym, ContextAddress obj_addr, ContextAddress index, ContextAddress * addr) {
-    ContextAddress offs = 0;
-    if (get_symbol_offset(sym, &offs) == 0) {
-        *addr = obj_addr + offs;
+static void evaluate_symbol_location(
+        Symbol * sym, ContextAddress obj_addr,
+        ContextAddress index, LocationExpressionState ** loc) {
+    LocationInfo * loc_info = NULL;
+    StackFrame * frame_info = NULL;
+    uint64_t args[2];
+    args[0] = obj_addr;
+    args[1] = index;
+    if (get_location_info(sym, &loc_info) < 0) {
+        error(errno, "Cannot get symbol location information");
     }
-    else {
-        LocationExpressionState * state = NULL;
-        LocationInfo * loc_info = NULL;
-        StackFrame * frame_info = NULL;
-        uint64_t args[2];
-        args[0] = obj_addr;
-        args[1] = index;
-        if (get_location_info(sym, &loc_info) < 0) {
-            error(errno, "Cannot get symbol location information");
-        }
-        if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &frame_info) < 0) {
-            error(errno, "Cannot get stack frame info");
-        }
-        state = evaluate_location_expression(expression_context, frame_info,
-            loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, args, 2);
-        if (state->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
-        *addr = (ContextAddress)state->stk[0];
+    if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &frame_info) < 0) {
+        error(errno, "Cannot get stack frame info");
     }
+    *loc = evaluate_location_expression(expression_context, frame_info,
+        loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, args, 2);
 }
 
-static void find_field(Symbol * class_sym, ContextAddress obj_addr, const char * name, const char * id, Symbol ** field_sym, ContextAddress * field_addr) {
+static void find_field(
+        Symbol * class_sym, ContextAddress obj_addr, const char * name, const char * id,
+        Symbol ** field_sym, LocationExpressionState ** field_loc) {
     Symbol ** children = NULL;
     Symbol ** inheritance = NULL;
     int count = 0;
@@ -1417,15 +1441,16 @@ static void find_field(Symbol * class_sym, ContextAddress obj_addr, const char *
         }
         if ((name != NULL && s != NULL && strcmp(s, name) == 0) ||
                 (id != NULL && strcmp(symbol2id(children[i]), id) == 0)) {
-            evaluate_symbol_address(children[i], obj_addr, 0, field_addr);
+            evaluate_symbol_location(children[i], obj_addr, 0, field_loc);
             *field_sym = children[i];
             return;
         }
     }
     for (i = 0; i < h; i++) {
-        ContextAddress x = 0;
-        evaluate_symbol_address(inheritance[i], obj_addr, 0, &x);
-        find_field(inheritance[i], x, name, id, field_sym, field_addr);
+        LocationExpressionState * x = NULL;
+        evaluate_symbol_location(inheritance[i], obj_addr, 0, &x);
+        if (x->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
+        find_field(inheritance[i], (ContextAddress)x->stk[0], name, id, field_sym, field_loc);
         if (*field_sym != NULL) return;
     }
 }
@@ -1443,10 +1468,10 @@ static void op_field(int mode, Value * v) {
 #if ENABLE_Symbols
         Symbol * sym = NULL;
         int sym_class = 0;
-        ContextAddress addr = 0;
+        LocationExpressionState * loc = NULL;
 
         if (!v->remote) error(ERR_INV_EXPRESSION, "L-value expected");
-        find_field(v->type, v->address, name, id, &sym, &addr);
+        find_field(v->type, v->address, name, id, &sym, &loc);
         if (sym == NULL) {
             error(ERR_SYM_NOT_FOUND, "Invalid field name or ID");
         }
@@ -1454,30 +1479,49 @@ static void op_field(int mode, Value * v) {
             error(errno, "Cannot retrieve symbol class");
         }
         if (sym_class == SYM_CLASS_FUNCTION) {
+            if (loc->stk_pos != 1) error(ERR_INV_EXPRESSION, "Invalid symbol location expression");
             get_symbol_type(sym, &v->type);
             v->type_class = TYPE_CLASS_POINTER;
             if (v->type != NULL) get_array_symbol(v->type, 0, &v->type);
-            set_ctx_word_value(v, addr);
+            set_ctx_word_value(v, (ContextAddress)loc->stk[0]);
             v->function = 1;
             v->sym = sym;
         }
         else {
-            ContextAddress size = 0;
-            if (get_symbol_size(sym, &size) < 0) {
-                error(errno, "Cannot retrieve field size");
-            }
-            v->address = addr;
-            v->size = size;
-            v->sym = NULL;
-            v->reg = NULL;
             if (get_symbol_type(sym, &v->type) < 0) {
                 error(errno, "Cannot retrieve symbol type");
             }
             if (get_symbol_type_class(sym, &v->type_class) < 0) {
                 error(errno, "Cannot retrieve symbol type class");
             }
-            set_value_endianness(v, sym, v->type);
+            if (mode == MODE_NORMAL) {
+                if (loc->stk_pos == 1) {
+                    ContextAddress size = 0;
+                    if (get_symbol_size(sym, &size) < 0) {
+                        error(errno, "Cannot retrieve field size");
+                    }
+                    v->address = (ContextAddress)loc->stk[0];
+                    v->size = size;
+                    v->sym = NULL;
+                    v->reg = NULL;
+                    set_value_endianness(v, sym, v->type);
+                }
+                else {
+                    size_t size = 0;
+                    void * value = NULL;
+                    int big_endian = loc->reg_id_scope.big_endian;
+                    StackFrame * frame_info = NULL;
+                    if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &frame_info) < 0) {
+                        error(errno, "Cannot get stack frame info");
+                    }
+                    read_location_peices(expression_context, frame_info,
+                        loc->pieces, loc->pieces_cnt, big_endian, &value, &size);
+                    set_value(v, value, size, big_endian);
+                    sign_extend(v, loc);
+                }
+            }
         }
+        v->loc = loc;
 #else
         error(ERR_UNSUPPORTED, "Symbols service not available");
 #endif
@@ -1558,6 +1602,7 @@ static void op_index(int mode, Value * v) {
     }
     v->sym = NULL;
     v->reg = NULL;
+    v->loc = NULL;
     v->size = size;
     v->type = type;
     if (get_symbol_type_class(type, &v->type_class) < 0) {
@@ -2106,6 +2151,7 @@ static void lazy_unary_expression(int mode, Value * v) {
                 v->address = (ContextAddress)to_uns(mode, v);
                 v->sym = NULL;
                 v->reg = NULL;
+                v->loc = NULL;
                 v->type = type;
                 v->type_class = type_class;
                 v->size = type_size;
@@ -2154,7 +2200,7 @@ static void pm_expression(int mode, Value * v) {
         if (mode != MODE_SKIP) {
             ContextAddress obj = 0;
             ContextAddress ptr = 0;
-            ContextAddress addr = 0;
+            LocationExpressionState * loc = NULL;
             if (sy == SY_PM_D) {
                 if (!v->remote) error(ERR_INV_EXPRESSION, "L-value expected");
                 obj = v->address;
@@ -2163,8 +2209,9 @@ static void pm_expression(int mode, Value * v) {
                 obj = (ContextAddress)to_uns(mode, v);
             }
             ptr = (ContextAddress)to_uns(mode, &x);
-            evaluate_symbol_address(x.type, obj, ptr, &addr);
-            set_ctx_word_value(v, addr);
+            evaluate_symbol_location(x.type, obj, ptr, &loc);
+            if (loc->stk_pos != 1) error(ERR_INV_EXPRESSION, "Cannot evaluate symbol address");
+            set_ctx_word_value(v, (ContextAddress)loc->stk[0]);
             v->constant = 0;
             if (get_symbol_base_type(x.type, &v->type) < 0) {
                 error(ERR_INV_EXPRESSION, "Cannot get pointed type");
@@ -3257,19 +3304,40 @@ static void command_assign_cache_client(void * x) {
     if (!err && frame != STACK_NO_FRAME && !ctx->stopped) err = ERR_IS_RUNNING;
     if (!err && evaluate_expression(ctx, frame, 0, expr->script, 0, &value) < 0) err = errno;
     if (!err) {
-        if (value.reg != NULL) {
-            StackFrame * info = NULL;
-            if (get_frame_info(ctx, frame, &info) < 0) err = errno;
-            if (!err && write_reg_bytes(info, value.reg, 0, args->value_size, (uint8_t *)args->value_buf) < 0) err = errno;
-#if SERVICE_Registers
-            if (!err) send_event_register_changed(register2id(ctx, frame, value.reg));
-#endif
-        }
-        else if (value.remote) {
+        if (value.remote) {
             if (context_write_mem(ctx, value.address, args->value_buf, args->value_size) < 0) err = errno;
 #if SERVICE_Memory
             if (!err) send_event_memory_changed(ctx, value.address, args->value_size);
 #endif
+        }
+        else if (value.loc != NULL && value.loc->pieces_cnt > 0) {
+            Trap trap;
+            if (set_trap(&trap)) {
+                unsigned i;
+                StackFrame * info = NULL;
+                for (i = 0; i < value.loc->pieces_cnt; i++) {
+                    LocationPiece * piece = value.loc->pieces + i;
+                    if (piece->reg) {
+                        if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
+                        break;
+                    }
+                }
+                write_location_peices(ctx, info, value.loc->pieces, value.loc->pieces_cnt,
+                    value.loc->reg_id_scope.big_endian, args->value_buf, args->value_size);
+#if SERVICE_Registers
+                if (info != NULL) {
+                    for (i = 0; i < value.loc->pieces_cnt; i++) {
+                        LocationPiece * piece = value.loc->pieces + i;
+                        if (piece->reg == NULL) continue;
+                        send_event_register_changed(register2id(ctx, frame, piece->reg));
+                    }
+                }
+#endif
+                clear_trap(&trap);
+            }
+            else {
+                err = trap.error;
+            }
         }
         else {
             err = ERR_INV_EXPRESSION;

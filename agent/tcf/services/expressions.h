@@ -34,6 +34,7 @@ struct Value {
     int type_class;             /* See symbols.h for type class definitions */
     void * value;               /* Pointer to value data buffer, or NULL if remote value */
     RegisterDefinition * reg;   /* Not NULL if the value represents a register variable */
+    LocationExpressionState * loc; /* Value location at remote target, if available */
     ContextAddress address;     /* Address of value data in remote target memory */
     ContextAddress size;        /* Value size in bytes */
     int remote;                 /* 1 if value data is in remote target memory, 0 if loaded into a local buffer */
