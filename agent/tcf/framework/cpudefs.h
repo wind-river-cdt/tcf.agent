@@ -263,6 +263,11 @@ extern void read_location_peices(
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void ** value, size_t * size);
 
+extern void write_location_peices(
+            Context * ctx, StackFrame * frame,
+            LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
+            void * value, size_t size);
+
 /*** CPU hardware breakpoints API ***/
 
 /* Get supported memory access modes */

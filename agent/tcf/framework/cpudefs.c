@@ -399,12 +399,12 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
                     piece->reg = cmd->args.piece.reg;
                     piece->value = cmd->args.piece.value;
                 }
-                else if (state->stk_pos == 0) {
+                else if (stk_pos == 0) {
                     location_expression_error();
                 }
                 else {
-                    state->stk_pos--;
-                    piece->addr = (ContextAddress)state->stk[state->stk_pos];
+                    stk_pos--;
+                    piece->addr = (ContextAddress)stk[stk_pos];
                 }
             }
             break;
@@ -480,6 +480,60 @@ void read_location_peices(Context * ctx, StackFrame * frame,
     }
     *value = bf;
     *size = bf_offs / 8;
+}
+
+void write_location_peices(Context * ctx, StackFrame * frame,
+            LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
+            void * value, size_t size) {
+    unsigned n = 0;
+    unsigned bf_offs = 0;
+    uint8_t * bf = (uint8_t *)value;
+    while (n < pieces_cnt) {
+        unsigned i;
+        LocationPiece * piece = pieces + n++;
+        unsigned piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
+        unsigned piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
+        uint8_t * pbf = NULL;
+        if (piece->reg) {
+            if (piece->reg->size < piece_size) {
+                pbf = (uint8_t *)tmp_alloc_zero(piece_size);
+            }
+            else {
+                pbf = (uint8_t *)tmp_alloc(piece->reg->size);
+            }
+            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
+            if (!piece->reg->big_endian != !big_endian) swap_bytes(pbf, piece->reg->size);
+        }
+        else if (piece->value) {
+            str_exception(ERR_OTHER, "Cannot write to a constant value");
+        }
+        else {
+            pbf = (uint8_t *)tmp_alloc(piece_size);
+            if (context_read_mem(ctx, piece->addr, pbf, piece_size) < 0) exception(errno);
+        }
+        for (i = piece->bit_offs; i < piece->bit_offs + piece_bits;  i++) {
+            if (bf_offs / 8 >= size) {
+                /* Leave unchanged */
+            }
+            else if (bf[bf_offs / 8] & (1u << (bf_offs % 8))) {
+                pbf[i / 8] |=  (1u << (i % 8));
+            }
+            else {
+                pbf[i / 8] &= ~(1u << (i % 8));
+            }
+            bf_offs++;
+        }
+        if (piece->reg) {
+            if (!piece->reg->big_endian != !big_endian) swap_bytes(pbf, piece->reg->size);
+            if (write_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
+        }
+        else if (piece->value) {
+            assert(0);
+        }
+        else {
+            if (context_write_mem(ctx, piece->addr, pbf, piece_size) < 0) exception(errno);
+        }
+    }
 }
 
 #if !defined(ENABLE_HardwareBreakpoints) || !ENABLE_HardwareBreakpoints
