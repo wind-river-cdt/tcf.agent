@@ -2671,10 +2671,27 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                     add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
                     add_location_command(SFT_CMD_NUMBER)->args.num = get_numeric_property_value(&v);
                     add_location_command(SFT_CMD_ADD);
-                    if (get_num_prop(obj, AT_bit_size, &bit_size)) {
-                        LocationExpressionCommand * cmd = add_location_command(SFT_CMD_PIECE);
-                        cmd->args.piece.bit_size = (unsigned)bit_size;
-                        if (get_num_prop(obj, AT_bit_offset, &bit_offs)) {
+                    break;
+                case FORM_BLOCK1    :
+                case FORM_BLOCK2    :
+                case FORM_BLOCK4    :
+                case FORM_BLOCK     :
+                case FORM_EXPRLOC   :
+                    add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
+                    add_dwarf_location_command(info, &v);
+                    break;
+                default:
+                    str_fmt_exception(ERR_OTHER, "Invalid AT_data_member_location form 0x%04x", v.mForm);
+                    break;
+                }
+                if (get_num_prop(obj, AT_bit_size, &bit_size)) {
+                    LocationExpressionCommand * cmd = add_location_command(SFT_CMD_PIECE);
+                    cmd->args.piece.bit_size = (unsigned)bit_size;
+                    if (get_num_prop(obj, AT_bit_offset, &bit_offs)) {
+                        if (obj->mCompUnit->mFile->big_endian) {
+                            cmd->args.piece.bit_offs = (unsigned)bit_offs;
+                        }
+                        else {
                             U8_T byte_size = 0;
                             U8_T type_byte_size = 0;
                             U8_T type_bit_size = 0;
@@ -2689,18 +2706,6 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                             }
                         }
                     }
-                    break;
-                case FORM_BLOCK1    :
-                case FORM_BLOCK2    :
-                case FORM_BLOCK4    :
-                case FORM_BLOCK     :
-                case FORM_EXPRLOC   :
-                    add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
-                    add_dwarf_location_command(info, &v);
-                    break;
-                default:
-                    str_fmt_exception(ERR_OTHER, "Invalid AT_data_member_location form 0x%04x", v.mForm);
-                    break;
                 }
                 info->args_cnt = 1;
                 clear_trap(&trap);

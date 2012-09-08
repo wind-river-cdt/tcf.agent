@@ -430,6 +430,8 @@ static void swap_bytes(void * buf, size_t size) {
     }
 }
 
+#define bit_mask(n) (1u << (big_endian ? 7 - n % 8 : n % 8))
+
 void read_location_peices(Context * ctx, StackFrame * frame,
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void ** value, size_t * size) {
@@ -443,19 +445,21 @@ void read_location_peices(Context * ctx, StackFrame * frame,
         unsigned piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
         unsigned piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
         uint8_t * pbf = NULL;
+        uint8_t * rbf = NULL;
         if (bf_size < bf_offs / 8 + piece_size + 1) {
             bf_size = bf_offs / 8 + piece_size + 1;
             bf = (uint8_t *)tmp_realloc(bf, bf_size);
         }
         if (piece->reg) {
             if (piece->reg->size < piece_size) {
-                pbf = (uint8_t *)tmp_alloc_zero(piece_size);
+                rbf = pbf = (uint8_t *)tmp_alloc_zero(piece_size);
+                if (big_endian) rbf += piece_size - piece->reg->size;
             }
             else {
-                pbf = (uint8_t *)tmp_alloc(piece->reg->size);
+                rbf = pbf = (uint8_t *)tmp_alloc(piece->reg->size);
             }
-            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
-            if (!piece->reg->big_endian != !big_endian) swap_bytes(pbf, piece->reg->size);
+            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            if (!piece->reg->big_endian != !big_endian) swap_bytes(rbf, piece->reg->size);
         }
         else if (piece->value) {
             pbf = (uint8_t *)piece->value;
@@ -465,17 +469,17 @@ void read_location_peices(Context * ctx, StackFrame * frame,
             if (context_read_mem(ctx, piece->addr, pbf, piece_size) < 0) exception(errno);
         }
         for (i = piece->bit_offs; i < piece->bit_offs + piece_bits;  i++) {
-            if (pbf[i / 8] & (1u << (i % 8))) {
-                bf[bf_offs / 8] |=  (1u << (bf_offs % 8));
+            if (pbf[i / 8] & bit_mask(i)) {
+                bf[bf_offs / 8] |=  bit_mask(bf_offs);
             }
             else {
-                bf[bf_offs / 8] &= ~(1u << (bf_offs % 8));
+                bf[bf_offs / 8] &= ~bit_mask(bf_offs);
             }
             bf_offs++;
         }
     }
     while (bf_offs % 8) {
-        bf[bf_offs / 8] &= ~(1u << (bf_offs % 8));
+        bf[bf_offs / 8] &= ~bit_mask(bf_offs);
         bf_offs++;
     }
     *value = bf;
@@ -494,15 +498,17 @@ void write_location_peices(Context * ctx, StackFrame * frame,
         unsigned piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
         unsigned piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
         uint8_t * pbf = NULL;
+        uint8_t * rbf = NULL;
         if (piece->reg) {
             if (piece->reg->size < piece_size) {
-                pbf = (uint8_t *)tmp_alloc_zero(piece_size);
+                rbf = pbf = (uint8_t *)tmp_alloc_zero(piece_size);
+                if (big_endian) rbf += piece_size - piece->reg->size;
             }
             else {
-                pbf = (uint8_t *)tmp_alloc(piece->reg->size);
+                rbf = pbf = (uint8_t *)tmp_alloc(piece->reg->size);
             }
-            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
-            if (!piece->reg->big_endian != !big_endian) swap_bytes(pbf, piece->reg->size);
+            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            if (!piece->reg->big_endian != !big_endian) swap_bytes(rbf, piece->reg->size);
         }
         else if (piece->value) {
             str_exception(ERR_OTHER, "Cannot write to a constant value");
@@ -513,19 +519,19 @@ void write_location_peices(Context * ctx, StackFrame * frame,
         }
         for (i = piece->bit_offs; i < piece->bit_offs + piece_bits;  i++) {
             if (bf_offs / 8 >= size) {
-                /* Leave unchanged */
+                /* Leave unchanged? */
             }
-            else if (bf[bf_offs / 8] & (1u << (bf_offs % 8))) {
-                pbf[i / 8] |=  (1u << (i % 8));
+            else if (bf[bf_offs / 8] & bit_mask(bf_offs)) {
+                pbf[i / 8] |=  bit_mask(i);
             }
             else {
-                pbf[i / 8] &= ~(1u << (i % 8));
+                pbf[i / 8] &= ~bit_mask(i);
             }
             bf_offs++;
         }
         if (piece->reg) {
-            if (!piece->reg->big_endian != !big_endian) swap_bytes(pbf, piece->reg->size);
-            if (write_reg_bytes(frame, piece->reg, 0, piece->reg->size, pbf) < 0) exception(errno);
+            if (!piece->reg->big_endian != !big_endian) swap_bytes(rbf, piece->reg->size);
+            if (write_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
         }
         else if (piece->value) {
             assert(0);
