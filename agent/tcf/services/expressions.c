@@ -3265,6 +3265,54 @@ static void command_evaluate_cache_client(void * x) {
             cnt++;
         }
 
+        if (value.loc != NULL && value.loc->pieces_cnt > 0) {
+            unsigned i;
+            if (cnt > 0) write_stream(&c->out, ',');
+            json_write_string(&c->out, "Pieces");
+            write_stream(&c->out, ':');
+            write_stream(&c->out, '[');
+            for (i = 0; i < value.loc->pieces_cnt; i++) {
+                LocationPiece * piece = value.loc->pieces + i;
+                if (i > 0) write_stream(&c->out, ',');
+                write_stream(&c->out, '{');
+                if (piece->size) {
+                    json_write_string(&c->out, "Size");
+                    write_stream(&c->out, ':');
+                    json_write_ulong(&c->out, piece->size);
+                }
+                else {
+                    json_write_string(&c->out, "BitSize");
+                    write_stream(&c->out, ':');
+                    json_write_ulong(&c->out, piece->bit_size);
+                }
+                if (piece->bit_offs) {
+                    write_stream(&c->out, ',');
+                    json_write_string(&c->out, "BitOffs");
+                    write_stream(&c->out, ':');
+                    json_write_ulong(&c->out, piece->bit_offs);
+                }
+                write_stream(&c->out, ',');
+                if (piece->reg) {
+                    json_write_string(&c->out, "Register");
+                    write_stream(&c->out, ':');
+                    json_write_string(&c->out, register2id(ctx, frame, piece->reg));
+                }
+                else if (piece->value) {
+                    json_write_string(&c->out, "Value");
+                    write_stream(&c->out, ':');
+                    json_write_binary(&c->out, piece->value, piece->size);
+                }
+                else {
+                    json_write_string(&c->out, "Address");
+                    write_stream(&c->out, ':');
+                    json_write_uint64(&c->out, piece->addr);
+                }
+                write_stream(&c->out, '}');
+            }
+            write_stream(&c->out, ']');
+            cnt++;
+        }
+
         if (value.big_endian) {
             if (cnt > 0) write_stream(&c->out, ',');
             json_write_string(&c->out, "BigEndian");
