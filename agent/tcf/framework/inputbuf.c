@@ -51,6 +51,7 @@ static void ibuf_eof(InputBuf * ibuf) {
 static size_t ibuf_free_size(InputBuf * ibuf) {
     if (ibuf->eof) return 0;
     if (ibuf->stream->cur == ibuf->buf + ibuf->buf_size) {
+        assert(ibuf->stream->cur == ibuf->stream->end);
         ibuf->stream->cur = ibuf->stream->end = ibuf->buf;
     }
     assert(ibuf->inp >= ibuf->buf && ibuf->inp < ibuf->buf + ibuf->buf_size);
@@ -64,7 +65,10 @@ static size_t ibuf_free_size(InputBuf * ibuf) {
 
 void ibuf_trigger_read(InputBuf * ibuf) {
     size_t size = ibuf_free_size(ibuf);
-    if (size > 0) ibuf->post_read(ibuf, ibuf->inp, size);
+    if (size > 0) {
+        assert(ibuf->inp + size <= ibuf->buf + ibuf->buf_size);
+        ibuf->post_read(ibuf, ibuf->inp, size);
+    }
 }
 
 int ibuf_get_more(InputBuf * ibuf, int peeking) {
@@ -149,6 +153,9 @@ int ibuf_get_more(InputBuf * ibuf, int peeking) {
                 out++;
                 continue;
 #endif
+            default:
+                /* This should never happen, see ibuf_read_done() */
+                assert(0);
             }
             if (!peeking) {
                 ibuf->out_esc = 0;
@@ -288,13 +295,15 @@ void ibuf_read_done(InputBuf * ibuf, size_t len) {
            to accommodate very larges messages, up to 16MB */
         unsigned char * tmp = (unsigned char *)loc_alloc(ibuf->buf_size * 2);
         size_t size = ibuf->buf + ibuf->buf_size - ibuf->stream->cur;
+        size_t scnt = ibuf->stream->end - ibuf->stream->cur;
         memcpy(tmp, ibuf->stream->cur, size);
         memcpy(tmp + size, ibuf->buf, ibuf->buf_size - size);
         loc_free(ibuf->buf);
         ibuf->buf = tmp;
         ibuf->inp = tmp + ibuf->buf_size - 1;
         ibuf->buf_size *= 2;
-        ibuf->stream->cur = ibuf->stream->end = tmp;
+        ibuf->stream->cur = tmp;
+        ibuf->stream->end = tmp + scnt;
     }
 #endif
 
