@@ -703,12 +703,25 @@ static void sign_extend(Value * v, LocationExpressionState * loc) {
             LocationPiece * piece = loc->pieces + i;
             bit_cnt += piece->bit_size ? piece->bit_size : piece->size * 8;
         }
-        if (bit_cnt > 0) {
-            if (buf[(bit_cnt - 1) / 8] & (1 << ((bit_cnt - 1) % 8))) {
-                /* Negative integer number */
-                while (bit_cnt < v->size * 8) {
-                    buf[bit_cnt / 8] |= 1 << (bit_cnt % 8);
-                    bit_cnt++;
+        if (bit_cnt > 0 && bit_cnt < v->size * 8) {
+            if (v->big_endian) {
+                unsigned offs = v->size * 8 - bit_cnt;
+                if (buf[offs / 8] & (1 << (7 - offs % 8))) {
+                    /* Negative integer number */
+                    while (offs > 0) {
+                        offs--;
+                        buf[offs / 8] |= 1 << (7 - offs % 8);
+                    }
+                }
+            }
+            else {
+                unsigned offs = bit_cnt - 1;
+                if (buf[offs / 8] & (1 << (offs % 8))) {
+                    /* Negative integer number */
+                    while (offs < v->size * 8 - 1) {
+                        offs++;
+                        buf[offs / 8] |= 1 << (offs % 8);
+                    }
                 }
             }
         }

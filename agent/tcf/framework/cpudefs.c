@@ -430,26 +430,30 @@ static void swap_bytes(void * buf, size_t size) {
     }
 }
 
-#define bit_mask(n) (1u << (big_endian ? 7 - n % 8 : n % 8))
+#define bit_mask(n) (1u << (big_endian ? 7 - (n) % 8 : (n) % 8))
 
 void read_location_pieces(Context * ctx, StackFrame * frame,
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void ** value, size_t * size) {
-    unsigned n = 0;
     uint8_t * bf = NULL;
     size_t bf_size = 0;
+    unsigned bf_bits = 0;
     unsigned bf_offs = 0;
+    unsigned n = 0;
+    unsigned i = 0;
+    while (i < pieces_cnt) {
+        LocationPiece * piece = pieces + i++;
+        bf_bits += piece->bit_size ? piece->bit_size : piece->size * 8;
+    }
+    bf_size = (size_t)((bf_bits + 7) / 8);
+    bf = (uint8_t *)tmp_alloc_zero(bf_size);
+    if (big_endian) bf_offs = bf_size * 8 - bf_bits;
     while (n < pieces_cnt) {
-        unsigned i;
         LocationPiece * piece = pieces + n++;
         unsigned piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
         unsigned piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
         uint8_t * pbf = NULL;
         uint8_t * rbf = NULL;
-        if (bf_size < bf_offs / 8 + piece_size + 1) {
-            bf_size = bf_offs / 8 + piece_size + 1;
-            bf = (uint8_t *)tmp_realloc(bf, bf_size);
-        }
         if (piece->reg) {
             if (piece->reg->size < piece_size) {
                 rbf = pbf = (uint8_t *)tmp_alloc_zero(piece_size);
@@ -469,31 +473,31 @@ void read_location_pieces(Context * ctx, StackFrame * frame,
             if (context_read_mem(ctx, piece->addr, pbf, piece_size) < 0) exception(errno);
         }
         for (i = piece->bit_offs; i < piece->bit_offs + piece_bits;  i++) {
-            if (pbf[i / 8] & bit_mask(i)) {
-                bf[bf_offs / 8] |=  bit_mask(bf_offs);
-            }
-            else {
-                bf[bf_offs / 8] &= ~bit_mask(bf_offs);
-            }
+            if (pbf[i / 8] & bit_mask(i)) bf[bf_offs / 8] |=  bit_mask(bf_offs);
             bf_offs++;
         }
     }
-    while (bf_offs % 8) {
-        bf[bf_offs / 8] &= ~bit_mask(bf_offs);
-        bf_offs++;
-    }
+
     *value = bf;
-    *size = bf_offs / 8;
+    *size = bf_size;
 }
 
 void write_location_pieces(Context * ctx, StackFrame * frame,
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void * value, size_t size) {
-    unsigned n = 0;
-    unsigned bf_offs = 0;
     uint8_t * bf = (uint8_t *)value;
+    size_t bf_size = 0;
+    unsigned bf_bits = 0;
+    unsigned bf_offs = 0;
+    unsigned n = 0;
+    unsigned i = 0;
+    while (i < pieces_cnt) {
+        LocationPiece * piece = pieces + i++;
+        bf_bits += piece->bit_size ? piece->bit_size : piece->size * 8;
+    }
+    bf_size = (size_t)((bf_bits + 7) / 8);
+    if (big_endian && size >= bf_size) bf_offs = size * 8 - bf_bits;
     while (n < pieces_cnt) {
-        unsigned i;
         LocationPiece * piece = pieces + n++;
         unsigned piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
         unsigned piece_bits = piece->bit_size ? piece->bit_size : piece->size * 8;
