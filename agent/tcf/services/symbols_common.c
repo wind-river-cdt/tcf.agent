@@ -95,7 +95,7 @@ int get_symbol_value(const Symbol * sym, void ** value, size_t * size, int * big
     if (state == NULL) return -1;
     if (!set_trap(&trap)) return -1;
     if (state->pieces_cnt > 0) {
-        read_location_peices(state->ctx, state->stack_frame,
+        read_location_pieces(state->ctx, state->stack_frame,
             state->pieces, state->pieces_cnt, loc_info->big_endian, value, size);
     }
     else {

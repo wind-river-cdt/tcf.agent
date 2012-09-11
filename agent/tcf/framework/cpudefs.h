@@ -258,15 +258,19 @@ extern LocationExpressionState * evaluate_location_expression(
             LocationExpressionCommand * cmds, unsigned cmds_cnt,
             uint64_t * args, unsigned args_cnt);
 
-extern void read_location_peices(
+extern void read_location_pieces(
             Context * ctx, StackFrame * frame,
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void ** value, size_t * size);
 
-extern void write_location_peices(
+extern void write_location_pieces(
             Context * ctx, StackFrame * frame,
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void * value, size_t size);
+
+/* Deprecated misspelled function names */
+#define read_location_peices read_location_pieces
+#define write_location_peices write_location_pieces
 
 /*** CPU hardware breakpoints API ***/
 

@@ -129,7 +129,7 @@ static void command_get_context_cache_client(void * x) {
                         if (state->pieces_cnt > 0) {
                             Trap trap;
                             if (set_trap(&trap)) {
-                                read_location_peices(state->ctx, state->stack_frame,
+                                read_location_pieces(state->ctx, state->stack_frame,
                                     state->pieces, state->pieces_cnt, loc_info->big_endian, &value, &value_size);
                                 big_endian = loc_info->big_endian;
                                 clear_trap(&trap);

@@ -432,7 +432,7 @@ static void swap_bytes(void * buf, size_t size) {
 
 #define bit_mask(n) (1u << (big_endian ? 7 - n % 8 : n % 8))
 
-void read_location_peices(Context * ctx, StackFrame * frame,
+void read_location_pieces(Context * ctx, StackFrame * frame,
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void ** value, size_t * size) {
     unsigned n = 0;
@@ -486,7 +486,7 @@ void read_location_peices(Context * ctx, StackFrame * frame,
     *size = bf_offs / 8;
 }
 
-void write_location_peices(Context * ctx, StackFrame * frame,
+void write_location_pieces(Context * ctx, StackFrame * frame,
             LocationPiece * pieces, unsigned pieces_cnt, int big_endian,
             void * value, size_t size) {
     unsigned n = 0;

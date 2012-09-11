@@ -750,7 +750,7 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
             else {
                 size_t size = 0;
                 void * value = NULL;
-                read_location_peices(expression_context, frame_info,
+                read_location_pieces(expression_context, frame_info,
                     state->pieces, state->pieces_cnt, loc_info->big_endian, &value, &size);
                 if (state->pieces_cnt == 1 && state->pieces->reg != NULL && state->pieces->reg->size == state->pieces->size) {
                     v->reg = state->pieces->reg;
@@ -1514,7 +1514,7 @@ static void op_field(int mode, Value * v) {
                     if (expression_frame != STACK_NO_FRAME && get_frame_info(expression_context, expression_frame, &frame_info) < 0) {
                         error(errno, "Cannot get stack frame info");
                     }
-                    read_location_peices(expression_context, frame_info,
+                    read_location_pieces(expression_context, frame_info,
                         loc->pieces, loc->pieces_cnt, big_endian, &value, &size);
                     set_value(v, value, size, big_endian);
                     sign_extend(v, loc);
@@ -1719,7 +1719,7 @@ static void funcccall_breakpoint(Context * ctx, void * args) {
             /* Read function call returned value */
             if (vm->pieces_cnt > 0) {
                 void * value = NULL;
-                read_location_peices(ctx, frame_info, vm->pieces, vm->pieces_cnt,
+                read_location_pieces(ctx, frame_info, vm->pieces, vm->pieces_cnt,
                         state->ret_big_endian, &value, &state->ret_size);
                 state->ret_value = loc_alloc_zero(state->ret_size);
                 memcpy(state->ret_value, value, state->ret_size);
@@ -3370,7 +3370,7 @@ static void command_assign_cache_client(void * x) {
                         break;
                     }
                 }
-                write_location_peices(ctx, info, value.loc->pieces, value.loc->pieces_cnt,
+                write_location_pieces(ctx, info, value.loc->pieces, value.loc->pieces_cnt,
                     value.loc->reg_id_scope.big_endian, args->value_buf, args->value_size);
 #if SERVICE_Registers
                 if (info != NULL) {

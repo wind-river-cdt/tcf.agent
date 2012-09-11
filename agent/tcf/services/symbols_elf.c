@@ -1730,7 +1730,7 @@ static void read_object_value(PropertyValue * v, void ** value, size_t * size, i
     if (v->mPieces != NULL) {
         StackFrame * frame = NULL;
         if (get_frame_info(v->mContext, v->mFrame, &frame) < 0) exception(errno);
-        read_location_peices(v->mContext, frame, v->mPieces, v->mPieceCnt, v->mBigEndian, value, size);
+        read_location_pieces(v->mContext, frame, v->mPieces, v->mPieceCnt, v->mBigEndian, value, size);
         *big_endian = v->mBigEndian;
     }
     else if (v->mAddr != NULL) {
