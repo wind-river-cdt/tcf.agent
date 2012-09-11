@@ -295,7 +295,7 @@ static MemoryCommandArgs * read_command_args(char * token, Channel * c, int cmd)
 
     json_read_string(&c->inp, id, sizeof(id));
     json_test_char(&c->inp, MARKER_EOA);
-    buf.addr = json_read_uint64(&c->inp);
+    buf.addr = (ContextAddress)json_read_uint64(&c->inp);
     json_test_char(&c->inp, MARKER_EOA);
     buf.word_size = (int)json_read_long(&c->inp);
     json_test_char(&c->inp, MARKER_EOA);
