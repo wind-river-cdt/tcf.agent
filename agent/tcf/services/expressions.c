@@ -688,7 +688,7 @@ static void sign_extend(Value * v, LocationExpressionState * loc) {
     }
     if (type_size > v->size) {
         /* Extend size */
-        uint8_t * buf = (uint8_t *)tmp_alloc_zero(type_size);
+        uint8_t * buf = (uint8_t *)tmp_alloc_zero((size_t)type_size);
         if (!v->big_endian) memcpy(buf, v->value, (size_t)v->size);
         else memcpy(buf + (size_t)(type_size - v->size), v->value, (size_t)v->size);
         v->size = type_size;
@@ -705,7 +705,7 @@ static void sign_extend(Value * v, LocationExpressionState * loc) {
         }
         if (bit_cnt > 0 && bit_cnt < v->size * 8) {
             if (v->big_endian) {
-                unsigned offs = v->size * 8 - bit_cnt;
+                unsigned offs = (unsigned)v->size * 8 - bit_cnt;
                 if (buf[offs / 8] & (1 << (7 - offs % 8))) {
                     /* Negative integer number */
                     while (offs > 0) {
