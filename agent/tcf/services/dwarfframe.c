@@ -158,6 +158,7 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             }
             break;
         case EM_PPC:
+        case EM_PPC64:
             if (n == 1) {
                 regs->regs[n].rule = RULE_VAL_OFFSET;
             }
@@ -849,6 +850,7 @@ static void generate_plt_section_commands(Context * ctx, ELF_File * file, U8_T o
         generate_commands();
         break;
     case EM_PPC:
+    case EM_PPC64:
         rules.return_address_register = 108; /* LR */
         frame_regs.cfa_rule = RULE_OFFSET;
         frame_regs.cfa_register = 1; /* R1 */
