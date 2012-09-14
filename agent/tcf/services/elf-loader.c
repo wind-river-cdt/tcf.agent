@@ -123,6 +123,11 @@ static int get_global_symbol_address(Context * ctx, ELF_File * file, const char 
                     if (file->byte_swap) SWAP(sym.st_name);
                     if (sym_name_cmp((char *)str->data + sym.st_name, name) != 0) continue;
                     switch (ELF64_ST_TYPE(sym.st_info)) {
+                    case STT_NOTYPE:
+                        /* Check if the NOTYPE symbol is for a section allocated in memory */
+                        if (file->byte_swap) SWAP(sym.st_shndx);
+                        if (sym.st_shndx <= 0 || sym.st_shndx >= file->section_cnt || ((file->sections + sym.st_shndx)->flags & SHF_ALLOC) == 0) break;
+                        /* fall through */
                     case STT_OBJECT:
                     case STT_FUNC:
                         if (file->byte_swap) SWAP(sym.st_value);
@@ -139,6 +144,11 @@ static int get_global_symbol_address(Context * ctx, ELF_File * file, const char 
                     if (file->byte_swap) SWAP(sym.st_name);
                     if (sym_name_cmp((char *)str->data + sym.st_name, name) != 0) continue;
                     switch (ELF32_ST_TYPE(sym.st_info)) {
+                    case STT_NOTYPE:
+                        /* Check if the NOTYPE symbol is for a section allocated in memory */
+                        if (file->byte_swap) SWAP(sym.st_shndx);
+                        if (sym.st_shndx <= 0 || sym.st_shndx >= file->section_cnt || ((file->sections + sym.st_shndx)->flags & SHF_ALLOC) == 0) break;
+                        /* fall through */
                     case STT_OBJECT:
                     case STT_FUNC:
                         if (file->byte_swap) SWAP(sym.st_value);

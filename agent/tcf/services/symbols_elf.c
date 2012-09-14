@@ -185,6 +185,10 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
     U8_T value = info->value;
 
     switch (info->type) {
+    case STT_NOTYPE:
+        /* Check if the NOTYPE symbol is for a section allocated in memory */
+        if (info->section == NULL || (info->section->flags & SHF_ALLOC) == 0) break;
+        /* fall through */
     case STT_OBJECT:
     case STT_FUNC:
         if (info->section_index == SHN_UNDEF) {
@@ -716,7 +720,7 @@ static int find_in_dwarf(const char * name, Symbol ** sym) {
     return 1;
 }
 
-static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol ** res) {
+static int find_by_name_in_sym_table(ELF_File * file, const char * name, int globals, Symbol ** res) {
     unsigned m = 0;
     unsigned h = calc_symbol_name_hash(name);
     unsigned cnt = 0;
@@ -729,7 +733,7 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol 
         while (n) {
             ELF_SymbolInfo sym_info;
             unpack_elf_symbol_info(tbl, n, &sym_info);
-            if (cmp_symbol_names(name, sym_info.name) == 0) {
+            if (cmp_symbol_names(name, sym_info.name) == 0 && (!globals || sym_info.bind == STB_GLOBAL || sym_info.bind == STB_WEAK)) {
                 int found = 0;
                 ContextAddress addr = 0;
                 if (sym_info.section_index != SHN_ABS && syminfo2address(prs, &sym_info, &addr) == 0) {
@@ -737,7 +741,7 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol 
                     if (range != NULL) {
                         ObjectInfo * obj = get_dwarf_children(range->mUnit->mObject);
                         while (obj != NULL) {
-                            if (obj->mName != NULL && (obj->mFlags & DOIF_external) != 0) {
+                            if (obj->mName != NULL && (!globals || (obj->mFlags & DOIF_external) != 0)) {
                                 switch (obj->mTag) {
                                 case TAG_global_subroutine:
                                 case TAG_global_variable:
@@ -763,6 +767,13 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, Symbol 
                     sym->tbl = tbl;
                     sym->index = n;
                     switch (sym_info.type) {
+                    case STT_NOTYPE:
+                        /* Check if the NOTYPE symbol is for a section allocated in memory */
+                        if (sym_info.section == NULL || (sym_info.section->flags & SHF_ALLOC) == 0) {
+                            sym->sym_class = SYM_CLASS_VALUE;
+                            break;
+                        }
+                        /* fall through */
                     case STT_FUNC:
                     case STT_GNU_IFUNC:
                         sym->sym_class = SYM_CLASS_FUNCTION;
@@ -848,7 +859,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                     found = find_by_name_in_pub_names(cache, name, res);
-                    if (!found) found = find_by_name_in_sym_table(file, name, res);
+                    if (!found) found = find_by_name_in_sym_table(file, name, 0, res);
                     clear_trap(&trap);
                 }
                 else {
@@ -946,7 +957,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                     found = find_by_name_in_pub_names(cache, name, res);
-                    if (!found) found = find_by_name_in_sym_table(file, name, res);
+                    if (!found) found = find_by_name_in_sym_table(file, name, sym_ip != 0, res);
                     clear_trap(&trap);
                 }
                 else {
@@ -998,7 +1009,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
                     }
                 }
                 if (!found) {
-                    found = find_by_name_in_sym_table(file, name, res);
+                    found = find_by_name_in_sym_table(file, name, 0, res);
                 }
                 clear_trap(&trap);
             }
@@ -1101,6 +1112,13 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
         int sym_class = SYM_CLASS_UNKNOWN;
         assert(sym_info.section == section);
         switch (sym_info.type) {
+        case STT_NOTYPE:
+            /* Check if the NOTYPE symbol is for a section allocated in memory */
+            if (sym_info.section == NULL || (sym_info.section->flags & SHF_ALLOC) == 0) {
+                sym_class = SYM_CLASS_VALUE;
+                break;
+            }
+            /* fall through */
         case STT_FUNC:
         case STT_GNU_IFUNC:
             sym_class = SYM_CLASS_FUNCTION;
@@ -1629,17 +1647,17 @@ static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
             if (set_trap(&trap)) {
                 PropertyValue p;
                 read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
-                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, sym);
+                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, 1, sym);
                 clear_trap(&trap);
             }
             else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && set_trap(&trap)) {
                 PropertyValue p;
                 read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
-                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, sym);
+                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, 1, sym);
                 clear_trap(&trap);
             }
             else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
-                found = find_by_name_in_sym_table(file, obj->mName, sym);
+                found = find_by_name_in_sym_table(file, obj->mName, 1, sym);
             }
         }
     }
@@ -1998,7 +2016,7 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
             return 0;
         }
         unpack_elf_symbol_info(sym->tbl, sym->index, &info);
-        if (info.type == STT_FUNC || info.type == STT_GNU_IFUNC) {
+        if (info.type == STT_FUNC || info.type == STT_GNU_IFUNC || info.type == STT_NOTYPE) {
             *type_class = TYPE_CLASS_FUNCTION;
             return 0;
         }
@@ -2149,6 +2167,7 @@ int get_symbol_size(const Symbol * sym, ContextAddress * size) {
             ELF_SymbolInfo info;
             unpack_elf_symbol_info(sym->tbl, sym->index, &info);
             switch (info.type) {
+            case STT_NOTYPE:
             case STT_OBJECT:
             case STT_FUNC:
                 *size = (ContextAddress)info.size;
@@ -2823,6 +2842,10 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
             }
         }
         switch (elf_sym_info.type) {
+        case STT_NOTYPE:
+            /* Check if the NOTYPE symbol is for a section allocated in memory */
+            if (elf_sym_info.section == NULL || (elf_sym_info.section->flags & SHF_ALLOC) == 0) break;
+            /* fall through */
         case STT_OBJECT:
         case STT_FUNC:
         case STT_GNU_IFUNC:

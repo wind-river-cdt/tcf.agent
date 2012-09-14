@@ -1408,12 +1408,12 @@ static void create_symbol_names_hash(ELF_Section * tbl) {
     for (i = 0; i < sym_cnt; i++) {
         ELF_SymbolInfo sym;
         unpack_elf_symbol_info(tbl, i, &sym);
-        if (sym.bind == STB_GLOBAL && sym.name != NULL) {
-            if (sym.name[0] == '_' && sym.name[1] == '_') {
+        if (sym.name != NULL) {
+            if (sym.bind == STB_GLOBAL && sym.name[0] == '_' && sym.name[1] == '_') {
                 if (strcmp(sym.name, "__GOTT_BASE__") == 0) tbl->file->vxworks_got = 1;
                 else if (strcmp(sym.name, "__GOTT_INDEX__") == 0) tbl->file->vxworks_got = 1;
             }
-            if (sym.section_index != SHN_UNDEF) {
+            if (sym.section_index != SHN_UNDEF && sym.type != STT_SECTION && sym.type != STT_FILE) {
                 unsigned h = calc_symbol_name_hash(sym.name) % sym_cnt;
                 tbl->sym_names_next[i] = tbl->sym_names_hash[h];
                 tbl->sym_names_hash[h] = i;
