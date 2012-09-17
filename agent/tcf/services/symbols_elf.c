@@ -495,16 +495,33 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
     return 0;
 }
 
-static void add_to_find_symbol_buf(ObjectInfo * obj) {
-    unsigned n = 0;
-    while (n < find_symbol_cnt) {
-        if (find_symbol_buf[n++]->obj == obj) return;
+static Symbol * add_to_find_symbol_buf(ObjectInfo * obj, Symbol * sym) {
+    assert (obj != NULL || sym != NULL);
+
+    if (obj != NULL) {
+        unsigned n = 0;
+        while (n < find_symbol_cnt) {
+            if (find_symbol_buf[n++]->obj == obj) return find_symbol_buf[n - 1];
+        }
+    }
+    else if (sym->tbl != NULL){
+        unsigned n = 0;
+        while (n < find_symbol_cnt) {
+            if (find_symbol_buf[n]->tbl == sym->tbl && find_symbol_buf[n]->index == sym->index) return find_symbol_buf[n];
+            n++;
+        }
     }
     if (find_symbol_cnt >= find_symbol_max) {
         find_symbol_max += 32;
         find_symbol_buf = (Symbol **)loc_realloc(find_symbol_buf, sizeof(Symbol *) * find_symbol_max);
     }
-    object2symbol(obj, find_symbol_buf + find_symbol_cnt++);
+    if (obj != NULL) {
+        object2symbol(obj, find_symbol_buf + find_symbol_cnt++);
+    }
+    else {
+        find_symbol_buf[find_symbol_cnt++] = sym;
+    }
+    return find_symbol_buf[find_symbol_cnt - 1];
 }
 
 static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symbol ** sym) {
@@ -518,7 +535,7 @@ static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symb
             ObjectInfo * obj = tbl->mNext[n].mObject;
             if (obj->mFlags & DOIF_external) {
                 if (cmp_symbol_names(obj->mName, name) == 0) {
-                    object2symbol(obj, sym);
+                    *sym = add_to_find_symbol_buf (obj, NULL);
                     return 1;
                 }
             }
@@ -541,15 +558,15 @@ static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symb
             n = tbl->mNext[n].mNext;
         }
         if (other != NULL) {
-            object2symbol(other, sym);
+            *sym = add_to_find_symbol_buf (other, NULL);
             return 1;
         }
         if (type != NULL) {
-            object2symbol(type, sym);
+            *sym = add_to_find_symbol_buf (type, NULL);
             return 1;
         }
         if (decl != NULL) {
-            object2symbol(decl, sym);
+            *sym = add_to_find_symbol_buf (decl, NULL);
             return 1;
         }
     }
@@ -572,7 +589,9 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
         int found = 0;
         Symbol * sym = NULL;
         DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
+        int find_symbol_cnt_sav = find_symbol_cnt;
         found = find_by_name_in_pub_names(cache, decl->mName, &sym);
+        find_symbol_cnt = find_symbol_cnt_sav;
         if (found && sym->obj != NULL &&
             sym->obj->mTag == decl->mTag &&
             (sym->obj->mFlags & DOIF_declaration) == 0) return sym->obj;
@@ -615,7 +634,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
     obj = children;
     while (obj != NULL) {
         if ((obj->mFlags & DOIF_specification) == 0 && obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
-            add_to_find_symbol_buf(find_definition(obj));
+            add_to_find_symbol_buf(find_definition(obj), NULL);
         }
         if (parent->mTag == TAG_subprogram && ip != 0) {
             if (!obj_ptr_chk) {
@@ -673,7 +692,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
                 decl = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
                 if (decl != NULL) {
                     if (obj->mName != NULL || (decl->mName != NULL && cmp_symbol_names(decl->mName, name) == 0)) {
-                        add_to_find_symbol_buf(find_definition(decl));
+                        add_to_find_symbol_buf(find_definition(decl), NULL);
                     }
                 }
             }
@@ -723,8 +742,8 @@ static int find_in_dwarf(const char * name, Symbol ** sym) {
 static int find_by_name_in_sym_table(ELF_File * file, const char * name, int globals, Symbol ** res) {
     unsigned m = 0;
     unsigned h = calc_symbol_name_hash(name);
-    unsigned cnt = 0;
     Context * prs = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
+    int found = 0;
     for (m = 1; m < file->section_cnt; m++) {
         unsigned n;
         ELF_Section * tbl = file->sections + m;
@@ -734,8 +753,8 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, int glo
             ELF_SymbolInfo sym_info;
             unpack_elf_symbol_info(tbl, n, &sym_info);
             if (cmp_symbol_names(name, sym_info.name) == 0 && (!globals || sym_info.bind == STB_GLOBAL || sym_info.bind == STB_WEAK)) {
-                int found = 0;
                 ContextAddress addr = 0;
+                int found_dwarf = 0;
                 if (sym_info.section_index != SHN_ABS && syminfo2address(prs, &sym_info, &addr) == 0) {
                     UnitAddressRange * range = elf_find_unit(sym_ctx, addr, addr, NULL);
                     if (range != NULL) {
@@ -749,9 +768,8 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, int glo
                                 case TAG_subprogram:
                                 case TAG_variable:
                                     if (cmp_symbol_names(obj->mName, name) == 0) {
-                                        object2symbol(obj, res);
-                                        found = 1;
-                                        cnt++;
+                                        *res = add_to_find_symbol_buf (obj, NULL);
+                                        found_dwarf = 1;
                                     }
                                     break;
                                 }
@@ -760,7 +778,7 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, int glo
                         }
                     }
                 }
-                if (!found) {
+                if (!found_dwarf) {
                     Symbol * sym = alloc_symbol();
                     sym->frame = STACK_NO_FRAME;
                     sym->ctx = prs;
@@ -785,14 +803,14 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, int glo
                         sym->sym_class = SYM_CLASS_VALUE;
                         break;
                     }
-                    *res = sym;
-                    cnt++;
+                    *res = add_to_find_symbol_buf (NULL, sym);
                 }
+                found = 1;
             }
             n = tbl->sym_names_next[n];
         }
     }
-    return cnt == 1;
+    return found;
 }
 
 int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char * name, Symbol ** res) {
@@ -866,7 +884,10 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                     error = trap.error;
                     break;
                 }
-                if (found) break;
+                if (found) {
+                    *res = find_symbol_buf[find_symbol_pos++];
+                    break;
+                }
                 file = elf_list_next(sym_ctx);
                 if (file == NULL) error = errno;
             }
@@ -951,26 +972,31 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
         /* Search in pub names of all other files */
         ELF_File * file = elf_list_first(sym_ctx, 0, ~(ContextAddress)0);
         if (file == NULL) error = errno;
+
         while (error == 0 && file != NULL) {
             if (file != curr_file) {
+                int found_pub, found_symtbl = 0;
                 Trap trap;
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
-                    found = find_by_name_in_pub_names(cache, name, res);
-                    if (!found) found = find_by_name_in_sym_table(file, name, sym_ip != 0, res);
+                    found_pub = find_by_name_in_pub_names(cache, name, res);
+                    if (sym_ip == 0 || !found_pub)
+                        found_symtbl = find_by_name_in_sym_table(file, name, sym_ip != 0, res);
                     clear_trap(&trap);
                 }
                 else {
                     error = trap.error;
                     break;
                 }
-                if (found) break;
+                found = found || found_pub || found_symtbl;
+                if (sym_ip != 0 && found) break;
             }
             file = elf_list_next(sym_ctx);
             if (file == NULL) error = errno;
         }
         elf_list_done(sym_ctx);
         sym_ip = 0;
+        if (found) *res = find_symbol_buf[find_symbol_pos++];
     }
 
     if (error == 0 && !found) error = ERR_SYM_NOT_FOUND;
@@ -1010,6 +1036,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
                 }
                 if (!found) {
                     found = find_by_name_in_sym_table(file, name, 0, res);
+                    if (found) *res = find_symbol_buf[find_symbol_pos++];
                 }
                 clear_trap(&trap);
             }
