@@ -21,6 +21,7 @@
 
 #if ENABLE_ELF && ENABLE_DebugContext
 
+#include <tcf/framework/myalloc.h>
 #include <tcf/framework/exceptions.h>
 #include <tcf/services/symbols.h>
 #include <tcf/services/dwarfcache.h>
@@ -184,6 +185,39 @@ ContextAddress elf_get_debug_structure_address(Context * ctx, ELF_File ** file_p
     return addr;
 }
 
+#if ENABLE_Symbols
+static void read_field(Context * ctx, const Symbol * sym, ContextAddress base, ContextAddress * value) {
+    LocationInfo * loc_info = NULL;
+    LocationExpressionState * state = NULL;
+    uint64_t args[] = { base };
+    void * buf = NULL;
+    size_t size = 0;
+    size_t i;
+
+    if (get_location_info(sym, &loc_info) < 0) exception(errno);
+    if (loc_info->args_cnt != 1) str_exception(ERR_OTHER, "Wrong object kind");
+    state = evaluate_location_expression(ctx, NULL,
+        loc_info->value_cmds.cmds, loc_info->value_cmds.cnt, args, 1);
+    if (state->pieces_cnt > 0) {
+        read_location_pieces(state->ctx, state->stack_frame,
+            state->pieces, state->pieces_cnt, loc_info->big_endian, &buf, &size);
+    }
+    else {
+        ContextAddress sym_size = 0;
+        if (state->stk_pos != 1) str_exception(ERR_OTHER, "Invalid location expression");
+        if (get_symbol_size(sym, &sym_size) < 0) exception(errno);
+        size = (size_t)sym_size;
+        buf = tmp_alloc(size);
+        if (context_read_mem(state->ctx, (ContextAddress)state->stk[0], buf, size) < 0) exception(errno);
+    }
+    *value = 0;
+    for (i = 0; i < size && i < sizeof(ContextAddress); i++) {
+        *value = *value << 8;
+        *value |= ((uint8_t *)buf)[loc_info->big_endian ? i : size - i - 1];
+    }
+}
+#endif
+
 static ContextAddress find_module(Context * ctx, ELF_File * exe_file, ELF_File * module,
                                   ContextAddress r_map, ContextAddress r_brk) {
 #if ENABLE_Symbols
@@ -191,31 +225,29 @@ static ContextAddress find_module(Context * ctx, ELF_File * exe_file, ELF_File *
     int i = 0, n = 0;
     Symbol ** children = NULL;
     ContextAddress link = r_map;
-    ContextAddress offs_l_addr = 0;
-    ContextAddress offs_l_next = 0;
-    ContextAddress offs_l_tls_modid = 0;
+    Symbol * sym_l_addr = NULL;
+    Symbol * sym_l_next = NULL;
+    Symbol * sym_l_tls_modid = NULL;
     if (find_symbol_by_name(ctx, STACK_NO_FRAME, r_brk, "link_map", &sym) < 0)
         str_exception(errno, "Cannot find loader symbol: link_map");
     if (get_symbol_children(sym, &children, &n) < 0) exception(errno);
     for (i = 0; i < n; i++) {
         char * name = NULL;
-        ContextAddress offs = 0;
         if (get_symbol_name(children[i], &name) < 0) exception(errno);
         if (name == NULL) continue;
-        if (get_symbol_offset(children[i], &offs) < 0) exception(errno);
-        if (strcmp(name, "l_map_start") == 0) offs_l_addr = offs;
-        else if (strcmp(name, "l_next") == 0) offs_l_next = offs;
-        else if (strcmp(name, "l_tls_modid") == 0) offs_l_tls_modid = offs;
+        if (strcmp(name, "l_map_start") == 0) sym_l_addr = children[i];
+        else if (strcmp(name, "l_next") == 0) sym_l_next = children[i];
+        else if (strcmp(name, "l_tls_modid") == 0) sym_l_tls_modid = children[i];
     }
-    if (offs_l_addr == 0 || offs_l_next == 0 || offs_l_tls_modid == 0)
+    if (sym_l_addr == NULL || sym_l_next == NULL || sym_l_tls_modid == NULL)
         str_exception(ERR_OTHER, "Invalid 'link_map' fields");
     while (link != 0) {
         ContextAddress l_tls_modid = 0;
-        if (elf_read_memory_word(ctx, exe_file, link + offs_l_tls_modid, &l_tls_modid) < 0) exception(errno);
+        read_field(ctx, sym_l_tls_modid, link, &l_tls_modid);
         if (l_tls_modid != 0) {
             ContextAddress l_addr = 0;
             ELF_File * link_file = NULL;
-            if (elf_read_memory_word(ctx, exe_file, link + offs_l_addr, &l_addr) < 0) exception(errno);
+            read_field(ctx, sym_l_addr, link, &l_addr);
             elf_map_to_link_time_address(ctx, l_addr, &link_file, NULL);
             if (link_file != NULL) {
                 if (link_file == module) return l_tls_modid;
@@ -223,7 +255,7 @@ static ContextAddress find_module(Context * ctx, ELF_File * exe_file, ELF_File *
                     strcmp(link_file->debug_info_file_name, module->name) == 0) return l_tls_modid;
             }
         }
-        if (elf_read_memory_word(ctx, exe_file, link + offs_l_next, &link) < 0) exception(errno);
+        read_field(ctx, sym_l_next, link, &link);
     }
 #endif
     return 0;
