@@ -68,6 +68,7 @@ struct Symbol {
     unsigned cardinal;
     ContextAddress length;
     Symbol * base;
+    Symbol * next;
 };
 
 #define is_array_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base != NULL)
@@ -131,10 +132,7 @@ static struct BaseTypeAlias {
     { NULL, NULL }
 };
 
-static Symbol ** find_symbol_buf = NULL;
-static unsigned find_symbol_pos = 0;
-static unsigned find_symbol_cnt = 0;
-static unsigned find_symbol_max = 0;
+static Symbol * find_symbol_list = NULL;
 
 #define SYMBOL_MAGIC 0x34875234
 
@@ -495,36 +493,30 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
     return 0;
 }
 
-static Symbol * add_to_find_symbol_buf(ObjectInfo * obj, Symbol * sym) {
-    assert (obj != NULL || sym != NULL);
+static void add_to_find_symbol_buf(ObjectInfo * obj, Symbol * sym) {
+    Symbol * p = NULL;
+    Symbol * s = find_symbol_list;
 
-    if (obj != NULL) {
-        unsigned n = 0;
-        while (n < find_symbol_cnt) {
-            if (find_symbol_buf[n++]->obj == obj) return find_symbol_buf[n - 1];
+    assert (obj != NULL || sym != NULL);
+    if (sym == NULL) object2symbol(obj, &sym);
+
+    while (s != NULL) {
+        if (sym->obj != NULL) {
+            if (s->var == sym->var && s->obj == sym->obj) return;
         }
-    }
-    else if (sym->tbl != NULL){
-        unsigned n = 0;
-        while (n < find_symbol_cnt) {
-            if (find_symbol_buf[n]->tbl == sym->tbl && find_symbol_buf[n]->index == sym->index) return find_symbol_buf[n];
-            n++;
+        else if (sym->tbl != NULL) {
+            if (s->tbl == sym->tbl && s->index == sym->index) return;
         }
+        p = s;
+        s = s->next;
     }
-    if (find_symbol_cnt >= find_symbol_max) {
-        find_symbol_max += 32;
-        find_symbol_buf = (Symbol **)loc_realloc(find_symbol_buf, sizeof(Symbol *) * find_symbol_max);
-    }
-    if (obj != NULL) {
-        object2symbol(obj, find_symbol_buf + find_symbol_cnt++);
-    }
-    else {
-        find_symbol_buf[find_symbol_cnt++] = sym;
-    }
-    return find_symbol_buf[find_symbol_cnt - 1];
+
+    assert(sym->next == NULL);
+    if (p != NULL) p->next = sym;
+    else find_symbol_list = sym;
 }
 
-static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symbol ** sym) {
+static void find_by_name_in_pub_names(DWARFCache * cache, const char * name) {
     PubNamesTable * tbl = &cache->mPubNames;
     if (tbl->mHash != NULL) {
         ObjectInfo * decl = NULL;
@@ -535,8 +527,7 @@ static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symb
             ObjectInfo * obj = tbl->mNext[n].mObject;
             if (obj->mFlags & DOIF_external) {
                 if (cmp_symbol_names(obj->mName, name) == 0) {
-                    *sym = add_to_find_symbol_buf (obj, NULL);
-                    return 1;
+                    add_to_find_symbol_buf(obj, NULL);
                 }
             }
             else if (obj->mFlags & DOIF_declaration) {
@@ -558,23 +549,20 @@ static int find_by_name_in_pub_names(DWARFCache * cache, const char * name, Symb
             n = tbl->mNext[n].mNext;
         }
         if (other != NULL) {
-            *sym = add_to_find_symbol_buf (other, NULL);
-            return 1;
+            add_to_find_symbol_buf(other, NULL);
         }
         if (type != NULL) {
-            *sym = add_to_find_symbol_buf (type, NULL);
-            return 1;
+            add_to_find_symbol_buf(type, NULL);
         }
         if (decl != NULL) {
-            *sym = add_to_find_symbol_buf (decl, NULL);
-            return 1;
+            add_to_find_symbol_buf(decl, NULL);
         }
     }
-    return 0;
 }
 
 /* If 'decl' represents a declaration, replace it with definition - if possible */
 static ObjectInfo * find_definition(ObjectInfo * decl) {
+    int search_pub_names = 1;
     if (decl == NULL) return NULL;
     if ((decl->mFlags & DOIF_declaration) == 0) return decl;
     if (decl->mDefinition != NULL) return decl->mDefinition;
@@ -583,18 +571,34 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
     case TAG_interface_type:
     case TAG_union_type:
     case TAG_class_type:
-        if (get_dwarf_children(decl) != NULL) return decl;
+        search_pub_names = decl->mName != NULL;
+        break;
+    default:
+        search_pub_names = (decl->mFlags & DOIF_external) != 0 && decl->mName != NULL;
+        break;
     }
-    if ((decl->mFlags & DOIF_external) != 0 && decl->mName != NULL) {
-        int found = 0;
-        Symbol * sym = NULL;
-        DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
-        int find_symbol_cnt_sav = find_symbol_cnt;
-        found = find_by_name_in_pub_names(cache, decl->mName, &sym);
-        find_symbol_cnt = find_symbol_cnt_sav;
-        if (found && sym->obj != NULL &&
-            sym->obj->mTag == decl->mTag &&
-            (sym->obj->mFlags & DOIF_declaration) == 0) return sym->obj;
+    if (search_pub_names) {
+        Trap trap;
+        Symbol * def = NULL;
+        Symbol * list = find_symbol_list;
+        if (set_trap(&trap)) {
+            DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
+            find_symbol_list = NULL;
+            find_by_name_in_pub_names(cache, decl->mName);
+            while (find_symbol_list != NULL) {
+                Symbol * sym = find_symbol_list;
+                find_symbol_list = find_symbol_list->next;
+                if (sym->obj != NULL &&
+                    sym->obj->mTag == decl->mTag &&
+                    (sym->obj->mFlags & DOIF_declaration) == 0) def = sym;
+            }
+            clear_trap(&trap);
+        }
+        else {
+            def = NULL;
+        }
+        find_symbol_list = list;
+        if (def != NULL) return def->obj;
     }
     return decl;
 }
@@ -653,14 +657,25 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
         /* Search in 'this' pointer */
         ObjectInfo * type = get_original_type(sym_this);
         if ((type->mTag == TAG_pointer_type || type->mTag == TAG_mod_pointer) && type->mType != NULL) {
-            unsigned n = find_symbol_cnt;
-            type = get_original_type(type->mType);
-            find_in_object_tree(type, 0, 0, name);
-            while (n < find_symbol_cnt) {
-                Symbol * s = find_symbol_buf[n++];
+            Trap trap;
+            Symbol * this_list = NULL;
+            Symbol * find_list = find_symbol_list;
+            if (set_trap(&trap)) {
+                find_symbol_list = NULL;
+                type = get_original_type(type->mType);
+                find_in_object_tree(type, 0, 0, name);
+                this_list = find_symbol_list;
+                clear_trap(&trap);
+            }
+            find_symbol_list = find_list;
+            while (this_list != NULL) {
+                Symbol * s = this_list;
+                this_list = this_list->next;
                 s->ctx = sym_ctx;
                 s->frame = sym_frame;
                 s->var = sym_this;
+                s->next = NULL;
+                add_to_find_symbol_buf(NULL, s);
             }
         }
     }
@@ -724,26 +739,21 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
     }
 }
 
-static int find_in_dwarf(const char * name, Symbol ** sym) {
+static void find_in_dwarf(const char * name) {
     ContextAddress rt_addr = 0;
     UnitAddressRange * range = elf_find_unit(sym_ctx, sym_ip, sym_ip, &rt_addr);
-    assert(find_symbol_pos == 0);
-    assert(find_symbol_cnt == 0);
     if (range != NULL) {
         CompUnit * unit = range->mUnit;
         find_in_object_tree(unit->mObject, rt_addr - range->mAddr, sym_ip, name);
         if (unit->mBaseTypes != NULL) find_in_object_tree(unit->mBaseTypes->mObject, 0, 0, name);
     }
-    if (find_symbol_cnt == 0) return 0;
-    *sym = find_symbol_buf[find_symbol_pos++];
-    return 1;
 }
 
-static int find_by_name_in_sym_table(ELF_File * file, const char * name, int globals, Symbol ** res) {
+static void find_by_name_in_sym_table(ELF_File * file, const char * name, int globals) {
     unsigned m = 0;
     unsigned h = calc_symbol_name_hash(name);
     Context * prs = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
-    int found = 0;
+
     for (m = 1; m < file->section_cnt; m++) {
         unsigned n;
         ELF_Section * tbl = file->sections + m;
@@ -768,7 +778,7 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, int glo
                                 case TAG_subprogram:
                                 case TAG_variable:
                                     if (cmp_symbol_names(obj->mName, name) == 0) {
-                                        *res = add_to_find_symbol_buf (obj, NULL);
+                                        add_to_find_symbol_buf(obj, NULL);
                                         found_dwarf = 1;
                                     }
                                     break;
@@ -803,24 +813,21 @@ static int find_by_name_in_sym_table(ELF_File * file, const char * name, int glo
                         sym->sym_class = SYM_CLASS_VALUE;
                         break;
                     }
-                    *res = add_to_find_symbol_buf (NULL, sym);
+                    add_to_find_symbol_buf(NULL, sym);
                 }
-                found = 1;
             }
             n = tbl->sym_names_next[n];
         }
     }
-    return found;
 }
 
 int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char * name, Symbol ** res) {
     int error = 0;
-    int found = 0;
     ELF_File * curr_file = NULL;
 
     assert(ctx != NULL);
-    find_symbol_pos = 0;
-    find_symbol_cnt = 0;
+    find_symbol_list = NULL;
+    *res = NULL;
 
 #if defined(_WRS_KERNEL)
     {
@@ -845,21 +852,20 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
             else {
                 sym->sym_class = SYM_CLASS_REFERENCE;
             }
-            *res = sym;
-            found = 1;
+            add_to_find_symbol_buf(NULL, sym);
         }
     }
 #endif
 
-    if (error == 0 && !found && get_sym_context(ctx, frame, ip) < 0) error = errno;
+    if (error == 0 && find_symbol_list == NULL && get_sym_context(ctx, frame, ip) < 0) error = errno;
 
     if (sym_ip != 0) {
 
-        if (error == 0 && !found) {
+        if (error == 0 && find_symbol_list == NULL) {
             /* Search the name in the current compilation unit */
             Trap trap;
             if (set_trap(&trap)) {
-                found = find_in_dwarf(name, res);
+                find_in_dwarf(name);
                 clear_trap(&trap);
             }
             else {
@@ -867,7 +873,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
             }
         }
 
-        if (error == 0 && !found) {
+        if (error == 0 && find_symbol_list == NULL) {
             /* Search in pub names of the current file */
             ELF_File * file = elf_list_first(sym_ctx, sym_ip, sym_ip);
             if (file == NULL) error = errno;
@@ -876,16 +882,12 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                 curr_file = file;
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
-                    found = find_by_name_in_pub_names(cache, name, res);
-                    if (!found) found = find_by_name_in_sym_table(file, name, 0, res);
+                    find_by_name_in_pub_names(cache, name);
+                    if (find_symbol_list == NULL) find_by_name_in_sym_table(file, name, 0);
                     clear_trap(&trap);
                 }
                 else {
                     error = trap.error;
-                    break;
-                }
-                if (found) {
-                    *res = find_symbol_buf[find_symbol_pos++];
                     break;
                 }
                 file = elf_list_next(sym_ctx);
@@ -894,25 +896,33 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
             elf_list_done(sym_ctx);
         }
 
-        if (error == 0 && !found) {
+        if (error == 0 && find_symbol_list == NULL) {
             /* Check if the name is one of well known C/C++ names */
             Trap trap;
             if (set_trap(&trap)) {
                 unsigned i = 0;
                 while (base_types_aliases[i].name) {
                     if (strcmp(name, base_types_aliases[i].name) == 0) {
-                        found = find_in_dwarf(base_types_aliases[i].alias, res);
-                        if (found) break;
+                        find_in_dwarf(base_types_aliases[i].alias);
+                        if (find_symbol_list != NULL) break;
                     }
                     i++;
                 }
-                if (!found) {
+                if (find_symbol_list == NULL) {
                     i = 0;
                     while (constant_pseudo_symbols[i].name) {
                         if (strcmp(name, constant_pseudo_symbols[i].name) == 0) {
+                            Trap trap;
                             Symbol * type = NULL;
-                            found = find_in_dwarf(constant_pseudo_symbols[i].type, &type);
-                            if (found) {
+                            Symbol * list = find_symbol_list;
+                            if (set_trap(&trap)) {
+                                find_symbol_list = NULL;
+                                find_in_dwarf(constant_pseudo_symbols[i].type);
+                                type = find_symbol_list;
+                                clear_trap(&trap);
+                            }
+                            find_symbol_list = list;
+                            if (type != NULL) {
                                 Symbol * sym = alloc_symbol();
                                 sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
                                 sym->frame = STACK_NO_FRAME;
@@ -920,14 +930,14 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                                 sym->base = type;
                                 sym->index = i;
                                 assert(is_constant_pseudo_symbol(sym));
-                                *res = sym;
+                                add_to_find_symbol_buf(NULL, sym);
                                 break;
                             }
                         }
                         i++;
                     }
                 }
-                if (!found) {
+                if (find_symbol_list == NULL) {
                     i = 0;
                     while (type_pseudo_symbols[i].name) {
                         if (strcmp(name, type_pseudo_symbols[i].name) == 0) {
@@ -936,8 +946,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                                 context_get_group(ctx, CONTEXT_GROUP_SYMBOLS),
                                 type_pseudo_symbols[i].size, type_pseudo_symbols[i].sign, &type);
                             type->index = i + 1;
-                            *res = type;
-                            found = 1;
+                            add_to_find_symbol_buf(NULL, type);
                             break;
                         }
                         i++;
@@ -952,54 +961,55 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
     }
 
 #if ENABLE_RCBP_TEST
-    if (!found) {
+    if (find_symbol_list == NULL) {
         int sym_class = 0;
         void * address = NULL;
-        found = find_test_symbol(ctx, name, &address, &sym_class) >= 0;
-        if (found) {
+        if (find_test_symbol(ctx, name, &address, &sym_class) >= 0) {
             Symbol * sym = alloc_symbol();
             sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
             sym->frame = STACK_NO_FRAME;
             sym->address = (ContextAddress)address;
             sym->has_address = 1;
             sym->sym_class = sym_class;
-            *res = sym;
+            add_to_find_symbol_buf(NULL, sym);
         }
     }
 #endif
 
-    if (error == 0 && !found) {
+    if (error == 0 && find_symbol_list == NULL) {
         /* Search in pub names of all other files */
         ELF_File * file = elf_list_first(sym_ctx, 0, ~(ContextAddress)0);
         if (file == NULL) error = errno;
 
         while (error == 0 && file != NULL) {
             if (file != curr_file) {
-                int found_pub, found_symtbl = 0;
                 Trap trap;
                 if (set_trap(&trap)) {
                     DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
-                    found_pub = find_by_name_in_pub_names(cache, name, res);
-                    if (sym_ip == 0 || !found_pub)
-                        found_symtbl = find_by_name_in_sym_table(file, name, sym_ip != 0, res);
+                    find_by_name_in_pub_names(cache, name);
+                    if (sym_ip == 0 || find_symbol_list == NULL)
+                        find_by_name_in_sym_table(file, name, sym_ip != 0);
                     clear_trap(&trap);
                 }
                 else {
                     error = trap.error;
                     break;
                 }
-                found = found || found_pub || found_symtbl;
-                if (sym_ip != 0 && found) break;
+                if (sym_ip != 0 && find_symbol_list != NULL) break;
             }
             file = elf_list_next(sym_ctx);
             if (file == NULL) error = errno;
         }
         elf_list_done(sym_ctx);
         sym_ip = 0;
-        if (found) *res = find_symbol_buf[find_symbol_pos++];
     }
 
-    if (error == 0 && !found) error = ERR_SYM_NOT_FOUND;
+    if (error == 0 && find_symbol_list == NULL) error = ERR_SYM_NOT_FOUND;
+
+    if (!error) {
+        *res = find_symbol_list;
+        find_symbol_list = find_symbol_list->next;
+    }
 
     assert(error || (*res != NULL && (*res)->ctx != NULL));
 
@@ -1012,11 +1022,9 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
 
 int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * scope, const char * name, Symbol ** res) {
     int error = 0;
-    int found = 0;
 
     *res = NULL;
-    find_symbol_pos = 0;
-    find_symbol_cnt = 0;
+    find_symbol_list = NULL;
     if (get_sym_context(ctx, frame, ip) < 0) error = errno;
 
     if (!error && scope == NULL && sym_ip != 0) {
@@ -1029,14 +1037,9 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
                 UnitAddressRange * range = find_comp_unit_addr_range(cache, sym_ip, sym_ip);
                 if (range != NULL) {
                     find_in_object_tree(range->mUnit->mObject, 0, 0, name);
-                    if (find_symbol_cnt > 0) {
-                        *res = find_symbol_buf[find_symbol_pos++];
-                        found = 1;
-                    }
                 }
-                if (!found) {
-                    found = find_by_name_in_sym_table(file, name, 0, res);
-                    if (found) *res = find_symbol_buf[find_symbol_pos++];
+                if (find_symbol_list == NULL) {
+                    find_by_name_in_sym_table(file, name, 0);
                 }
                 clear_trap(&trap);
             }
@@ -1044,21 +1047,16 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
                 error = trap.error;
                 break;
             }
-            if (found) break;
             file = elf_list_next(sym_ctx);
             if (file == NULL) error = errno;
         }
         elf_list_done(sym_ctx);
     }
 
-    if (!found && !error && scope != NULL && scope->obj != NULL) {
+    if (!error && find_symbol_list == NULL && scope != NULL && scope->obj != NULL) {
         Trap trap;
         if (set_trap(&trap)) {
             find_in_object_tree(scope->obj, 0, 0, name);
-            if (find_symbol_cnt > 0) {
-                *res = find_symbol_buf[find_symbol_pos++];
-                found = 1;
-            }
             clear_trap(&trap);
         }
         else {
@@ -1066,7 +1064,12 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
         }
     }
 
-    if (error == 0 && !found) error = ERR_SYM_NOT_FOUND;
+    if (error == 0 && find_symbol_list == NULL) error = ERR_SYM_NOT_FOUND;
+
+    if (!error) {
+        *res = find_symbol_list;
+        find_symbol_list = find_symbol_list->next;
+    }
 
     assert(error || (*res != NULL && (*res)->ctx != NULL));
 
@@ -1202,8 +1205,7 @@ int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol **
     ContextAddress rt_addr = 0;
     UnitAddressRange * range = NULL;
 
-    find_symbol_pos = 0;
-    find_symbol_cnt = 0;
+    find_symbol_list = NULL;
     if (!set_trap(&trap)) return -1;
     if (frame == STACK_TOP_FRAME && (frame = get_top_frame(ctx)) < 0) exception(errno);
     if (get_sym_context(ctx, frame, addr) < 0) exception(errno);
@@ -1225,8 +1227,9 @@ int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol **
 }
 
 int find_next_symbol(Symbol ** sym) {
-    if (find_symbol_pos < find_symbol_cnt) {
-        *sym = find_symbol_buf[find_symbol_pos++];
+    if (find_symbol_list != NULL) {
+        *sym = find_symbol_list;
+        find_symbol_list = find_symbol_list->next;
         return 0;
     }
     errno = ERR_SYM_NOT_FOUND;
@@ -1654,41 +1657,49 @@ static U8_T get_array_index_length(ObjectInfo * obj) {
 }
 
 static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
-    int found = 0;
-    if (obj->mFlags & DOIF_external) {
-        Trap trap;
-        ELF_File * file = obj->mCompUnit->mFile;
-        if (file->debug_info_file) {
-            size_t n = strlen(file->name);
-            if (strcmp(file->name + n - 6, ".debug") == 0) {
-                char * fnm = (char *)tmp_alloc_zero(n);
-                memcpy(fnm, file->name, n - 6);
-                fnm = canonicalize_file_name(fnm);
-                if (fnm != NULL) {
-                    file = elf_open(fnm);
-                    free(fnm);
+    Trap trap;
+    Symbol * list = find_symbol_list;
+    if (set_trap(&trap)) {
+        *sym = NULL;
+        find_symbol_list = NULL;
+        if (obj->mFlags & DOIF_external) {
+            ELF_File * file = obj->mCompUnit->mFile;
+            if (file->debug_info_file) {
+                size_t n = strlen(file->name);
+                if (n > 6 && strcmp(file->name + n - 6, ".debug") == 0) {
+                    char * fnm = (char *)tmp_alloc_zero(n);
+                    memcpy(fnm, file->name, n - 6);
+                    fnm = canonicalize_file_name(fnm);
+                    if (fnm != NULL) {
+                        file = elf_open(fnm);
+                        free(fnm);
+                    }
+                }
+            }
+            if (file != NULL) {
+                Trap trap;
+                if (set_trap(&trap)) {
+                    PropertyValue p;
+                    read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
+                    if (p.mAddr != NULL) find_by_name_in_sym_table(file, (char *)p.mAddr, 1);
+                    clear_trap(&trap);
+                }
+                else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && set_trap(&trap)) {
+                    PropertyValue p;
+                    read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
+                    if (p.mAddr != NULL) find_by_name_in_sym_table(file, (char *)p.mAddr, 1);
+                    clear_trap(&trap);
+                }
+                else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
+                    find_by_name_in_sym_table(file, obj->mName, 1);
                 }
             }
         }
-        if (file != NULL) {
-            if (set_trap(&trap)) {
-                PropertyValue p;
-                read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
-                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, 1, sym);
-                clear_trap(&trap);
-            }
-            else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && set_trap(&trap)) {
-                PropertyValue p;
-                read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
-                if (p.mAddr != NULL) found = find_by_name_in_sym_table(file, (char *)p.mAddr, 1, sym);
-                clear_trap(&trap);
-            }
-            else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
-                found = find_by_name_in_sym_table(file, obj->mName, 1, sym);
-            }
-        }
+        if (find_symbol_list != NULL) *sym = find_symbol_list;
+        clear_trap(&trap);
     }
-    return found;
+    find_symbol_list = list;
+    return *sym != NULL;
 }
 
 static U8_T read_string_length(ObjectInfo * obj);
@@ -2263,7 +2274,7 @@ int get_symbol_base_type(const Symbol * sym, Symbol ** base_type) {
         }
         obj = obj->mType;
         if (obj != NULL) {
-            object2symbol(obj, base_type);
+            object2symbol(find_definition(obj), base_type);
             return 0;
         }
         return err_wrong_obj();
