@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -14,7 +14,7 @@
  *******************************************************************************/
 
 /*
- * This module handles process/thread OS contexts and their state machine.
+ * This module handles debug contexts and their state machine.
  */
 
 #ifndef D_context
@@ -37,6 +37,11 @@ typedef void ContextAttachCallBack(int, Context *, void *);
  * A context can belong to a parent context. Contexts hierarchy can be simple
  * plain list or it can form a tree. It is up to target agent developers to choose
  * layout that is most descriptive for a given target.
+ *
+ * Role of a context is defined by its capabilities. Clients learn the context
+ * capabilities using functions like context_has_state(), context_can_resume(),
+ * context_get_group(), etc. For example, if a context has a name and no other capabilities,
+ * its role is to provide human readable label for a group of contexts - its children.
  */
 struct Context {
     char                id[256];            /* context ID */
@@ -175,17 +180,19 @@ struct MemoryRegionAttribute {
 #define CONTEXT_ATTACH_NO_MAIN   0x08 /* Don't stop at main() */
 
 /*
- * Convert PID to TCF Context ID
+ * Convert PID to TCF Context ID.
+ * Note: PID to ID mapping is supported for native debugging only.
  */
 extern char * pid2id(pid_t pid, pid_t parent);
 
 /*
- * Convert TCF Context ID to PID
+ * Convert TCF Context ID to PID.
+ * Note: PID to ID mapping is supported for native debugging only.
  */
 extern pid_t id2pid(const char * id, pid_t * parent);
 
 /*
- * Search Context record by TCF Context ID
+ * Search Context record by TCF Context ID.
  */
 extern Context * id2ctx(const char * id);
 
@@ -199,6 +206,8 @@ extern size_t context_extension(size_t size);
 
 /*
  * Create a Context object.
+ * The function is called by context implementation.
+ * It is not supposed to be called by clients.
  */
 extern Context * create_context(const char * id);
 
@@ -223,6 +232,7 @@ extern const char * context_state_name(Context * ctx);
  * Get state change reason of a context.
  * Reason can be any text, but if it is one of predefined strings,
  * a generic client might be able to handle it better.
+ * See REASON_* for predefined reason names.
  */
 extern const char * context_suspend_reason(Context * ctx);
 
@@ -230,6 +240,7 @@ extern const char * context_suspend_reason(Context * ctx);
  * Find a context by PID
  * Both process and main thread can have same PID.
  * 'thread' = 0: search for process, otherwise search for a thread.
+ * Note: PID to context mapping is supported for native debugging only.
  */
 extern Context * context_find_from_pid(pid_t pid, int thread);
 
@@ -244,6 +255,7 @@ extern int context_attach_self(void);
  * Client provides a call-back function that will be called when context is attached.
  * The callback function args are error code, the context and client data.
  * 'mode' - attach mode flags, see CONTEXT_ATTACH_*.
+ * Note: attaching by PID is supported for native debugging only.
  */
 extern int context_attach(pid_t pid, ContextAttachCallBack * done, void * client_data, int mode);
 
@@ -362,7 +374,7 @@ extern int context_get_mem_error_info(MemoryErrorInfo * info);
 #endif
 
 /*
- * Write 'size' byte into context register starting at offset 'offs'.
+ * Write 'size' bytes into context register starting at offset 'offs'.
  * Return -1 and set errno if the register cannot be written.
  * Return 0 on success.
  */
@@ -376,14 +388,15 @@ extern int context_write_reg(Context * ctx, RegisterDefinition * def, unsigned o
 extern int context_read_reg(Context * ctx, RegisterDefinition * def, unsigned offs, unsigned size, void * buf);
 
 /*
- * Return context memory word size in bytes.
+ * Return context word size in bytes.
+ * It is the default value of sizeof(void*) when debug symbols are not available.
  */
 extern unsigned context_word_size(Context * ctx);
 
 /*
  * Map an address in given address space to a unique canonical memory location.
  * A target system can have same block (page) of memory mapped to different address spaces at different addresses.
- * This function should return memory space and address that uniquely identify memory block.
+ * This function should return memory space and address that uniquely identify the location.
  * 'block_addr' and 'block_size' are optional arguments that clients can use to retrieve
  * the memory block start address and size. Clients can use this information to map a range of addresses
  * with a single function call.
@@ -408,39 +421,54 @@ extern Context * context_get_group(Context * ctx, int group);
 
 /*
  * "stop" context group - all contexts that need to be stopped to make sure
- * memory contents in a particular address space is stable.
+ * that memory contents in a particular address space is stable.
+ * Note: NULL is not allowed as the group handle.
+ * If the grouping is not applicable to a context,
+ * context_get_group() should return the context itself.
  */
 #define CONTEXT_GROUP_STOP          1
 
 /*
  * "breakpoint" context group - all contexts for which evaluation of breakpoint
  * location should produce same list of addresses.
- * context_get_group(ctx, CONTEXT_GROUP_BREAKPOINT) == NULL means the context
- * does not support breakpoints.
+ * context_get_group(ctx, CONTEXT_GROUP_BREAKPOINT) == NULL means
+ * the context does not support breakpoints.
  */
 #define CONTEXT_GROUP_BREAKPOINT    2
 
 /*
  * "intercept" context group - all contexts which should be intercepted
  * when any member of the group is intercepted for any reason.
+ * Note: NULL is not allowed as the group handle.
+ * If the grouping is not applicable to a context,
+ * context_get_group() should return the context itself.
  */
 #define CONTEXT_GROUP_INTERCEPT     3
 
 /*
  * "process" context group - all contexts that share same memory address space,
  * memory map and executable files.
+ * Note: NULL is not allowed as the group handle.
+ * If the grouping is not applicable to a context,
+ * context_get_group() should return the context itself.
  */
 #define CONTEXT_GROUP_PROCESS       4
 
 /*
  * "CPU" context group - all contexts that belong to same CPU.
  * On SMP systems, all CPUs (cores) of same type should be members of same group.
+ * Note: NULL is not allowed as the group handle.
+ * If the grouping is not applicable to a context,
+ * context_get_group() should return the context itself.
  */
 #define CONTEXT_GROUP_CPU           5
 
 /*
  * "Symbols" context group - all contexts that share same symbol reader data,
  * including symbol files, source file paths and user defined memory map entries.
+ * Note: NULL is not allowed as the group handle.
+ * If the grouping is not applicable to a context,
+ * context_get_group() should return the context itself.
  */
 #define CONTEXT_GROUP_SYMBOLS       6
 
@@ -518,6 +546,7 @@ extern int context_get_breakpoint_status(ContextBreakpoint * bp, const char *** 
 
 /*
  * Functions that notify listeners of various context event.
+ * These function are called by context implementation.
  * They are not supposed to be called by clients.
  */
 extern void send_context_created_event(Context * ctx);
