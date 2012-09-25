@@ -1584,7 +1584,7 @@ static void add_state(CompUnit * Unit, LineNumbersState * state) {
         /* Workaround: Diab compiler generates invalid file indices for an empty compilation unit */
         return;
     }
-    if (Unit->mFiles[state->mFile].mAreaCnt++ == 1) {
+    if (Unit->mFiles[state->mFile].mAreaCnt++ == 0) {
         LineNumbersState s;
         memset(&s, 0, sizeof(s));
         s.mLine = 1;
