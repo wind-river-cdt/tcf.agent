@@ -882,6 +882,20 @@ static void load_addr_ranges(void) {
     }
 }
 
+static void add_pub_name(PubNamesTable * tbl, ObjectInfo * obj) {
+    PubNamesInfo * info = NULL;
+    unsigned h = calc_symbol_name_hash(obj->mName) % tbl->mHashSize;
+    if (tbl->mCnt >= tbl->mMax) {
+        tbl->mMax = tbl->mMax * 3 / 2;
+        tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
+    }
+    info = tbl->mNext + tbl->mCnt;
+    info->mObject = obj;
+    info->mNext = tbl->mHash[h];
+    tbl->mHash[h] = tbl->mCnt++;
+    obj->mFlags |= DOIF_pub_mark;
+}
+
 static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names) {
     PubNamesTable * tbl = &sCache->mPubNames;
     dio_EnterSection(NULL, pub_names, 0);
@@ -903,47 +917,24 @@ static void load_pub_names(ELF_Section * debug_info, ELF_Section * pub_names) {
                 "Invalid unit size in %s section", pub_names->name);
             for (;;) {
                 char * name = NULL;
-                PubNamesInfo * info = NULL;
+                ObjectInfo * info = NULL;
                 U8_T obj_offs = dwarf64 ? dio_ReadU8() : (U8_T)dio_ReadU4();
                 if (obj_offs == 0) break;
                 if (obj_offs >= unit_size) str_fmt_exception(ERR_INV_DWARF,
                     "Invalid object offset in %s section", pub_names->name);
                 name = dio_ReadString();
-                if (tbl->mCnt >= tbl->mMax) {
-                    tbl->mMax = tbl->mMax * 3 / 2;
-                    tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
-                }
-                info = tbl->mNext + tbl->mCnt;
-                info->mObject = find_loaded_object(sCache, (ContextAddress)(debug_info->addr + unit_offs + obj_offs));
-                if (info->mObject != NULL &&
-                        info->mObject->mName != NULL &&
-                        (info->mObject->mFlags & DOIF_pub_mark) == 0 &&
-                        strcmp(info->mObject->mName, name) == 0) {
-                    unsigned h = calc_symbol_name_hash(info->mObject->mName) % tbl->mHashSize;
-                    info->mNext = tbl->mHash[h];
-                    tbl->mHash[h] = tbl->mCnt++;
-                    info->mObject->mFlags |= DOIF_pub_mark;
-                }
+                info = find_loaded_object(sCache, (ContextAddress)(debug_info->addr + unit_offs + obj_offs));
+                if (info == NULL) continue;
+                if (info->mName == NULL) continue;
+                if (info->mFlags & DOIF_pub_mark) continue;
+                if (strcmp(info->mName, name) != 0) continue;
+                add_pub_name(tbl, info);
             }
         }
         assert(next >= dio_GetPos());
         dio_SetPos(next);
     }
     dio_ExitSection();
-}
-
-static void add_pub_name(PubNamesTable * tbl, ObjectInfo * obj) {
-    PubNamesInfo * info = NULL;
-    unsigned h = calc_symbol_name_hash(obj->mName) % tbl->mHashSize;
-    if (tbl->mCnt >= tbl->mMax) {
-        tbl->mMax = tbl->mMax * 3 / 2;
-        tbl->mNext = (PubNamesInfo *)loc_realloc(tbl->mNext, sizeof(PubNamesInfo) * tbl->mMax);
-    }
-    info = tbl->mNext + tbl->mCnt;
-    info->mObject = obj;
-    info->mNext = tbl->mHash[h];
-    tbl->mHash[h] = tbl->mCnt++;
-    obj->mFlags |= DOIF_pub_mark;
 }
 
 static void create_pub_names(ELF_Section * debug_info) {

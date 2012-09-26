@@ -566,15 +566,16 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
     if (decl == NULL) return NULL;
     if ((decl->mFlags & DOIF_declaration) == 0) return decl;
     if (decl->mDefinition != NULL) return decl->mDefinition;
+    if (decl->mName == NULL) return decl;
     switch (decl->mTag) {
     case TAG_structure_type:
     case TAG_interface_type:
     case TAG_union_type:
     case TAG_class_type:
-        search_pub_names = decl->mName != NULL;
+        search_pub_names = 1;
         break;
     default:
-        search_pub_names = (decl->mFlags & DOIF_external) != 0 && decl->mName != NULL;
+        search_pub_names = (decl->mFlags & DOIF_external) != 0;
         break;
     }
     if (search_pub_names) {
@@ -588,14 +589,13 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
             while (find_symbol_list != NULL) {
                 Symbol * sym = find_symbol_list;
                 find_symbol_list = find_symbol_list->next;
-                if (sym->obj != NULL &&
-                    sym->obj->mTag == decl->mTag &&
-                    (sym->obj->mFlags & DOIF_declaration) == 0) def = sym;
+                if (sym->obj == NULL) continue;
+                if (sym->obj->mTag != decl->mTag) continue;
+                if (sym->obj->mFlags & DOIF_declaration) continue;
+                def = sym;
+                break;
             }
             clear_trap(&trap);
-        }
-        else {
-            def = NULL;
         }
         find_symbol_list = list;
         if (def != NULL) return def->obj;
@@ -2506,7 +2506,7 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
         int n = 0;
         int buf_len = 0;
         Symbol ** buf = NULL;
-        ObjectInfo * i = get_dwarf_children(obj);
+        ObjectInfo * i = get_dwarf_children(find_definition(obj));
         while (i != NULL) {
             Symbol * x = NULL;
             object2symbol(find_definition(i), &x);
@@ -2644,6 +2644,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
         Trap trap;
         PropertyValue v;
 
+        obj = find_definition(obj);
         info->big_endian = obj->mCompUnit->mFile->big_endian;
         if ((obj->mFlags & DOIF_external) == 0 && sym->var != NULL) {
             /* The symbol represents a member of a class instance */

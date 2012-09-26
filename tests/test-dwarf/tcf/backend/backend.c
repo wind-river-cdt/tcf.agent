@@ -759,6 +759,11 @@ static void loc_var_func(void * args, Symbol * sym) {
             }
         }
         else {
+            char * base_type_name = NULL;
+            if (get_symbol_name(base_type, &base_type_name) < 0) {
+                error_sym("get_symbol_name", base_type);
+            }
+            if (base_type_name != NULL) base_type_name = tmp_strdup(base_type_name);
             if (get_symbol_type_class(base_type, &base_type_class) < 0) {
                 error_sym("get_symbol_type_class", base_type);
             }

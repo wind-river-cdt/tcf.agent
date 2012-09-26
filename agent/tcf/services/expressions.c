@@ -779,7 +779,6 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
             v->remote = 1;
         }
         v->constant = sym_class == SYM_CLASS_VALUE;
-        v->sym = sym;
         break;
     case SYM_CLASS_FUNCTION:
         {
@@ -791,13 +790,13 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
             }
             set_ctx_word_value(v, word);
             v->function = 1;
-            v->sym = sym;
         }
         break;
     default:
         v->type = sym;
         break;
     }
+    v->sym = sym;
     return sym_class;
 }
 
@@ -868,11 +867,11 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) error(errno, "Cannot read symbol data");
         }
         else {
-            if (flags) {
-                const SYM_FLAGS flag_mask = SYM_FLAG_TYPE | SYM_FLAG_CONST_TYPE | SYM_FLAG_VOLATILE_TYPE |
-                    SYM_FLAG_STRUCT_TYPE | SYM_FLAG_CLASS_TYPE | SYM_FLAG_UNION_TYPE | SYM_FLAG_ENUM_TYPE;
+            const SYM_FLAGS flag_mask = SYM_FLAG_TYPE | SYM_FLAG_CONST_TYPE | SYM_FLAG_VOLATILE_TYPE |
+                SYM_FLAG_STRUCT_TYPE | SYM_FLAG_CLASS_TYPE | SYM_FLAG_UNION_TYPE | SYM_FLAG_ENUM_TYPE;
+            SYM_FLAGS sym_flags = (get_all_symbol_flags(sym) ^ flags) & flag_mask;
+            if (sym_flags != 0) {
                 Symbol * nxt = NULL;
-                SYM_FLAGS sym_flags = (get_all_symbol_flags(sym) ^ flags) & flag_mask;
                 while (find_next_symbol(&nxt) == 0) {
                     SYM_FLAGS nxt_flags = (get_all_symbol_flags(nxt) ^ flags) & flag_mask;
                     if (flag_count(nxt_flags) < flag_count(sym_flags)) sym = nxt;
