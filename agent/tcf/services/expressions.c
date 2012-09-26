@@ -83,6 +83,8 @@
 #define MODE_TYPE   1
 #define MODE_SKIP   2
 
+#define SYM_FLAG_TYPE 0xf0000000
+
 static char * text = NULL;
 static int text_pos = 0;
 static int text_len = 0;
@@ -809,6 +811,7 @@ static SYM_FLAGS get_all_symbol_flags(Symbol * sym) {
         all_flags |= sym_flags;
         if (get_symbol_class(sym, &sym_class) < 0) error(errno, "Cannot get symbol class");
         if (sym_class != SYM_CLASS_TYPE) break;
+        all_flags |= SYM_FLAG_TYPE;
         if (get_symbol_type(sym, &nxt) < 0) error(errno, "Cannot get symbol type");
         if (nxt == sym) break;
         sym = nxt;
@@ -866,7 +869,7 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
         }
         else {
             if (flags) {
-                const SYM_FLAGS flag_mask = SYM_FLAG_CONST_TYPE | SYM_FLAG_VOLATILE_TYPE |
+                const SYM_FLAGS flag_mask = SYM_FLAG_TYPE | SYM_FLAG_CONST_TYPE | SYM_FLAG_VOLATILE_TYPE |
                     SYM_FLAG_STRUCT_TYPE | SYM_FLAG_CLASS_TYPE | SYM_FLAG_UNION_TYPE | SYM_FLAG_ENUM_TYPE;
                 Symbol * nxt = NULL;
                 SYM_FLAGS sym_flags = (get_all_symbol_flags(sym) ^ flags) & flag_mask;
@@ -1086,7 +1089,7 @@ static int type_name(int mode, Symbol ** type) {
             }
             while (cnt > 0);
         }
-        sym_class = identifier(mode, NULL, name, sym_flags, &v);
+        sym_class = identifier(mode, NULL, name, sym_flags | SYM_FLAG_TYPE, &v);
     }
 #if ENABLE_Symbols
     else if (text_sy == SY_ID) {
@@ -1107,13 +1110,14 @@ static int type_name(int mode, Symbol ** type) {
     if (text_sy == SY_SCOPE) {
         Value scope = v;
         next_sy();
-        sym_class = qualified_name(mode, &scope, sym_flags, &v);
+        sym_class = qualified_name(mode, &scope, sym_flags | SYM_FLAG_TYPE, &v);
     }
     if (sym_class != SYM_CLASS_TYPE) {
         if (sym_flags) error(ERR_INV_EXPRESSION, "Type '%s' not found", name);
         return 0;
     }
     expr_len = type_expression(mode, expr_buf);
+    if (text_sy != ')') return 0;
     if (mode != MODE_SKIP) {
         int i;
         for (i = 0; i < expr_len; i++) {
@@ -1657,7 +1661,7 @@ static void op_sizeof(int mode, Value * v) {
 
     if (p) next_sy();
     pos = sy_pos;
-    if (type_name(mode, &type)) {
+    if (p && type_name(mode, &type)) {
         if (mode != MODE_SKIP) {
             ContextAddress type_size = 0;
 #if ENABLE_Symbols

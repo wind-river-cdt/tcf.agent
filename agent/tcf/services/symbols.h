@@ -79,6 +79,7 @@ typedef uint32_t SYM_FLAGS;
 #define SYM_FLAG_ENUM_TYPE      0x0400000
 #define SYM_FLAG_STRUCT_TYPE    0x0800000
 #define SYM_FLAG_STRING_TYPE    0x1000000
+#define SYM_FLAG_INHERITANCE    0x2000000
 
 /* Symbol properties update policies */
 #define UPDATE_ON_MEMORY_MAP_CHANGES 0

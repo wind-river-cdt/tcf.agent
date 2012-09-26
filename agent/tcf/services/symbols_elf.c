@@ -671,9 +671,11 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
             while (this_list != NULL) {
                 Symbol * s = this_list;
                 this_list = this_list->next;
-                s->ctx = sym_ctx;
-                s->frame = sym_frame;
-                s->var = sym_this;
+                if (s->obj->mTag != TAG_subprogram) {
+                    s->ctx = sym_ctx;
+                    s->frame = sym_frame;
+                    s->var = sym_this;
+                }
                 s->next = NULL;
                 add_to_find_symbol_buf(NULL, s);
             }
@@ -764,7 +766,6 @@ static void find_by_name_in_sym_table(ELF_File * file, const char * name, int gl
             unpack_elf_symbol_info(tbl, n, &sym_info);
             if (cmp_symbol_names(name, sym_info.name) == 0 && (!globals || sym_info.bind == STB_GLOBAL || sym_info.bind == STB_WEAK)) {
                 ContextAddress addr = 0;
-                int found_dwarf = 0;
                 if (sym_info.section_index != SHN_ABS && syminfo2address(prs, &sym_info, &addr) == 0) {
                     UnitAddressRange * range = elf_find_unit(sym_ctx, addr, addr, NULL);
                     if (range != NULL) {
@@ -779,7 +780,6 @@ static void find_by_name_in_sym_table(ELF_File * file, const char * name, int gl
                                 case TAG_variable:
                                     if (cmp_symbol_names(obj->mName, name) == 0) {
                                         add_to_find_symbol_buf(obj, NULL);
-                                        found_dwarf = 1;
                                     }
                                     break;
                                 }
@@ -788,7 +788,7 @@ static void find_by_name_in_sym_table(ELF_File * file, const char * name, int gl
                         }
                     }
                 }
-                if (!found_dwarf) {
+                {
                     Symbol * sym = alloc_symbol();
                     sym->frame = STACK_NO_FRAME;
                     sym->ctx = prs;
@@ -1695,7 +1695,14 @@ static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
                 }
             }
         }
-        if (find_symbol_list != NULL) *sym = find_symbol_list;
+        while (find_symbol_list != NULL) {
+            Symbol * s = find_symbol_list;
+            find_symbol_list = find_symbol_list->next;
+            if (s->obj != obj) {
+                *sym = s;
+                break;
+            }
+        }
         clear_trap(&trap);
     }
     find_symbol_list = list;
@@ -2993,6 +3000,9 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
                 if (v == DW_END_big) *flags |= SYM_FLAG_BIG_ENDIAN;
                 if (v == DW_END_little) *flags |= SYM_FLAG_LITTLE_ENDIAN;
             }
+            break;
+        case TAG_inheritance:
+            *flags |= SYM_FLAG_INHERITANCE;
             break;
         }
     }
