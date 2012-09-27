@@ -306,7 +306,7 @@ static void exec_stack_frame_instruction(void) {
     case CFA_nop:
         break;
     case CFA_set_loc:
-        rules.location = read_frame_data_pointer(rules.addr_encoding, 0);
+        rules.location = read_frame_data_pointer(rules.addr_encoding, NULL);
         break;
     case CFA_advance_loc1:
         rules.location += dio_ReadU1() * rules.code_alignment;
@@ -916,7 +916,7 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
                 break;
             case 'P':
                 rules.prh_encoding = dio_ReadU1();
-                read_frame_data_pointer(rules.prh_encoding, 0);
+                read_frame_data_pointer(rules.prh_encoding, NULL);
                 break;
             case 'R':
                 rules.addr_encoding = dio_ReadU1();
@@ -935,7 +935,7 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
     dio_SetPos(saved_pos);
 }
 
-static void read_frame_fde(ELF_Section * section, U8_T IP, U8_T fde_pos) {
+static void read_frame_fde(U8_T IP, U8_T fde_pos) {
     int fde_dwarf64 = 0;
     U8_T fde_length = 0;
     U8_T fde_end = 0;
@@ -943,7 +943,7 @@ static void read_frame_fde(ELF_Section * section, U8_T IP, U8_T fde_pos) {
     U8_T cie_ref = 0;
     int fde_flag = 0;
 
-    dio_EnterSection(NULL, section, fde_pos);
+    dio_EnterSection(NULL, rules.section, fde_pos);
     fde_length = dio_ReadU4();
     assert(fde_length > 0);
     if (fde_length == ~(U4_T)0) {
@@ -1088,7 +1088,7 @@ static void read_frame_info_section(Context * ctx, ELF_File * file, U8_T IP, DWA
             l = k + 1;
         }
         else {
-            read_frame_fde(section, IP, range->mOffset);
+            read_frame_fde(IP, range->mOffset);
             return;
         }
     }

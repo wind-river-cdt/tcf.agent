@@ -1147,6 +1147,20 @@ static void update_step_machine_code_area(CodeArea * area, void * args) {
     if (area->directory != NULL) ext->step_code_area->directory = loc_strdup(area->directory);
     if (area->file != NULL) ext->step_code_area->file = loc_strdup(area->file);
 }
+
+static int is_function_prologue(Context * ctx, ContextAddress ip, CodeArea * area) {
+#if SERVICE_Symbols
+    Symbol * sym = NULL;
+    int sym_class = SYM_CLASS_UNKNOWN;
+    ContextAddress sym_addr = 0;
+    if (find_symbol_by_addr(ctx, STACK_NO_FRAME, ip, &sym) < 0) return 0;
+    if (get_symbol_class(sym, &sym_class) < 0) return 0;
+    if (sym_class != SYM_CLASS_FUNCTION) return 0;
+    if (get_symbol_address(sym, &sym_addr) < 0) return 0;
+    if (sym_addr >= area->start_address && sym_addr < area->end_address) return 1;
+#endif
+    return 0;
+}
 #endif
 
 #if EN_STEP_OVER
@@ -1392,6 +1406,16 @@ static int update_step_machine_state(Context * ctx) {
                 return -1;
             }
             if (ext->step_code_area == NULL) {
+                /* Line info not available for current IP */
+#if SERVICE_Symbols
+                if (is_plt_section(ctx, addr) != 0) {
+                    /* Continue stepping to skip PLT entry */
+                    ext->step_code_area = area;
+                    ext->step_range_start = addr;
+                    ext->step_range_end = addr + 1;
+                    break;
+                }
+#endif
                 free_code_area(area);
                 ctx->pending_intercept = 1;
                 ext->step_done = REASON_STEP;
@@ -1399,7 +1423,7 @@ static int update_step_machine_state(Context * ctx) {
             }
             same_line = is_same_line(ext->step_code_area, area);
             free_code_area(area);
-            if (!same_line) {
+            if (!same_line && !is_function_prologue(ctx, addr, ext->step_code_area)) {
                 if ((ext->step_mode != RM_REVERSE_STEP_INTO_LINE && ext->step_mode != RM_REVERSE_STEP_OVER_LINE) ||
                         (ext->step_line_cnt == 0 && addr == ext->step_code_area->start_address) ||
                         ext->step_line_cnt >= 2) {
