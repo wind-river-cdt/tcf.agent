@@ -493,6 +493,68 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
     return 0;
 }
 
+static int cmp_object_profiles(ObjectInfo * x, ObjectInfo * y) {
+    if (x == y) return 1;
+    while (x != NULL) {
+        switch (x->mTag) {
+        case TAG_typedef:
+        case TAG_const_type:
+        case TAG_volatile_type:
+            x = x->mType;
+            continue;
+        }
+        break;
+    }
+    while (y != NULL) {
+        switch (y->mTag) {
+        case TAG_typedef:
+        case TAG_const_type:
+        case TAG_volatile_type:
+            y = y->mType;
+            continue;
+        }
+        break;
+    }
+    if (x == NULL || y == NULL) return 0;
+    if (x->mTag != y->mTag) return 0;
+    switch (x->mTag) {
+    case TAG_subprogram:
+        {
+            ObjectInfo * px = get_dwarf_children(x);
+            ObjectInfo * py = get_dwarf_children(y);
+            while (px != NULL && py != NULL) {
+                if (px->mTag != TAG_formal_parameter) {
+                    px = px->mSibling;
+                    continue;
+                }
+                if (py->mTag != TAG_formal_parameter) {
+                    py = py->mSibling;
+                    continue;
+                }
+                if (!cmp_object_profiles(px->mType, py->mType)) return 0;
+                px = px->mSibling;
+                py = py->mSibling;
+            }
+            if (px != NULL || py != NULL) return 0;
+        }
+        break;
+    case TAG_packed_type:
+    case TAG_const_type:
+    case TAG_volatile_type:
+    case TAG_restrict_type:
+    case TAG_shared_type:
+    case TAG_pointer_type:
+    case TAG_mod_pointer:
+    case TAG_string_type:
+    case TAG_array_type:
+        if (!cmp_object_profiles(x->mType, y->mType)) return 0;
+        break;
+    }
+    if (x->mName == y->mName) return 1;
+    if (x->mName == NULL || y->mName == NULL) return 0;
+    return strcmp(x->mName, y->mName) == 0;
+}
+
 static void add_to_find_symbol_buf(ObjectInfo * obj, Symbol * sym) {
     Symbol * p = NULL;
     Symbol * s = find_symbol_list;
@@ -516,89 +578,104 @@ static void add_to_find_symbol_buf(ObjectInfo * obj, Symbol * sym) {
     else find_symbol_list = sym;
 }
 
+static int pub_name_priority(ObjectInfo * obj) {
+    int p = 0;
+    if (obj->mFlags & DOIF_external) p += 2;
+    if (obj->mFlags & DOIF_declaration) p -= 4;
+    switch (obj->mTag) {
+    case TAG_class_type:
+    case TAG_structure_type:
+    case TAG_union_type:
+    case TAG_enumeration_type:
+        p -= 1;
+        break;
+    }
+    return p;
+}
+
+static int pub_name_comparator(const void * x, const void * y) {
+    int px = pub_name_priority(*(ObjectInfo **)x);
+    int py = pub_name_priority(*(ObjectInfo **)y);
+    if (px > py) return -1;
+    if (px < py) return +1;
+    return 0;
+}
+
 static void find_by_name_in_pub_names(DWARFCache * cache, const char * name) {
     PubNamesTable * tbl = &cache->mPubNames;
     if (tbl->mHash != NULL) {
-        ObjectInfo * decl = NULL;
-        ObjectInfo * type = NULL;
-        ObjectInfo * other = NULL;
+        static ObjectInfo ** buf = NULL;
+        static unsigned buf_pos = 0;
+        static unsigned buf_max = 0;
         unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
+        buf_pos = 0;
         while (n != 0) {
             ObjectInfo * obj = tbl->mNext[n].mObject;
-            if (obj->mFlags & DOIF_external) {
-                if (cmp_symbol_names(obj->mName, name) == 0) {
-                    add_to_find_symbol_buf(obj, NULL);
+            if (cmp_symbol_names(obj->mName, name) == 0) {
+                if (buf_pos >= buf_max) {
+                    buf_max += 0x100;
+                    buf = (ObjectInfo **)loc_realloc(buf, sizeof(ObjectInfo *) * buf_max);
                 }
-            }
-            else if (obj->mFlags & DOIF_declaration) {
-                if (decl == NULL && cmp_symbol_names(obj->mName, name) == 0) decl = obj;
-            }
-            else {
-                switch (obj->mTag) {
-                case TAG_class_type:
-                case TAG_structure_type:
-                case TAG_union_type:
-                case TAG_enumeration_type:
-                    if (type == NULL && cmp_symbol_names(obj->mName, name) == 0) type = obj;
-                    break;
-                default:
-                    if (other == NULL && cmp_symbol_names(obj->mName, name) == 0) other = obj;
-                    break;
-                }
+                buf[buf_pos++] = obj;
             }
             n = tbl->mNext[n].mNext;
         }
-        if (other != NULL) {
-            add_to_find_symbol_buf(other, NULL);
-        }
-        if (type != NULL) {
-            add_to_find_symbol_buf(type, NULL);
-        }
-        if (decl != NULL) {
-            add_to_find_symbol_buf(decl, NULL);
+        if (buf_pos > 0) {
+            unsigned i;
+            qsort(buf, buf_pos, sizeof(ObjectInfo *), pub_name_comparator);
+            for (i = 0; i < buf_pos; i++) add_to_find_symbol_buf(buf[i], NULL);
         }
     }
 }
 
 /* If 'decl' represents a declaration, replace it with definition - if possible */
 static ObjectInfo * find_definition(ObjectInfo * decl) {
-    int search_pub_names = 1;
-    if (decl == NULL) return NULL;
-    if ((decl->mFlags & DOIF_declaration) == 0) return decl;
-    if (decl->mDefinition != NULL) return decl->mDefinition;
-    if (decl->mName == NULL) return decl;
-    switch (decl->mTag) {
-    case TAG_structure_type:
-    case TAG_interface_type:
-    case TAG_union_type:
-    case TAG_class_type:
-        search_pub_names = 1;
-        break;
-    default:
-        search_pub_names = (decl->mFlags & DOIF_external) != 0;
-        break;
-    }
-    if (search_pub_names) {
-        Trap trap;
-        Symbol * def = NULL;
-        Symbol * list = find_symbol_list;
-        if (set_trap(&trap)) {
-            DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
-            find_symbol_list = NULL;
-            find_by_name_in_pub_names(cache, decl->mName);
-            while (find_symbol_list != NULL) {
-                Symbol * sym = find_symbol_list;
-                find_symbol_list = find_symbol_list->next;
-                if (sym->obj == NULL) continue;
-                if (sym->obj->mTag != decl->mTag) continue;
-                if (sym->obj->mFlags & DOIF_declaration) continue;
-                def = sym;
-                break;
-            }
-            clear_trap(&trap);
+    while (decl != NULL) {
+        int search_pub_names = 0;
+        if (decl->mDefinition != NULL) {
+            decl = decl->mDefinition;
+            continue;
         }
-        find_symbol_list = list;
-        if (def != NULL) return def->obj;
+        if (decl->mName == NULL) return decl;
+        if ((decl->mFlags & DOIF_declaration) == 0) return decl;
+        switch (decl->mTag) {
+        case TAG_structure_type:
+        case TAG_interface_type:
+        case TAG_union_type:
+        case TAG_class_type:
+            search_pub_names = 1;
+            break;
+        default:
+            search_pub_names = (decl->mFlags & DOIF_external) != 0;
+            break;
+        }
+        if (search_pub_names) {
+            Trap trap;
+            Symbol * def = NULL;
+            Symbol * list = find_symbol_list;
+            if (set_trap(&trap)) {
+                DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
+                find_symbol_list = NULL;
+                find_by_name_in_pub_names(cache, decl->mName);
+                while (find_symbol_list != NULL) {
+                    Symbol * sym = find_symbol_list;
+                    find_symbol_list = find_symbol_list->next;
+                    if (sym->obj == NULL) continue;
+                    if (sym->obj->mTag != decl->mTag) continue;
+                    if (sym->obj->mFlags & DOIF_declaration) continue;
+                    if (!cmp_object_profiles(decl, sym->obj)) continue;
+                    def = sym;
+                    break;
+                }
+                clear_trap(&trap);
+            }
+            find_symbol_list = list;
+            if (def != NULL) {
+                decl = def->obj;
+                continue;
+            }
+        }
+        break;
     }
     return decl;
 }

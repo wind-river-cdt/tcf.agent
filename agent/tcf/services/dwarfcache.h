@@ -80,6 +80,7 @@ struct FileInfo {
 #define DOIF_find_mark          0x1000
 #define DOIF_load_mark          0x2000
 #define DOIF_pub_mark           0x4000
+#define DOIF_low_pc             0x8000
 
 struct ObjectInfo {
 

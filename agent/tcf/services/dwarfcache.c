@@ -614,6 +614,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_low_pc:
         dio_ChkAddr(Form);
         Info->u.mCode.mLowPC = (ContextAddress)dio_gFormData;
+        Info->mFlags |= DOIF_low_pc;
         break;
     case AT_high_pc:
         dio_ChkAddr(Form);
@@ -745,10 +746,15 @@ static void read_object_refs(void) {
             assert(ref.org->mTag != 0);
             if (ref.org->mFlags & DOIF_load_mark) str_fmt_exception(ERR_INV_DWARF,
                 "Invalid forward reference at %x", (unsigned)ref.obj->mID);
-            if (ref.obj->mFlags & DOIF_specification) ref.org->mDefinition = ref.obj;
             if (ref.obj->mName == NULL) ref.obj->mName = ref.org->mName;
             if (ref.obj->mType == NULL) ref.obj->mType = ref.org->mType;
             ref.obj->mFlags |= ref.org->mFlags & ~(DOIF_children_loaded | DOIF_declaration | DOIF_specification);
+            if (ref.obj->mFlags & DOIF_specification) {
+                ref.org->mDefinition = ref.obj;
+                if ((ref.obj->mFlags & (DOIF_low_pc | DOIF_ranges)) == 0) {
+                    ref.obj->mFlags |= ref.org->mFlags & DOIF_declaration;
+                }
+            }
             if (ref.obj->mFlags & DOIF_external) {
                 ObjectInfo * cls = ref.org;
                 while (cls->mParent != NULL &&

@@ -874,7 +874,9 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
                 Symbol * nxt = NULL;
                 while (find_next_symbol(&nxt) == 0) {
                     SYM_FLAGS nxt_flags = (get_all_symbol_flags(nxt) ^ flags) & flag_mask;
-                    if (flag_count(nxt_flags) < flag_count(sym_flags)) sym = nxt;
+                    if (flag_count(nxt_flags) >= flag_count(sym_flags)) continue;
+                    sym_flags = nxt_flags;
+                    sym = nxt;
                 }
             }
             return sym2value(mode, sym, v);
@@ -901,10 +903,16 @@ static int qualified_name(int mode, Value * scope, SYM_FLAGS flags, Value * v) {
         memset(v, 0, sizeof(Value));
         if (text_sy == SY_NAME) {
             if (mode != MODE_SKIP) {
-                sym_class = identifier(mode, scope, (char *)text_val.value, flags, v);
+                char * name = tmp_strdup((char *)text_val.value);
+                SYM_FLAGS f = flags;
+                next_sy();
+                if (text_sy == SY_SCOPE) f |= SYM_FLAG_TYPE;
+                sym_class = identifier(mode, scope, name, f, v);
                 if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
             }
-            next_sy();
+            else {
+                next_sy();
+            }
         }
         else if (text_sy == SY_ID) {
             if (mode != MODE_SKIP) {
