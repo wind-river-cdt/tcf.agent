@@ -68,7 +68,11 @@ struct Symbol {
     unsigned cardinal;
     ContextAddress length;
     Symbol * base;
+    /* Volatile fields, used for sorting */
     Symbol * next;
+    unsigned level;
+    unsigned pos;
+    unsigned dup;
 };
 
 #define is_array_type_pseudo_symbol(s) (s->sym_class == SYM_CLASS_TYPE && s->obj == NULL && s->base != NULL)
@@ -555,30 +559,7 @@ static int cmp_object_profiles(ObjectInfo * x, ObjectInfo * y) {
     return strcmp(x->mName, y->mName) == 0;
 }
 
-static void add_to_find_symbol_buf(ObjectInfo * obj, Symbol * sym) {
-    Symbol * p = NULL;
-    Symbol * s = find_symbol_list;
-
-    assert (obj != NULL || sym != NULL);
-    if (sym == NULL) object2symbol(obj, &sym);
-
-    while (s != NULL) {
-        if (sym->obj != NULL) {
-            if (s->var == sym->var && s->obj == sym->obj) return;
-        }
-        else if (sym->tbl != NULL) {
-            if (s->tbl == sym->tbl && s->index == sym->index) return;
-        }
-        p = s;
-        s = s->next;
-    }
-
-    assert(sym->next == NULL);
-    if (p != NULL) p->next = sym;
-    else find_symbol_list = sym;
-}
-
-static int pub_name_priority(ObjectInfo * obj) {
+static int symbol_priority(ObjectInfo * obj) {
     int p = 0;
     if (obj->mFlags & DOIF_external) p += 2;
     if (obj->mFlags & DOIF_declaration) p -= 4;
@@ -593,38 +574,104 @@ static int pub_name_priority(ObjectInfo * obj) {
     return p;
 }
 
-static int pub_name_comparator(const void * x, const void * y) {
-    int px = pub_name_priority(*(ObjectInfo **)x);
-    int py = pub_name_priority(*(ObjectInfo **)y);
-    if (px > py) return -1;
-    if (px < py) return +1;
+static int symbol_equ_comparator(const void * x, const void * y) {
+    Symbol * sx = *(Symbol **)x;
+    Symbol * sy = *(Symbol **)y;
+
+    if ((uintptr_t)sx->obj < (uintptr_t)sy->obj) return -1;
+    if ((uintptr_t)sx->obj > (uintptr_t)sy->obj) return +1;
+    if ((uintptr_t)sx->var < (uintptr_t)sy->var) return -1;
+    if ((uintptr_t)sx->var > (uintptr_t)sy->var) return +1;
+    if ((uintptr_t)sx->tbl < (uintptr_t)sy->tbl) return -1;
+    if ((uintptr_t)sx->tbl > (uintptr_t)sy->tbl) return +1;
+    if (sx->index < sy->index) return -1;
+    if (sx->index > sy->index) return +1;
     return 0;
 }
 
-static void find_by_name_in_pub_names(DWARFCache * cache, const char * name) {
-    PubNamesTable * tbl = &cache->mPubNames;
-    if (tbl->mHash != NULL) {
-        static ObjectInfo ** buf = NULL;
-        static unsigned buf_pos = 0;
-        static unsigned buf_max = 0;
-        unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
-        buf_pos = 0;
-        while (n != 0) {
-            ObjectInfo * obj = tbl->mNext[n].mObject;
-            if (cmp_symbol_names(obj->mName, name) == 0) {
-                if (buf_pos >= buf_max) {
-                    buf_max += 0x100;
-                    buf = (ObjectInfo **)loc_realloc(buf, sizeof(ObjectInfo *) * buf_max);
-                }
-                buf[buf_pos++] = obj;
-            }
-            n = tbl->mNext[n].mNext;
+static int symbol_prt_comparator(const void * x, const void * y) {
+    Symbol * sx = *(Symbol **)x;
+    Symbol * sy = *(Symbol **)y;
+
+    if (sx->level < sy->level) return -1;
+    if (sx->level > sy->level) return +1;
+
+    if (sx->obj == NULL && sy->obj != NULL) return -1;
+    if (sx->obj != NULL && sy->obj == NULL) return +1;
+
+    if (sx->obj != sy->obj) {
+        int px = symbol_priority(sx->obj);
+        int py = symbol_priority(sy->obj);
+        if (px < py) return -1;
+        if (px > py) return +1;
+    }
+    else {
+        if (sx->var == NULL && sy->var != NULL) return -1;
+        if (sx->var != NULL && sy->var == NULL) return +1;
+    }
+
+    if (sx->pos < sy->pos) return -1;
+    if (sx->pos > sy->pos) return +1;
+    return 0;
+}
+
+static void add_to_find_symbol_buf(Symbol * sym) {
+    sym->next = find_symbol_list;
+    find_symbol_list = sym;
+}
+
+static void add_obj_to_find_symbol_buf(ObjectInfo * obj, unsigned level) {
+    Symbol * sym = NULL;
+    object2symbol(obj, &sym);
+    add_to_find_symbol_buf(sym);
+    sym->level = level;
+}
+
+static void sort_find_symbol_buf(void) {
+    /* Sort find_symbol_list:
+     * 1. inner scope before parent scope
+     * 2. DWARF symbols before ELF symbols
+     * 3. 'extern' before 'static'
+     * 3. definitions before declarations
+     * 4. etc.
+     */
+    unsigned cnt = 0;
+    unsigned pos = 0;
+    Symbol ** buf = NULL;
+    Symbol * s = find_symbol_list;
+    if (s == NULL) return;
+    if (s->next == NULL) return;
+    while (s != NULL) {
+        s = s->next;
+        cnt++;
+    }
+    pos = 0;
+    s = find_symbol_list;
+    buf = (Symbol **)tmp_alloc(sizeof(Symbol *) * cnt);
+    while (s != NULL) {
+        s->dup = 0;
+        s->pos = pos;
+        buf[pos++] = s;
+        s = s->next;
+    }
+    find_symbol_list = NULL;
+    /* Remove duplicate entries */
+    qsort(buf, cnt, sizeof(Symbol *), symbol_equ_comparator);
+    for (pos = 0; pos < cnt - 1; pos++) {
+        s = buf[pos];
+        if (s->obj || s->tbl) {
+            Symbol * q = buf[pos + 1];
+            if (s->obj == q->obj && s->var == q->var &&
+                s->tbl == q->tbl && s->index == q->index) s->dup = 1;
         }
-        if (buf_pos > 0) {
-            unsigned i;
-            qsort(buf, buf_pos, sizeof(ObjectInfo *), pub_name_comparator);
-            for (i = 0; i < buf_pos; i++) add_to_find_symbol_buf(buf[i], NULL);
-        }
+    }
+    /* Final sort */
+    qsort(buf, cnt, sizeof(Symbol *), symbol_prt_comparator);
+    for (pos = 0; pos < cnt; pos++) {
+        s = buf[pos];
+        if (s->dup) continue;
+        s->next = find_symbol_list;
+        find_symbol_list = s;
     }
 }
 
@@ -650,28 +697,25 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
             break;
         }
         if (search_pub_names) {
-            Trap trap;
-            Symbol * def = NULL;
-            Symbol * list = find_symbol_list;
-            if (set_trap(&trap)) {
-                DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
-                find_symbol_list = NULL;
-                find_by_name_in_pub_names(cache, decl->mName);
-                while (find_symbol_list != NULL) {
-                    Symbol * sym = find_symbol_list;
-                    find_symbol_list = find_symbol_list->next;
-                    if (sym->obj == NULL) continue;
-                    if (sym->obj->mTag != decl->mTag) continue;
-                    if (sym->obj->mFlags & DOIF_declaration) continue;
-                    if (!cmp_object_profiles(decl, sym->obj)) continue;
-                    def = sym;
+            ObjectInfo * def = NULL;
+            DWARFCache * cache = get_dwarf_cache(get_dwarf_file(decl->mCompUnit->mFile));
+            PubNamesTable * tbl = &cache->mPubNames;
+            if (tbl->mHash != NULL) {
+                unsigned n = tbl->mHash[calc_symbol_name_hash(decl->mName) % tbl->mHashSize];
+                while (n != 0) {
+                    ObjectInfo * obj = tbl->mNext[n].mObject;
+                    n = tbl->mNext[n].mNext;
+                    if (obj->mTag != decl->mTag) continue;
+                    if (obj->mFlags & DOIF_declaration) continue;
+                    if (cmp_symbol_names(obj->mName, decl->mName) != 0) continue;
+                    if (cmp_object_profiles(decl, obj) == 0) continue;
+                    def = obj;
                     break;
                 }
-                clear_trap(&trap);
             }
-            find_symbol_list = list;
             if (def != NULL) {
-                decl = def->obj;
+                decl->mDefinition = def;
+                decl = def;
                 continue;
             }
         }
@@ -680,7 +724,22 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
     return decl;
 }
 
-static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, ContextAddress ip, const char * name) {
+static void find_by_name_in_pub_names(DWARFCache * cache, const char * name) {
+    PubNamesTable * tbl = &cache->mPubNames;
+    if (tbl->mHash != NULL) {
+        unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
+        while (n != 0) {
+            ObjectInfo * obj = tbl->mNext[n].mObject;
+            if (cmp_symbol_names(obj->mName, name) == 0) {
+                add_obj_to_find_symbol_buf(obj, 1);
+            }
+            n = tbl->mNext[n].mNext;
+        }
+    }
+}
+
+static void find_in_object_tree(ObjectInfo * parent, unsigned level,
+        ContextAddress rt_offs, ContextAddress ip, const char * name) {
     ObjectInfo * children = get_dwarf_children(parent);
     ObjectInfo * obj = NULL;
     ObjectInfo * sym_this = NULL;
@@ -688,7 +747,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
     U8_T obj_ptr_id = 0;
 
     if (ip != 0) {
-        /* Search nested blocks first */
+        /* Search nested scope */
         obj = children;
         while (obj != NULL) {
             switch (obj->mTag) {
@@ -704,7 +763,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
             case TAG_subroutine:
             case TAG_subprogram:
                 if (!check_in_range(obj, rt_offs, ip)) break;
-                find_in_object_tree(obj, rt_offs, ip, name);
+                find_in_object_tree(obj, level + 1, rt_offs, ip, name);
                 break;
             }
             obj = obj->mSibling;
@@ -714,8 +773,8 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
     /* Search current scope */
     obj = children;
     while (obj != NULL) {
-        if ((obj->mFlags & DOIF_specification) == 0 && obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
-            add_to_find_symbol_buf(find_definition(obj), NULL);
+        if (obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
+            add_obj_to_find_symbol_buf(find_definition(obj), level);
         }
         if (parent->mTag == TAG_subprogram && ip != 0) {
             if (!obj_ptr_chk) {
@@ -740,7 +799,8 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
             if (set_trap(&trap)) {
                 find_symbol_list = NULL;
                 type = get_original_type(type->mType);
-                find_in_object_tree(type, 0, 0, name);
+                find_in_object_tree(type, level, 0, 0, name);
+                sort_find_symbol_buf();
                 this_list = find_symbol_list;
                 clear_trap(&trap);
             }
@@ -754,7 +814,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
                     s->var = sym_this;
                 }
                 s->next = NULL;
-                add_to_find_symbol_buf(NULL, s);
+                add_to_find_symbol_buf(s);
             }
         }
     }
@@ -765,7 +825,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
         ObjectInfo * name_space;
         read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, parent, AT_extension, &p);
         name_space = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
-        if (name_space != NULL) find_in_object_tree(name_space, 0, 0, name);
+        if (name_space != NULL) find_in_object_tree(name_space, level, 0, 0, name);
     }
 
     /* Search imported and inherited objects */
@@ -773,10 +833,10 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
     while (obj != NULL) {
         switch (obj->mTag) {
         case TAG_enumeration_type:
-            find_in_object_tree(obj, 0, 0, name);
+            find_in_object_tree(obj, level, 0, 0, name);
             break;
         case TAG_inheritance:
-            find_in_object_tree(obj->mType, 0, 0, name);
+            find_in_object_tree(obj->mType, level, 0, 0, name);
             break;
         case TAG_imported_declaration:
             if (obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
@@ -786,13 +846,13 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
                 decl = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
                 if (decl != NULL) {
                     if (obj->mName != NULL || (decl->mName != NULL && cmp_symbol_names(decl->mName, name) == 0)) {
-                        add_to_find_symbol_buf(find_definition(decl), NULL);
+                        add_obj_to_find_symbol_buf(find_definition(decl), level);
                     }
                 }
             }
             break;
         case TAG_imported_module:
-            find_in_object_tree(obj, 0, 0, name);
+            find_in_object_tree(obj, level, 0, 0, name);
             {
                 PropertyValue p;
                 ObjectInfo * module;
@@ -802,7 +862,7 @@ static void find_in_object_tree(ObjectInfo * parent, ContextAddress rt_offs, Con
                     Trap trap;
                     if (set_trap(&trap)) {
                         module->mFlags |= DOIF_find_mark;
-                        find_in_object_tree(module, 0, 0, name);
+                        find_in_object_tree(module, level, 0, 0, name);
                         clear_trap(&trap);
                         module->mFlags &= ~DOIF_find_mark;
                     }
@@ -823,8 +883,8 @@ static void find_in_dwarf(const char * name) {
     UnitAddressRange * range = elf_find_unit(sym_ctx, sym_ip, sym_ip, &rt_addr);
     if (range != NULL) {
         CompUnit * unit = range->mUnit;
-        find_in_object_tree(unit->mObject, rt_addr - range->mAddr, sym_ip, name);
-        if (unit->mBaseTypes != NULL) find_in_object_tree(unit->mBaseTypes->mObject, 0, 0, name);
+        find_in_object_tree(unit->mObject, 2, rt_addr - range->mAddr, sym_ip, name);
+        if (unit->mBaseTypes != NULL) find_in_object_tree(unit->mBaseTypes->mObject, 2, 0, 0, name);
     }
 }
 
@@ -856,7 +916,7 @@ static void find_by_name_in_sym_table(ELF_File * file, const char * name, int gl
                                 case TAG_subprogram:
                                 case TAG_variable:
                                     if (cmp_symbol_names(obj->mName, name) == 0) {
-                                        add_to_find_symbol_buf(obj, NULL);
+                                        add_obj_to_find_symbol_buf(obj, 0);
                                     }
                                     break;
                                 }
@@ -890,7 +950,7 @@ static void find_by_name_in_sym_table(ELF_File * file, const char * name, int gl
                         sym->sym_class = SYM_CLASS_VALUE;
                         break;
                     }
-                    add_to_find_symbol_buf(NULL, sym);
+                    add_to_find_symbol_buf(sym);
                 }
             }
             n = tbl->sym_names_next[n];
@@ -929,7 +989,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
             else {
                 sym->sym_class = SYM_CLASS_REFERENCE;
             }
-            add_to_find_symbol_buf(NULL, sym);
+            add_to_find_symbol_buf(sym);
         }
     }
 #endif
@@ -995,6 +1055,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                             if (set_trap(&trap)) {
                                 find_symbol_list = NULL;
                                 find_in_dwarf(constant_pseudo_symbols[i].type);
+                                sort_find_symbol_buf();
                                 type = find_symbol_list;
                                 clear_trap(&trap);
                             }
@@ -1007,7 +1068,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                                 sym->base = type;
                                 sym->index = i;
                                 assert(is_constant_pseudo_symbol(sym));
-                                add_to_find_symbol_buf(NULL, sym);
+                                add_to_find_symbol_buf(sym);
                                 break;
                             }
                         }
@@ -1023,7 +1084,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                                 context_get_group(ctx, CONTEXT_GROUP_SYMBOLS),
                                 type_pseudo_symbols[i].size, type_pseudo_symbols[i].sign, &type);
                             type->index = i + 1;
-                            add_to_find_symbol_buf(NULL, type);
+                            add_to_find_symbol_buf(type);
                             break;
                         }
                         i++;
@@ -1048,7 +1109,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
             sym->address = (ContextAddress)address;
             sym->has_address = 1;
             sym->sym_class = sym_class;
-            add_to_find_symbol_buf(NULL, sym);
+            add_to_find_symbol_buf(sym);
         }
     }
 #endif
@@ -1083,7 +1144,11 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
 
     if (error == 0 && find_symbol_list == NULL) error = ERR_SYM_NOT_FOUND;
 
-    if (!error) {
+    if (error) {
+        find_symbol_list = NULL;
+    }
+    else {
+        sort_find_symbol_buf();
         *res = find_symbol_list;
         find_symbol_list = find_symbol_list->next;
     }
@@ -1113,7 +1178,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
                 DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
                 UnitAddressRange * range = find_comp_unit_addr_range(cache, sym_ip, sym_ip);
                 if (range != NULL) {
-                    find_in_object_tree(range->mUnit->mObject, 0, 0, name);
+                    find_in_object_tree(range->mUnit->mObject, 2, 0, 0, name);
                 }
                 if (find_symbol_list == NULL) {
                     find_by_name_in_sym_table(file, name, 0);
@@ -1133,7 +1198,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
     if (!error && find_symbol_list == NULL && scope != NULL && scope->obj != NULL) {
         Trap trap;
         if (set_trap(&trap)) {
-            find_in_object_tree(scope->obj, 0, 0, name);
+            find_in_object_tree(scope->obj, 2, 0, 0, name);
             clear_trap(&trap);
         }
         else {
@@ -1143,7 +1208,11 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
 
     if (error == 0 && find_symbol_list == NULL) error = ERR_SYM_NOT_FOUND;
 
-    if (!error) {
+    if (error) {
+        find_symbol_list = NULL;
+    }
+    else {
+        sort_find_symbol_buf();
         *res = find_symbol_list;
         find_symbol_list = find_symbol_list->next;
     }

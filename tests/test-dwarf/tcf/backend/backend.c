@@ -1125,7 +1125,7 @@ static void next_pc(void) {
         }
 
         test_cnt++;
-        if (test_cnt % 8 == 0) tmp_gc();
+        if (test_cnt % 4 == 0) tmp_gc();
 
         if (loaded) {
             struct timespec time_diff;
