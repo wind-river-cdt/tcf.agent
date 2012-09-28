@@ -159,6 +159,7 @@ void set_value(Value * v, void * data, size_t size, int big_endian) {
     v->remote = 0;
     v->address = 0;
     v->function = 0;
+    v->sym_list = NULL;
     v->size = (ContextAddress)size;
     v->big_endian = big_endian;
     v->value = tmp_alloc(size);
@@ -867,19 +868,35 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) error(errno, "Cannot read symbol data");
         }
         else {
+            unsigned cnt = 0;
+            unsigned max = 0;
+            Symbol * nxt = NULL;
+            Symbol ** list = NULL;
+            int sym_class = 0;
             const SYM_FLAGS flag_mask = SYM_FLAG_TYPE | SYM_FLAG_CONST_TYPE | SYM_FLAG_VOLATILE_TYPE |
                 SYM_FLAG_STRUCT_TYPE | SYM_FLAG_CLASS_TYPE | SYM_FLAG_UNION_TYPE | SYM_FLAG_ENUM_TYPE;
             SYM_FLAGS sym_flags = (get_all_symbol_flags(sym) ^ flags) & flag_mask;
-            if (sym_flags != 0) {
-                Symbol * nxt = NULL;
-                while (find_next_symbol(&nxt) == 0) {
-                    SYM_FLAGS nxt_flags = (get_all_symbol_flags(nxt) ^ flags) & flag_mask;
-                    if (flag_count(nxt_flags) >= flag_count(sym_flags)) continue;
-                    sym_flags = nxt_flags;
-                    sym = nxt;
+            while (find_next_symbol(&nxt) == 0) {
+                SYM_FLAGS nxt_flags = (get_all_symbol_flags(nxt) ^ flags) & flag_mask;
+                if (max == 0) {
+                    list = (Symbol **)tmp_alloc(sizeof(Symbol *) * (max = 8));
+                    list[cnt++] = sym;
                 }
+                else if (cnt + 1 >= max) {
+                    list = (Symbol **)tmp_realloc(list, sizeof(Symbol *) * (max *= 2));
+                }
+                list[cnt++] = nxt;
+                if (flag_count(nxt_flags) >= flag_count(sym_flags)) continue;
+                sym_flags = nxt_flags;
+                sym = nxt;
             }
-            return sym2value(mode, sym, v);
+            sym_class = sym2value(mode, sym, v);
+            if (list != NULL) {
+                list[cnt++] = NULL;
+                v->sym_list = list;
+                assert(cnt <= max);
+            }
+            return sym_class;
         }
     }
 #elif ENABLE_RCBP_TEST

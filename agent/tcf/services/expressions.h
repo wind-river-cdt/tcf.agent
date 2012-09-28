@@ -41,6 +41,7 @@ struct Value {
     int constant;               /* 1 if the value is not expected to change during execution of value context */
     int big_endian;             /* 1 if the value is big endian */
     int function;               /* 1 if the value represents a function */
+    Symbol ** sym_list;         /* Symbol list, if applicable, NULL terminated */
 };
 
 typedef struct Value Value;

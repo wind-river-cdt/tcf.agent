@@ -1265,8 +1265,24 @@ static void plant_at_address_expression(Context * ctx, ContextAddress ip, Breakp
 #endif
         }
     }
-    if (error) address_expression_error(ctx, bp, error);
-    else plant_breakpoint(ctx, bp, addr, size);
+    if (error) {
+        address_expression_error(ctx, bp, error);
+    }
+    else {
+        plant_breakpoint(ctx, bp, addr, size);
+#if ENABLE_Symbols
+        /* If the expression returns multiple symbols, plant multiple breakpoints */
+        if (v.sym_list != NULL) {
+            unsigned n = 0;
+            while (v.sym_list[n] != NULL) {
+                Symbol * sym = v.sym_list[n++];
+                if (get_symbol_address(sym, &addr) == 0) {
+                    plant_breakpoint(ctx, bp, addr, size);
+                }
+            }
+        }
+#endif
+    }
 }
 
 #if ENABLE_LineNumbers
