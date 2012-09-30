@@ -755,6 +755,9 @@ static void read_object_refs(void) {
                     ref.obj->mFlags |= ref.org->mFlags & DOIF_declaration;
                 }
             }
+            if (ref.obj->mFlags & DOIF_abstract_origin) {
+                if (ref.obj->mFlags & DOIF_external) ref.org->mDefinition = ref.obj;
+            }
             if (ref.obj->mFlags & DOIF_external) {
                 ObjectInfo * cls = ref.org;
                 while (cls->mParent != NULL &&

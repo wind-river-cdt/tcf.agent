@@ -830,9 +830,9 @@ static unsigned flag_count(SYM_FLAGS flags) {
 #endif /* ENABLE_Symbols */
 
 static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Value * v) {
-    int i;
     memset(v, 0, sizeof(Value));
     if (scope == NULL) {
+        int i;
         for (i = 0; i < id_callback_cnt; i++) {
             if (id_callbacks[i](expression_context, expression_frame, name, v)) return SYM_CLASS_VALUE;
         }
@@ -902,11 +902,11 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
 #elif ENABLE_RCBP_TEST
     {
         void * ptr = NULL;
-        int cls = 0;
-        if (find_test_symbol(expression_context, name, &ptr, &cls) >= 0) {
+        int sym_class = 0;
+        if (find_test_symbol(expression_context, name, &ptr, &sym_class) >= 0) {
             v->type_class = TYPE_CLASS_CARDINAL;
             set_ctx_word_value(v, (ContextAddress)ptr);
-            return cls;
+            return sym_class;
         }
     }
 #endif
@@ -918,14 +918,20 @@ static int qualified_name(int mode, Value * scope, SYM_FLAGS flags, Value * v) {
     int sym_class = 0;
     for (;;) {
         memset(v, 0, sizeof(Value));
-        if (text_sy == SY_NAME) {
+        if (text_sy == SY_NAME || (scope != NULL && text_sy == '~')) {
+            int tilda = text_sy == '~';
+            if (tilda) {
+                next_sy();
+                if (text_sy != SY_NAME) error(ERR_INV_EXPRESSION, "Identifier expected");
+            }
             if (mode != MODE_SKIP) {
-                char * name = tmp_strdup((char *)text_val.value);
                 SYM_FLAGS f = flags;
+                char * name = (char *)text_val.value;
+                name = tilda ? tmp_strdup2("~", name) : tmp_strdup(name);
                 next_sy();
                 if (text_sy == SY_SCOPE) f |= SYM_FLAG_TYPE;
                 sym_class = identifier(mode, scope, name, f, v);
-                if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", text_val.value);
+                if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", name);
             }
             else {
                 next_sy();
@@ -934,17 +940,15 @@ static int qualified_name(int mode, Value * scope, SYM_FLAGS flags, Value * v) {
         else if (text_sy == SY_ID) {
             if (mode != MODE_SKIP) {
                 int ok = 0;
+                Context * ctx = NULL;
+                int frame = STACK_NO_FRAME;
+                RegisterDefinition * def = NULL;
                 const char * id = (char *)text_val.value;
-                {
-                    Context * ctx = NULL;
-                    int frame = STACK_NO_FRAME;
-                    RegisterDefinition * def = NULL;
-                    if (id2register(id, &ctx, &frame, &def) >= 0) {
-                        if (frame == STACK_TOP_FRAME) frame = expression_frame;
-                        sym_class = SYM_CLASS_UNKNOWN;
-                        reg2value(ctx, frame, def, v);
-                        ok = 1;
-                    }
+                if (id2register(id, &ctx, &frame, &def) >= 0) {
+                    if (frame == STACK_TOP_FRAME) frame = expression_frame;
+                    sym_class = SYM_CLASS_UNKNOWN;
+                    reg2value(ctx, frame, def, v);
+                    ok = 1;
                 }
 #if ENABLE_Symbols
                 if (!ok) {
@@ -2089,6 +2093,20 @@ static void lazy_unary_expression(int mode, Value * v) {
         break;
     case '~':
         next_sy();
+#if ENABLE_Symbols
+        /* Check for C++ destructor */
+        if (text_sy == SY_NAME) {
+            Value type;
+            int sym_class = identifier(mode, NULL, (char *)text_val.value, SYM_FLAG_TYPE, &type);
+            if (sym_class == SYM_CLASS_TYPE && type.type_class == TYPE_CLASS_COMPOSITE) {
+                char * name = tmp_strdup2("~", (char *)text_val.value);
+                sym_class = identifier(mode, &type, name, 0, v);
+                if (sym_class < 0) error(ERR_INV_EXPRESSION, "Undefined identifier '%s'", name);
+                next_sy();
+                break;
+            }
+        }
+#endif
         unary_expression(mode, v);
         if (mode != MODE_SKIP) {
             if (!is_whole_number(v)) {

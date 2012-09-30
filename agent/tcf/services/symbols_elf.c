@@ -526,19 +526,21 @@ static int cmp_object_profiles(ObjectInfo * x, ObjectInfo * y) {
         {
             ObjectInfo * px = get_dwarf_children(x);
             ObjectInfo * py = get_dwarf_children(y);
-            while (px != NULL && py != NULL) {
-                if (px->mTag != TAG_formal_parameter) {
+            for (;;) {
+                while (px != NULL) {
+                    if (px->mTag == TAG_formal_parameter) break;
                     px = px->mSibling;
-                    continue;
                 }
-                if (py->mTag != TAG_formal_parameter) {
+                while (py != NULL) {
+                    if (py->mTag == TAG_formal_parameter) break;
                     py = py->mSibling;
-                    continue;
                 }
+                if (px == NULL || py == NULL) break;
                 if (!cmp_object_profiles(px->mType, py->mType)) return 0;
                 px = px->mSibling;
                 py = py->mSibling;
             }
+            if (x->mName != NULL && x->mName[0] == '~') break;
             if (px != NULL || py != NULL) return 0;
         }
         break;
