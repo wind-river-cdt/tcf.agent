@@ -2120,7 +2120,7 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
                     *type_class = TYPE_CLASS_POINTER;
                     return 0;
                 case ATE_boolean:
-                    *type_class = TYPE_CLASS_INTEGER;
+                    *type_class = TYPE_CLASS_ENUMERATION;
                     return 0;
                 case ATE_float:
                     *type_class = TYPE_CLASS_REAL;
@@ -2140,7 +2140,7 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
         case TAG_fund_type:
             switch (obj->u.mFundType) {
             case FT_boolean:
-                *type_class = TYPE_CLASS_INTEGER;
+                *type_class = TYPE_CLASS_ENUMERATION;
                 return 0;
             case FT_char:
                 *type_class = TYPE_CLASS_INTEGER;
@@ -2591,6 +2591,27 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
     return err_no_info();
 }
 
+static Symbol ** boolean_children(const Symbol * type) {
+    unsigned i = 0;
+    unsigned n = 0;
+    Symbol ** buf = (Symbol **)tmp_alloc(sizeof(Symbol *) * 2);
+    while (constant_pseudo_symbols[i].name != NULL) {
+        if (n < 2 && strcmp(constant_pseudo_symbols[i].type, "bool") == 0) {
+            Symbol * sym = alloc_symbol();
+            sym->ctx = type->ctx;
+            sym->frame = STACK_NO_FRAME;
+            sym->sym_class = SYM_CLASS_VALUE;
+            sym->base = (Symbol *)type;
+            sym->index = i;
+            assert(is_constant_pseudo_symbol(sym));
+            buf[n++] = sym;
+        }
+        i++;
+    }
+    assert(n == 2);
+    return buf;
+}
+
 int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
@@ -2652,18 +2673,35 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
     obj = get_original_type(obj);
     if (obj != NULL) {
         int n = 0;
-        int buf_len = 0;
         Symbol ** buf = NULL;
-        ObjectInfo * i = get_dwarf_children(find_definition(obj));
-        while (i != NULL) {
-            Symbol * x = NULL;
-            object2symbol(find_definition(i), &x);
-            if (buf_len <= n) {
-                buf_len += 16;
-                buf = (Symbol **)tmp_realloc(buf, sizeof(Symbol *) * buf_len);
+        if (obj->mTag == TAG_base_type) {
+            U8_T x = 0;
+            if (get_num_prop(obj, AT_encoding, &x)) {
+                if (x == ATE_boolean) {
+                    buf = boolean_children(sym);
+                    n = 2;
+                }
             }
-            buf[n++] = x;
-            i = i->mSibling;
+        }
+        else if (obj->mTag == TAG_fund_type) {
+            if (obj->u.mFundType == FT_boolean) {
+                buf = boolean_children(sym);
+                n = 2;
+            }
+        }
+        else {
+            int buf_len = 0;
+            ObjectInfo * i = get_dwarf_children(find_definition(obj));
+            while (i != NULL) {
+                Symbol * x = NULL;
+                object2symbol(find_definition(i), &x);
+                if (buf_len <= n) {
+                    buf_len += 16;
+                    buf = (Symbol **)tmp_realloc(buf, sizeof(Symbol *) * buf_len);
+                }
+                buf[n++] = x;
+                i = i->mSibling;
+            }
         }
         *children = buf;
         *count = n;
