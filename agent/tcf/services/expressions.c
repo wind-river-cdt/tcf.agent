@@ -1145,7 +1145,6 @@ static int type_name(int mode, Symbol ** type) {
         return 0;
     }
     expr_len = type_expression(mode, expr_buf);
-    if (text_sy != ')') return 0;
     if (mode != MODE_SKIP) {
         int i;
         for (i = 0; i < expr_len; i++) {
@@ -1689,7 +1688,7 @@ static void op_sizeof(int mode, Value * v) {
 
     if (p) next_sy();
     pos = sy_pos;
-    if (p && type_name(mode, &type)) {
+    if (type_name(mode, &type) && (!p || text_sy == ')')) {
         if (mode != MODE_SKIP) {
             ContextAddress type_size = 0;
 #if ENABLE_Symbols
