@@ -518,6 +518,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\agent\tcf\services\elf-symbols.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\services\elf-symbols.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\agent\tcf\services\expressions.c"
 				>
 			</File>

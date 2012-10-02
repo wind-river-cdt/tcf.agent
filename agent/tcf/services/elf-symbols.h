@@ -49,6 +49,13 @@ extern int elf_enumerate_symbols (Context * ctx, const char * file_name, Enumera
  */
 extern int elf_symbol_info (Symbol * sym, ELF_SymbolInfo * elf_sym);
 
+/*
+ * Get the TCF Symbol from ELF symbol info.
+ * On error returns -1 and sets errno.
+ * On success returns 0.
+ */
+extern int elf_tcf_symbol (ELF_SymbolInfo * elf_sym, Symbol ** sym);
+
 #endif /* SERVICE_Symbols && !ENABLE_SymbolsProxy && ENABLE_ELF */
 
 #endif /* D_symbols_elf */
