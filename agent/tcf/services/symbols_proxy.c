@@ -1213,6 +1213,7 @@ static void read_location_command(InputStream * inp, void * args) {
         cmd->args.num = json_read_int64(inp);
         break;
     case SFT_CMD_ARG:
+    case SFT_CMD_SET_ARG:
         json_test_char(inp, ',');
         cmd->args.num = (unsigned)json_read_ulong(inp);
         break;
@@ -1224,6 +1225,7 @@ static void read_location_command(InputStream * inp, void * args) {
         break;
     case SFT_CMD_RD_MEM:
     case SFT_CMD_WR_MEM:
+    case SFT_CMD_LOAD:
         json_test_char(inp, ',');
         cmd->args.mem.size = json_read_ulong(inp);
         json_test_char(inp, ',');

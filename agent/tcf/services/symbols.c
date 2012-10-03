@@ -683,6 +683,7 @@ static void write_commands(OutputStream * out, Context * ctx, LocationExpression
                 json_write_int64(out, cmd->args.num);
                 break;
             case SFT_CMD_ARG:
+            case SFT_CMD_SET_ARG:
                 write_stream(out, ',');
                 json_write_ulong(out, cmd->args.arg_no);
                 break;
@@ -693,6 +694,7 @@ static void write_commands(OutputStream * out, Context * ctx, LocationExpression
                 break;
             case SFT_CMD_RD_MEM:
             case SFT_CMD_WR_MEM:
+            case SFT_CMD_LOAD:
                 write_stream(out, ',');
                 json_write_ulong(out, cmd->args.mem.size);
                 write_stream(out, ',');

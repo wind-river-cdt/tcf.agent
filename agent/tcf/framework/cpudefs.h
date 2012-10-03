@@ -107,6 +107,9 @@ typedef struct RegisterIdScope {
 #define SFT_CMD_WR_REG         22
 #define SFT_CMD_WR_MEM         23
 #define SFT_CMD_PIECE          24
+#define SFT_CMD_LOAD           25
+#define SFT_CMD_STORE          26
+#define SFT_CMD_SET_ARG        27
 
 #define SFT_CMD_REGISTER        2 /* Deprecated, use SFT_CMD_RD_REG */
 #define SFT_CMD_DEREF           4 /* Deprecated, use SFT_CMD_RD_MEM */

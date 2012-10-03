@@ -253,6 +253,23 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
             if (frame == NULL) str_exception(ERR_INV_CONTEXT, "Invalid stack frame");
             stk[stk_pos++] = frame->fp;
             break;
+        case SFT_CMD_LOAD:
+            if (state->pieces_cnt > 0) {
+                size_t j;
+                size_t size = 0;
+                uint64_t n = 0;
+                void * buf = NULL;
+
+                read_location_pieces(state->ctx, state->stack_frame,
+                    state->pieces, state->pieces_cnt, cmd->args.mem.big_endian, &buf, &size);
+                state->pieces_cnt = 0;
+                for (j = 0; j < size; j++) {
+                    n = (n << 8) | ((uint8_t *)buf)[cmd->args.mem.big_endian ? j : size - j - 1];
+                }
+                stk[stk_pos++] = n;
+                break;
+            }
+            /* Fall through */
         case SFT_CMD_RD_MEM:
             if (stk_pos < 1) location_expression_error();
             {
@@ -360,6 +377,18 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
         case SFT_CMD_ARG:
             if (cmd->args.arg_no >= args_cnt) location_expression_error();
             stk[stk_pos++] = args[cmd->args.arg_no];
+            break;
+        case SFT_CMD_SET_ARG:
+            if (stk_pos < 1) location_expression_error();
+            if (cmd->args.arg_no >= args_cnt) {
+                unsigned cnt = cmd->args.arg_no + 1;
+                uint64_t * buf = (uint64_t *)tmp_alloc_zero(sizeof(uint64_t) * cnt);
+                memcpy(buf, args, sizeof(uint64_t) * args_cnt);
+                args_cnt = cnt;
+                args = buf;
+            }
+            args[cmd->args.arg_no] = stk[stk_pos - 1];
+            stk_pos--;
             break;
         case SFT_CMD_LOCATION:
             state->stk = stk;
