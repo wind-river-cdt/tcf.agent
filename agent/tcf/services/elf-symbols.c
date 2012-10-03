@@ -36,7 +36,8 @@ struct EnumerateSymbols {
     char ctxId[256];
 };
 
-static int enumerate_symbol_table (ELF_Section * sec, EnumerateSymbols * enum_syms, EnumerateBatchSymbolsCallBack * call_back, void * args) {
+static int enumerate_symbol_table (Context * ctx, ELF_Section * sec,
+        EnumerateSymbols * enum_syms, EnumerateBatchSymbolsCallBack * call_back, void * args) {
     uint32_t sym_idx;
     int cont = 1;
     int has_more = 0;
@@ -47,7 +48,7 @@ static int enumerate_symbol_table (ELF_Section * sec, EnumerateSymbols * enum_sy
 
         unpack_elf_symbol_info(sec, sym_idx, &sym_info);
 
-        if (elf_tcf_symbol (&sym_info, &sym) < 0) exception (errno);
+        if (elf_tcf_symbol (ctx, &sym_info, &sym) < 0) exception (errno);
 
         cont = call_back (args, sym);
     }
@@ -127,7 +128,7 @@ int elf_enumerate_symbols (Context * ctx, const char * file_name, EnumerateSymbo
         (*enum_syms)->sec_idx = sec_idx;
     }
 
-    has_more = enumerate_symbol_table(file->sections + sec_idx, *enum_syms, call_back, args);
+    has_more = enumerate_symbol_table(ctx, file->sections + sec_idx, *enum_syms, call_back, args);
 
     clear_trap(&trap);
 

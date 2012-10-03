@@ -219,11 +219,11 @@ static int syminfo2address(Context * ctx, ELF_SymbolInfo * info, ContextAddress 
     return -1;
 }
 
-int elf_tcf_symbol(ELF_SymbolInfo * sym_info, Symbol ** symbol) {
+int elf_tcf_symbol(Context * ctx, ELF_SymbolInfo * sym_info, Symbol ** symbol) {
     Symbol * sym = alloc_symbol();
 
     sym->frame = STACK_NO_FRAME;
-    sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
+    sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
     sym->tbl = sym_info->sym_section;
     sym->index = sym_info->sym_index;
 
@@ -675,7 +675,7 @@ static void add_obj_to_find_symbol_buf(ObjectInfo * obj, unsigned level) {
 
 static void add_elf_to_find_symbol_buf(ELF_SymbolInfo * elf_sym) {
     Symbol * sym = NULL;
-    elf_tcf_symbol(elf_sym, &sym);
+    elf_tcf_symbol(sym_ctx, elf_sym, &sym);
     add_to_find_symbol_buf(sym);
 }
 
