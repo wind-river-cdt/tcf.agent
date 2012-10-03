@@ -368,6 +368,7 @@ static void test_enumeration_type(Symbol * type) {
             error_sym("get_symbol_flags", enum_type);
         }
         if ((enum_flags & SYM_FLAG_ENUM_TYPE) != 0) break;
+        if ((enum_flags & SYM_FLAG_BOOL_TYPE) != 0) break;
         if (get_symbol_type(enum_type, &enum_type) < 0) {
             error_sym("get_symbol_type", enum_type);
         }

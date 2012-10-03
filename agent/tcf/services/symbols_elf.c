@@ -2090,7 +2090,6 @@ int get_symbol_type(const Symbol * sym, Symbol ** type) {
 }
 
 int get_symbol_type_class(const Symbol * sym, int * type_class) {
-    U8_T x;
     ObjectInfo * obj = sym->obj;
     assert(sym->magic == SYMBOL_MAGIC);
     if (is_constant_pseudo_symbol(sym)) return get_symbol_type_class(sym->base, type_class);
@@ -2139,26 +2138,24 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
             *type_class = TYPE_CLASS_COMPOSITE;
             return 0;
         case TAG_base_type:
-            if (get_num_prop(obj, AT_encoding, &x)) {
-                switch ((int)x) {
-                case ATE_address:
-                    *type_class = TYPE_CLASS_POINTER;
-                    return 0;
-                case ATE_boolean:
-                    *type_class = TYPE_CLASS_ENUMERATION;
-                    return 0;
-                case ATE_float:
-                    *type_class = TYPE_CLASS_REAL;
-                    return 0;
-                case ATE_signed:
-                case ATE_signed_char:
-                    *type_class = TYPE_CLASS_INTEGER;
-                    return 0;
-                case ATE_unsigned:
-                case ATE_unsigned_char:
-                    *type_class = TYPE_CLASS_CARDINAL;
-                    return 0;
-                }
+            switch (obj->u.mFundType) {
+            case ATE_address:
+                *type_class = TYPE_CLASS_POINTER;
+                return 0;
+            case ATE_boolean:
+                *type_class = TYPE_CLASS_ENUMERATION;
+                return 0;
+            case ATE_float:
+                *type_class = TYPE_CLASS_REAL;
+                return 0;
+            case ATE_signed:
+            case ATE_signed_char:
+                *type_class = TYPE_CLASS_INTEGER;
+                return 0;
+            case ATE_unsigned:
+            case ATE_unsigned_char:
+                *type_class = TYPE_CLASS_CARDINAL;
+                return 0;
             }
             *type_class = TYPE_CLASS_UNKNOWN;
             return 0;
@@ -2616,17 +2613,19 @@ int get_symbol_lower_bound(const Symbol * sym, int64_t * value) {
     return err_no_info();
 }
 
-static Symbol ** boolean_children(const Symbol * type) {
+static Symbol ** boolean_children(ObjectInfo * type_obj) {
     unsigned i = 0;
     unsigned n = 0;
+    Symbol * type_sym = NULL;
     Symbol ** buf = (Symbol **)tmp_alloc(sizeof(Symbol *) * 2);
+    object2symbol(type_obj, &type_sym);
     while (constant_pseudo_symbols[i].name != NULL) {
         if (n < 2 && strcmp(constant_pseudo_symbols[i].type, "bool") == 0) {
             Symbol * sym = alloc_symbol();
-            sym->ctx = type->ctx;
+            sym->ctx = sym_ctx;
             sym->frame = STACK_NO_FRAME;
             sym->sym_class = SYM_CLASS_VALUE;
-            sym->base = (Symbol *)type;
+            sym->base = type_sym;
             sym->index = i;
             assert(is_constant_pseudo_symbol(sym));
             buf[n++] = sym;
@@ -2700,17 +2699,14 @@ int get_symbol_children(const Symbol * sym, Symbol *** children, int * count) {
         int n = 0;
         Symbol ** buf = NULL;
         if (obj->mTag == TAG_base_type) {
-            U8_T x = 0;
-            if (get_num_prop(obj, AT_encoding, &x)) {
-                if (x == ATE_boolean) {
-                    buf = boolean_children(sym);
-                    n = 2;
-                }
+            if (obj->u.mFundType == ATE_boolean) {
+                buf = boolean_children(obj);
+                n = 2;
             }
         }
         else if (obj->mTag == TAG_fund_type) {
             if (obj->u.mFundType == FT_boolean) {
-                buf = boolean_children(sym);
+                buf = boolean_children(obj);
                 n = 2;
             }
         }
@@ -3212,10 +3208,16 @@ int get_symbol_flags(const Symbol * sym, SYM_FLAGS * flags) {
                 *flags |= SYM_FLAG_PARAMETER;
                 if (get_num_prop(obj, AT_is_optional, &v) && v != 0) *flags |= SYM_FLAG_OPTIONAL;
             }
+            else if (obj->mTag == TAG_base_type) {
+                if (obj->u.mFundType == ATE_boolean) *flags |= SYM_FLAG_BOOL_TYPE;
+            }
             if (get_num_prop(obj, AT_endianity, &v)) {
                 if (v == DW_END_big) *flags |= SYM_FLAG_BIG_ENDIAN;
                 if (v == DW_END_little) *flags |= SYM_FLAG_LITTLE_ENDIAN;
             }
+            break;
+        case TAG_fund_type:
+            if (obj->u.mFundType == FT_boolean) *flags |= SYM_FLAG_BOOL_TYPE;
             break;
         case TAG_inheritance:
             *flags |= SYM_FLAG_INHERITANCE;

@@ -589,6 +589,11 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_mod_u_d_type:
         read_mod_user_def_type(Form, &Info->mType);
         break;
+    case AT_encoding:
+        if (Tag == TAG_base_type) {
+            Info->u.mFundType = (U2_T)dio_gFormData;
+        }
+        break;
     case AT_subscr_data:
         read_subscr_data(Form, Info);
         break;
