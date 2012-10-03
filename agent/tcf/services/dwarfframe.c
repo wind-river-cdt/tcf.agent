@@ -882,7 +882,8 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
     dio_Skip(cie_dwarf64 ? 8 : 4);
     rules.version = dio_ReadU1();
     if (rules.version != 1 && rules.version != 3 && rules.version != 4) {
-        str_exception(ERR_INV_DWARF, "Unsupported version of Call Frame Information");
+        str_fmt_exception(ERR_INV_DWARF,
+            "Unsupported version of Call Frame Information: %d", rules.version);
     }
     rules.cie_aug = dio_ReadString();
     if (rules.cie_aug != NULL && strcmp(rules.cie_aug, "eh") == 0) {
@@ -897,7 +898,8 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
         rules.segment_size = 0;
     }
     if (rules.segment_size != 0) {
-        str_exception(ERR_INV_DWARF, "Unsupported Call Frame Information: segment size != 0");
+        str_exception(ERR_INV_DWARF,
+            "Unsupported Call Frame Information: segment size != 0");
     }
     rules.code_alignment = dio_ReadULEB128();
     rules.data_alignment = dio_ReadSLEB128();
@@ -1001,7 +1003,8 @@ static int cmp_frame_info_ranges(const void * x, const void * y) {
     return 0;
 }
 
-static void create_search_index(DWARFCache * cache, ELF_Section * section) {
+static void create_search_index(DWARFCache * cache, FrameInfoIndex * index) {
+    ELF_Section * section = index->mSection;
     dio_EnterSection(NULL, section, 0);
     while (dio_GetPos() < section->size) {
         int fde_dwarf64 = 0;
@@ -1043,13 +1046,13 @@ static void create_search_index(DWARFCache * cache, ELF_Section * section) {
             FrameInfoRange * range = NULL;
             if (rules.eh_frame) cie_ref = ref_pos - cie_ref;
             if (cie_ref != rules.cie_pos) read_frame_cie(fde_pos, cie_ref);
-            if (cache->mFrameInfoRangesCnt >= cache->mFrameInfoRangesMax) {
-                cache->mFrameInfoRangesMax += 512;
-                if (cache->mFrameInfoRanges == NULL) cache->mFrameInfoRangesMax += (unsigned)(section->size / 32);
-                cache->mFrameInfoRanges = (FrameInfoRange *)loc_realloc(cache->mFrameInfoRanges,
-                    cache->mFrameInfoRangesMax * sizeof(FrameInfoRange));
+            if (index->mFrameInfoRangesCnt >= index->mFrameInfoRangesMax) {
+                index->mFrameInfoRangesMax += 512;
+                if (index->mFrameInfoRanges == NULL) index->mFrameInfoRangesMax += (unsigned)(section->size / 32);
+                index->mFrameInfoRanges = (FrameInfoRange *)loc_realloc(index->mFrameInfoRanges,
+                    index->mFrameInfoRangesMax * sizeof(FrameInfoRange));
             }
-            range = cache->mFrameInfoRanges + cache->mFrameInfoRangesCnt++;
+            range = index->mFrameInfoRanges + index->mFrameInfoRangesCnt++;
             range->mAddr = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, &sec);
             range->mSize = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, NULL);
             range->mOffset = fde_pos;
@@ -1057,16 +1060,18 @@ static void create_search_index(DWARFCache * cache, ELF_Section * section) {
         dio_SetPos(fde_end);
     }
     dio_ExitSection();
-    qsort(cache->mFrameInfoRanges, cache->mFrameInfoRangesCnt, sizeof(FrameInfoRange), cmp_frame_info_ranges);
+    qsort(index->mFrameInfoRanges, index->mFrameInfoRangesCnt, sizeof(FrameInfoRange), cmp_frame_info_ranges);
 }
 
-static void read_frame_info_section(Context * ctx, ELF_File * file, U8_T IP, DWARFCache * cache, ELF_Section * section) {
+static void read_frame_info_section(Context * ctx, U8_T IP, DWARFCache * cache, FrameInfoIndex * index) {
     unsigned l, h;
+    ELF_Section * section = index->mSection;
+    ELF_File * file = section->file;
 
     memset(&rules, 0, sizeof(StackFrameRules));
     rules.ctx = ctx;
     rules.section = section;
-    rules.eh_frame = section == cache->mEHFrame;
+    rules.eh_frame = strcmp(section->name, ".eh_frame") == 0;
     rules.reg_id_scope.big_endian = file->big_endian;
     rules.reg_id_scope.machine = file->machine;
     rules.reg_id_scope.os_abi = file->os_abi;
@@ -1074,13 +1079,14 @@ static void read_frame_info_section(Context * ctx, ELF_File * file, U8_T IP, DWA
     rules.reg_id_scope.id_type = rules.eh_frame ? REGNUM_EH_FRAME : REGNUM_DWARF;
     rules.cie_pos = ~(U8_T)0;
 
-    if (cache->mFrameInfoRanges == NULL) create_search_index(cache, section);
+    if (index->mFrameInfoRanges == NULL) create_search_index(cache, index);
+
     l = 0;
-    h = cache->mFrameInfoRangesCnt;
+    h = index->mFrameInfoRangesCnt;
     while (l < h) {
         unsigned k = (l + h) / 2;
-        FrameInfoRange * range = cache->mFrameInfoRanges + k;
-        assert(cache->mFrameInfoRanges[l].mAddr <= cache->mFrameInfoRanges[h - 1].mAddr);
+        FrameInfoRange * range = index->mFrameInfoRanges + k;
+        assert(index->mFrameInfoRanges[l].mAddr <= index->mFrameInfoRanges[h - 1].mAddr);
         if (range->mAddr > IP) {
             h = k;
         }
@@ -1096,6 +1102,7 @@ static void read_frame_info_section(Context * ctx, ELF_File * file, U8_T IP, DWA
 
 void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * text_section, U8_T addr) {
     DWARFCache * cache = get_dwarf_cache(file);
+    FrameInfoIndex * index = NULL;
 
     dwarf_stack_trace_regs_cnt = 0;
     if (dwarf_stack_trace_fp == NULL) {
@@ -1106,25 +1113,21 @@ void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * te
     dwarf_stack_trace_addr = 0;
     dwarf_stack_trace_size = 0;
 
-    if (cache->mDebugFrame) {
-        read_frame_info_section(ctx, file, addr, cache, cache->mDebugFrame);
+    index = cache->mFrameInfo;
+    while (index != NULL) {
+        read_frame_info_section(ctx, addr, cache, index);
         if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
-    }
-    if (cache->mEHFrame) {
-        read_frame_info_section(ctx, file, addr, cache, cache->mEHFrame);
-        if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+        index = index->mNext;
     }
     if (file->debug_info_file_name) {
         file = elf_open(file->debug_info_file_name);
         if (file != NULL) {
             cache = get_dwarf_cache(file);
-            if (cache->mDebugFrame) {
-                read_frame_info_section(ctx, file, addr, cache, cache->mDebugFrame);
+            index = cache->mFrameInfo;
+            while (index != NULL) {
+                read_frame_info_section(ctx, addr, cache, index);
                 if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
-            }
-            if (cache->mEHFrame) {
-                read_frame_info_section(ctx, file, addr, cache, cache->mEHFrame);
-                if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+                index = index->mNext;
             }
         }
     }

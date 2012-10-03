@@ -47,6 +47,7 @@ typedef struct CompUnit CompUnit;
 typedef struct SymbolSection SymbolSection;
 typedef struct UnitAddressRange UnitAddressRange;
 typedef struct FrameInfoRange FrameInfoRange;
+typedef struct FrameInfoIndex FrameInfoIndex;
 typedef struct DWARFCache DWARFCache;
 
 struct FileInfo {
@@ -220,6 +221,14 @@ struct FrameInfoRange {
     U8_T mOffset;
 };
 
+struct FrameInfoIndex {
+    ELF_Section * mSection;
+    FrameInfoRange * mFrameInfoRanges;
+    unsigned mFrameInfoRangesCnt;
+    unsigned mFrameInfoRangesMax;
+    FrameInfoIndex * mNext;
+};
+
 #define DWARF_CACHE_MAGIC 0x34625490
 
 struct DWARFCache {
@@ -233,8 +242,6 @@ struct DWARFCache {
     ELF_Section * mDebugLineV2;
     ELF_Section * mDebugLoc;
     ELF_Section * mDebugRanges;
-    ELF_Section * mDebugFrame;
-    ELF_Section * mEHFrame;
     ObjectInfo ** mObjectHash;
     unsigned mObjectHashSize;
     struct ObjectArray * mObjectList;
@@ -243,9 +250,7 @@ struct DWARFCache {
     unsigned mAddrRangesCnt;
     unsigned mAddrRangesMax;
     PubNamesTable mPubNames;
-    FrameInfoRange * mFrameInfoRanges;
-    unsigned mFrameInfoRangesCnt;
-    unsigned mFrameInfoRangesMax;
+    FrameInfoIndex * mFrameInfo;
     unsigned mFileInfoHashSize;
     FileInfo ** mFileInfoHash;
 };

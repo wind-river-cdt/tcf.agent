@@ -994,6 +994,8 @@ static void load_debug_sections(void) {
     ELF_Section * pub_names = NULL;
     ELF_Section * pub_types = NULL;
     ELF_Section * debug_info = NULL;
+    FrameInfoIndex * frame_info_d = NULL;
+    FrameInfoIndex * frame_info_e = NULL;
     ELF_File * file = sCache->mFile;
 
     memset(&trap, 0, sizeof(trap));
@@ -1049,10 +1051,16 @@ static void load_debug_sections(void) {
             sCache->mDebugRanges = sec;
         }
         else if (strcmp(sec->name, ".debug_frame") == 0) {
-            sCache->mDebugFrame = sec;
+            FrameInfoIndex * idx = (FrameInfoIndex *)loc_alloc_zero(sizeof(FrameInfoIndex));
+            idx->mSection = sec;
+            idx->mNext = frame_info_d;
+            frame_info_d = idx;
         }
         else if (strcmp(sec->name, ".eh_frame") == 0) {
-            sCache->mEHFrame = sec;
+            FrameInfoIndex * idx = (FrameInfoIndex *)loc_alloc_zero(sizeof(FrameInfoIndex));
+            idx->mSection = sec;
+            idx->mNext = frame_info_e;
+            frame_info_e = idx;
         }
         else if (strcmp(sec->name, ".debug_pubnames") == 0) {
             pub_names = sec;
@@ -1060,6 +1068,19 @@ static void load_debug_sections(void) {
         else if (strcmp(sec->name, ".debug_pubtypes") == 0) {
             pub_types = sec;
         }
+    }
+
+    while (frame_info_e != NULL) {
+        FrameInfoIndex * idx = frame_info_e;
+        frame_info_e = idx->mNext;
+        idx->mNext = sCache->mFrameInfo;
+        sCache->mFrameInfo = idx;
+    }
+    while (frame_info_d != NULL) {
+        FrameInfoIndex * idx = frame_info_d;
+        frame_info_d = idx->mNext;
+        idx->mNext = sCache->mFrameInfo;
+        sCache->mFrameInfo = idx;
     }
 
     if (debug_info) {
@@ -1488,9 +1509,14 @@ static void free_dwarf_cache(ELF_File * file) {
             Cache->mObjectList = Buf->mNext;
             loc_free(Buf);
         }
+        while (Cache->mFrameInfo != NULL) {
+            FrameInfoIndex * idx = Cache->mFrameInfo;
+            Cache->mFrameInfo = idx->mNext;
+            loc_free(idx->mFrameInfoRanges);
+            loc_free(idx);
+        }
         loc_free(Cache->mObjectHash);
         loc_free(Cache->mAddrRanges);
-        loc_free(Cache->mFrameInfoRanges);
         loc_free(Cache->mPubNames.mHash);
         loc_free(Cache->mPubNames.mNext);
         loc_free(Cache->mFileInfoHash);
