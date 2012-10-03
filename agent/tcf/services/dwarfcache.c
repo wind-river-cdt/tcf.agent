@@ -1590,10 +1590,15 @@ static void add_state(CompUnit * Unit, LineNumbersState * state) {
         return;
     }
     if (Unit->mFiles[state->mFile].mAreaCnt++ == 0) {
+        /* Workaround: compilers don't produce mapping for first lines in a source file.
+         * Such mapping is needed, for example, for re-positioning of source line breakpoints.
+         * We add artificial entry for that.
+         */
         LineNumbersState s;
         memset(&s, 0, sizeof(s));
         s.mLine = 1;
         s.mFile = state->mFile;
+        s.mAddress = state->mAddress;
         add_state(Unit, &s);
     }
     if (Unit->mStatesCnt >= Unit->mStatesMax) {

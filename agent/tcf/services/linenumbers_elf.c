@@ -132,7 +132,6 @@ static void call_client(CompUnit * unit, LineNumbersState * state,
     FileInfo * file_info = unit->mFiles + state->mFile;
 
     if (code_next == NULL) return;
-    if (state->mAddress >= code_next->mAddress) return;
 
     memset(&area, 0, sizeof(area));
     area.start_line = state->mLine;
@@ -328,7 +327,7 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
                         }
                         for (;;) {
                             LineNumbersState * code_next = get_next_in_code(unit, state);
-                            if (code_next != NULL) {
+                            if (code_next != NULL && state->mAddress < code_next->mAddress) {
                                 LineNumbersState * text_next = get_next_in_text(unit, state);
                                 call_client(unit, state, code_next, text_next, state->mAddress - range->mAddr + range_rt_addr, client, args);
                             }
