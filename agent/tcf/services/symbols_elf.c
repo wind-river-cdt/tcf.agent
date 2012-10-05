@@ -83,6 +83,9 @@ static Context * sym_ctx;
 static int sym_frame;
 static ContextAddress sym_ip;
 
+#define        save_sym_values() Context * org_ctx = sym_ctx; int org_frame = sym_frame; ContextAddress org_ip = sym_ip;
+#define        restore_sym_values() sym_ctx = org_ctx; sym_frame = org_frame; sym_ip = org_ip;
+
 typedef long ConstantValueType;
 
 static struct ConstantPseudoSymbol {
@@ -313,9 +316,7 @@ static int is_frame_based_object(Symbol * sym) {
     if (sym->obj != NULL) {
         ContextAddress addr = 0;
         ContextAddress size = 0;
-        Context * org_ctx = sym_ctx;
-        int org_frame = sym_frame;
-        ContextAddress org_ip = sym_ip;
+        save_sym_values ();
 
         assert(sym->frame == STACK_NO_FRAME);
 
@@ -338,9 +339,7 @@ static int is_frame_based_object(Symbol * sym) {
             }
         }
 
-        sym_ctx = org_ctx;
-        sym_frame = org_frame;
-        sym_ip = org_ip;
+        restore_sym_values();
     }
 
     return res;
@@ -1434,15 +1433,11 @@ static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_
         case TAG_local_variable:
         case TAG_variable:
             if (level > 0) {
-                Context * org_ctx = sym_ctx;
-                int org_frame = sym_frame;
-                ContextAddress org_ip = sym_ip;
+                save_sym_values();
                 Symbol * sym = NULL;
                 object2symbol(find_definition(obj), &sym);
                 call_back(args, sym);
-                sym_ctx = org_ctx;
-                sym_frame = org_frame;
-                sym_ip = org_ip;
+                restore_sym_values();
             }
             break;
         }
@@ -3004,7 +2999,10 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                     UnitAddressRange * range = NULL;
                     Symbol * caller = NULL;
                     StackFrame * info = NULL;
-                    if (get_frame_info(sym_ctx, get_prev_frame(sym_ctx, sym_frame), &info) < 0) exception(errno);
+                    save_sym_values();
+                    int frame = get_prev_frame(sym_ctx, sym_frame);
+                    restore_sym_values();
+                    if (get_frame_info(sym_ctx, frame, &info) < 0) exception(errno);
                     if (read_reg_value(info, reg_def, &addr) < 0) exception(errno);
                     range = elf_find_unit(sym_ctx, addr, addr, &rt_addr);
                     if (range != NULL) find_by_addr_in_unit(
