@@ -83,8 +83,8 @@ static Context * sym_ctx;
 static int sym_frame;
 static ContextAddress sym_ip;
 
-#define        save_sym_values() Context * org_ctx = sym_ctx; int org_frame = sym_frame; ContextAddress org_ip = sym_ip;
-#define        restore_sym_values() sym_ctx = org_ctx; sym_frame = org_frame; sym_ip = org_ip;
+#define save_sym_values() Context * org_ctx = sym_ctx; int org_frame = sym_frame; ContextAddress org_ip = sym_ip
+#define restore_sym_values() sym_ctx = org_ctx; sym_frame = org_frame; sym_ip = org_ip
 
 typedef long ConstantValueType;
 
