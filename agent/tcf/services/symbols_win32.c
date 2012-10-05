@@ -1200,10 +1200,6 @@ int get_stack_tracing_info(Context * ctx, ContextAddress addr, StackTracingInfo 
     return 0;
 }
 
-int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
-    return 0;
-}
-
 int get_funccall_info(const Symbol * func,
         const Symbol ** args, unsigned args_cnt, FunctionCallInfo ** res) {
     FunctionCallInfo * info = (FunctionCallInfo *)tmp_alloc_zero(sizeof(FunctionCallInfo));

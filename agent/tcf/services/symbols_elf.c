@@ -1718,55 +1718,6 @@ int get_stack_tracing_info(Context * ctx, ContextAddress rt_addr, StackTracingIn
     return 0;
 }
 
-int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
-    int error = 0;
-    uint64_t ip = 0;
-    Context * ctx = frame->ctx;
-    StackTracingInfo * info = NULL;
-
-    if (read_reg_value(frame, get_PC_definition(ctx), &ip) < 0) {
-        if (frame->is_top_frame) error = errno;
-    }
-    else if (get_stack_tracing_info(ctx, (ContextAddress)ip, &info) < 0) {
-        error = errno;
-    }
-    else if (info != NULL) {
-        Trap trap;
-        if (set_trap(&trap)) {
-            int i;
-            LocationExpressionState * state;
-            state = evaluate_location_expression(ctx, frame, info->fp->cmds, info->fp->cmds_cnt, NULL, 0);
-            if (state->stk_pos != 1) str_exception(ERR_OTHER, "Invalid stack trace expression");
-            frame->fp = (ContextAddress)state->stk[0];
-            frame->is_walked = 1;
-            for (i = 0; i < info->reg_cnt; i++) {
-                int ok = 0;
-                uint64_t v = 0;
-                Trap trap_reg;
-                if (set_trap(&trap_reg)) {
-                    /* If a saved register value cannot be evaluated - ignore it */
-                    state = evaluate_location_expression(ctx, frame, info->regs[i]->cmds, info->regs[i]->cmds_cnt, NULL, 0);
-                    if (state->stk_pos == 1) {
-                        v = state->stk[0];
-                        ok = 1;
-                    }
-                    clear_trap(&trap_reg);
-                }
-                if (ok && write_reg_value(down, info->regs[i]->reg, v) < 0) exception(errno);
-            }
-            clear_trap(&trap);
-        }
-        else {
-            frame->fp = 0;
-        }
-    }
-    if (error) {
-        errno = error;
-        return -1;
-    }
-    return 0;
-}
-
 const char * get_symbol_file_name(Context * ctx, MemoryRegion * module) {
     int error = 0;
     ELF_File * file = module ? elf_open_memory_region_file(module, &error) : NULL;

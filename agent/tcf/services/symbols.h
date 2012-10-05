@@ -269,15 +269,6 @@ extern int get_funccall_info(const Symbol * func,
         const Symbol ** args, unsigned args_cnt, FunctionCallInfo ** info);
 
 /*
- * For given context and its registers in a stack frame,
- * compute stack frame location and next frame register values.
- * If frame info is not available, do nothing.
- * Return -1 and set errno in case of an error.
- * Return 0 on success.
- */
-extern int get_next_stack_frame(StackFrame * frame, StackFrame * down);
-
-/*
  * For given context and instruction address,
  * search for stack tracing information.
  * Return -1 and set errno in case of an error.

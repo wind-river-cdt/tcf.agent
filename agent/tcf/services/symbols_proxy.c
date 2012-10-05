@@ -130,13 +130,7 @@ typedef struct StackFrameCache {
     ErrorReport * error;
     Context * ctx;
     uint64_t ip;
-    uint64_t address;
-    uint64_t size;
-
-    StackFrameRegisterLocation * fp;
-    StackFrameRegisterLocation ** regs;
-    int regs_cnt;
-
+    StackTracingInfo sti;
     int disposed;
 } StackFrameCache;
 
@@ -327,9 +321,9 @@ static void free_stack_frame_cache(StackFrameCache * c) {
         cache_dispose(&c->cache);
         release_error_report(c->error);
         context_unlock(c->ctx);
-        for (i = 0; i < c->regs_cnt; i++) free_sft_sequence(c->regs[i]);
-        free_sft_sequence(c->fp);
-        loc_free(c->regs);
+        for (i = 0; i < c->sti.reg_cnt; i++) free_sft_sequence(c->sti.regs[i]);
+        free_sft_sequence(c->sti.fp);
+        loc_free(c->sti.regs);
         loc_free(c);
     }
 }
@@ -553,7 +547,6 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress addr, const cha
     if (!set_trap(&trap)) return -1;
 
     if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
         ip = addr;
     }
     else {
@@ -655,7 +648,6 @@ int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol **
     if (!set_trap(&trap)) return -1;
 
     if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
         ip = addr;
     }
     else {
@@ -726,7 +718,6 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress addr, Symbol *
     if (!set_trap(&trap)) return -1;
 
     if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
         ip = addr;
     }
     else {
@@ -820,10 +811,7 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * func,
 
     if (!set_trap(&trap)) return -1;
 
-    if (frame == STACK_NO_FRAME) {
-        ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
-    }
-    else {
+    if (frame != STACK_NO_FRAME) {
         StackFrame * info = NULL;
         if (frame == STACK_TOP_FRAME && (frame = get_top_frame(ctx)) < 0) exception(errno);;
         if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
@@ -1308,15 +1296,12 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     LocationInfoCache * f = NULL;
     SymInfoCache * sym_cache = NULL;
     Context * ctx = NULL;
-    Context * prs = NULL;
     uint64_t ip = 0;
 
     sym_cache = get_sym_info_cache(sym, ACC_OTHER);
     if (sym_cache == NULL) return -1;
 
-    /* Here we assume that symbol location info is valid for all threads in same memory space */
     ctx = sym_cache->update_owner;
-    prs = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
 
     if (!set_trap(&trap)) return -1;
 
@@ -1330,7 +1315,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     syms = get_symbols_cache();
     for (l = syms->link_location[h].next; l != syms->link_location + h; l = l->next) {
         LocationInfoCache * c = syms2location(l);
-        if (c->ctx == prs && strcmp(sym_cache->id, c->sym_id) == 0) {
+        if (c->ctx == ctx && strcmp(sym_cache->id, c->sym_id) == 0) {
             if (c->pending != NULL) {
                 cache_wait(&c->cache);
             }
@@ -1347,7 +1332,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** loc) {
     if (f == NULL) {
         f = (LocationInfoCache *)loc_alloc_zero(sizeof(LocationInfoCache));
         list_add_first(&f->link_syms, syms->link_location + h);
-        context_lock(f->ctx = prs);
+        context_lock(f->ctx = ctx);
         f->ip = ip;
 #if ENABLE_RCBP_TEST
         if (strncmp(sym_cache->id, "@T.", 3) == 0) {
@@ -1426,30 +1411,30 @@ static void validate_frame(Channel * c, void * args, int error) {
             size = json_read_uint64(&c->inp);
             json_test_char(&c->inp, MARKER_EOA);
             if (error || size == 0) {
-                f->address = f->ip & ~(uint64_t)3;
-                f->size = 4;
+                f->sti.addr = f->ip & ~(uint64_t)3;
+                f->sti.size = 4;
             }
             else {
                 assert(addr <= f->ip);
                 assert(addr + size > f->ip);
-                f->address = addr;
-                f->size = size;
+                f->sti.addr = (ContextAddress)addr;
+                f->sti.size = (ContextAddress)size;
             }
             location_cmds.cnt = 0;
             if (json_read_array(&c->inp, read_location_command, NULL)) {
-                f->fp = (StackFrameRegisterLocation *)loc_alloc(sizeof(StackFrameRegisterLocation) +
+                f->sti.fp = (StackFrameRegisterLocation *)loc_alloc(sizeof(StackFrameRegisterLocation) +
                     (location_cmds.cnt - 1) * sizeof(LocationExpressionCommand));
-                f->fp->reg = NULL;
-                f->fp->cmds_cnt = location_cmds.cnt;
-                f->fp->cmds_max = location_cmds.cnt;
-                memcpy(f->fp->cmds, location_cmds.cmds, location_cmds.cnt * sizeof(LocationExpressionCommand));
+                f->sti.fp->reg = NULL;
+                f->sti.fp->cmds_cnt = location_cmds.cnt;
+                f->sti.fp->cmds_max = location_cmds.cnt;
+                memcpy(f->sti.fp->cmds, location_cmds.cmds, location_cmds.cnt * sizeof(LocationExpressionCommand));
             }
             json_test_char(&c->inp, MARKER_EOA);
             trace_regs_cnt = 0;
             if (json_read_struct(&c->inp, read_stack_trace_register, NULL)) {
-                f->regs_cnt = trace_regs_cnt;
-                f->regs = (StackFrameRegisterLocation **)loc_alloc(trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
-                memcpy(f->regs, trace_regs, trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
+                f->sti.reg_cnt = trace_regs_cnt;
+                f->sti.regs = (StackFrameRegisterLocation **)loc_alloc(trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
+                memcpy(f->sti.regs, trace_regs, trace_regs_cnt * sizeof(StackFrameRegisterLocation *));
             }
             json_test_char(&c->inp, MARKER_EOA);
             json_test_char(&c->inp, MARKER_EOM);
@@ -1465,34 +1450,25 @@ static void validate_frame(Channel * c, void * args, int error) {
     if (f->disposed) free_stack_frame_cache(f);
 }
 
-int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
+int get_stack_tracing_info(Context * ctx, ContextAddress ip, StackTracingInfo ** info) {
     Trap trap;
     unsigned h;
     LINK * l;
-    uint64_t ip = 0;
-    Context * ctx = frame->ctx;
-    /* Here we assume that stack tracing info is valid for all threads in same memory space */
-    Context * prs = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
     SymbolsCache * syms = NULL;
     StackFrameCache * f = NULL;
 
+    *info = NULL;
     if (!set_trap(&trap)) return -1;
 
-    if (read_reg_value(frame, get_PC_definition(ctx), &ip) < 0) {
-        if (frame->is_top_frame) exception(errno);
-        clear_trap(&trap);
-        return 0;
-    }
-
-    h = hash_frame(prs);
+    h = hash_frame(ctx);
     syms = get_symbols_cache();
     for (l = syms->link_frame[h].next; l != syms->link_frame + h; l = l->next) {
         StackFrameCache * c = syms2frame(l);
-        if (c->ctx == prs) {
+        if (c->ctx == ctx) {
             if (c->pending != NULL) {
                 cache_wait(&c->cache);
             }
-            else if (c->address <= ip && c->address + c->size > ip) {
+            else if (c->sti.addr <= ip && c->sti.addr + c->sti.size > ip) {
                 f = c;
                 break;
             }
@@ -1508,7 +1484,7 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
         Channel * c = get_channel(syms);
         f = (StackFrameCache *)loc_alloc_zero(sizeof(StackFrameCache));
         list_add_first(&f->link_syms, syms->link_frame + h);
-        context_lock(f->ctx = prs);
+        context_lock(f->ctx = ctx);
         f->ip = ip;
         f->pending = protocol_send_command(c, SYMBOLS, "findFrameInfo", validate_frame, f);
         json_write_string(&c->out, f->ctx->id);
@@ -1521,35 +1497,8 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
     else if (f->error != NULL) {
         exception(set_error_report_errno(f->error));
     }
-    else if (f->fp != NULL) {
-        Trap trap;
-        if (set_trap(&trap)) {
-            int i;
-            LocationExpressionState * state;
-            state = evaluate_location_expression(ctx, frame, f->fp->cmds, f->fp->cmds_cnt, NULL, 0);
-            if (state->stk_pos != 1) str_exception(ERR_OTHER, "Invalid stack trace expression");
-            frame->fp = (ContextAddress)state->stk[0];
-            frame->is_walked = 1;
-            for (i = 0; i < f->regs_cnt; i++) {
-                int ok = 0;
-                uint64_t v = 0;
-                Trap trap_reg;
-                if (set_trap(&trap_reg)) {
-                    /* If a saved register value cannot be evaluated - ignore it */
-                    state = evaluate_location_expression(ctx, frame, f->regs[i]->cmds, f->regs[i]->cmds_cnt, NULL, 0);
-                    if (state->stk_pos == 1) {
-                        v = state->stk[0];
-                        ok = 1;
-                    }
-                    clear_trap(&trap_reg);
-                }
-                if (ok && write_reg_value(down, f->regs[i]->reg, v) < 0) exception(errno);
-            }
-            clear_trap(&trap);
-        }
-        else {
-            frame->fp = 0;
-        }
+    else if (f->sti.fp != NULL) {
+        *info = &f->sti;
     }
 
     clear_trap(&trap);
@@ -1628,13 +1577,13 @@ static void flush_syms(Context * ctx, int mode) {
                 while (l != syms->link_frame + i) {
                     StackFrameCache * c = syms2frame(l);
                     l = l->next;
-                    if (c->ctx == prs) free_stack_frame_cache(c);
+                    if (context_get_group(c->ctx, CONTEXT_GROUP_SYMBOLS) == prs) free_stack_frame_cache(c);
                 }
                 l = syms->link_location[i].next;
                 while (l != syms->link_location + i) {
                     LocationInfoCache * c = syms2location(l);
                     l = l->next;
-                    if (c->ctx == prs) free_location_info_cache(c);
+                    if (context_get_group(c->ctx, CONTEXT_GROUP_SYMBOLS) == prs) free_location_info_cache(c);
                 }
             }
         }
