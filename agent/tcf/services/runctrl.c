@@ -1153,9 +1153,12 @@ static int is_function_prologue(Context * ctx, ContextAddress ip, CodeArea * are
     Symbol * sym = NULL;
     int sym_class = SYM_CLASS_UNKNOWN;
     ContextAddress sym_addr = 0;
+    ContextAddress sym_size = 0;
     if (find_symbol_by_addr(ctx, STACK_NO_FRAME, ip, &sym) < 0) return 0;
     if (get_symbol_class(sym, &sym_class) < 0) return 0;
     if (sym_class != SYM_CLASS_FUNCTION) return 0;
+    if (get_symbol_size(sym, &sym_size) < 0) return 0;
+    if (sym_size == 0) return 0;
     if (get_symbol_address(sym, &sym_addr) < 0) return 0;
     if (sym_addr >= area->start_address && sym_addr < area->end_address) return 1;
 #endif
