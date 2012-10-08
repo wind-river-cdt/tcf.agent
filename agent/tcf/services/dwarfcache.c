@@ -1613,6 +1613,12 @@ static int state_address_comparator(const void * x1, const void * x2) {
     LineNumbersState * s2 = (LineNumbersState *)x2;
     if (s1->mAddress < s2->mAddress) return -1;
     if (s1->mAddress > s2->mAddress) return +1;
+    if (s1->mFile < s2->mFile) return -1;
+    if (s1->mFile > s2->mFile) return +1;
+    if (s1->mLine < s2->mLine) return -1;
+    if (s1->mLine > s2->mLine) return +1;
+    if (s1->mColumn < s2->mColumn) return -1;
+    if (s1->mColumn > s2->mColumn) return +1;
     return 0;
 }
 
