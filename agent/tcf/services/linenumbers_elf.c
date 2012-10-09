@@ -160,7 +160,7 @@ static void call_client(CompUnit * unit, LineNumbersState * state,
     area.file_size = file_info->mSize;
     area.start_address = state_addr;
     area.end_address = code_next->mAddress - state->mAddress + state_addr;
-    if (text_next != NULL) area.next_address = text_next->mAddress;
+    if (text_next != NULL) area.next_address = text_next->mAddress - state->mAddress + state_addr;
     area.isa = state->mISA;
     area.is_statement = (state->mFlags & LINE_IsStmt) != 0;
     area.basic_block = (state->mFlags & LINE_BasicBlock) != 0;
