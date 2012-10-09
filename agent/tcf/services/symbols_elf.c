@@ -130,10 +130,12 @@ static struct BaseTypeAlias {
     { "signed long", "long int" },
     { "signed long int", "long int" },
     { "unsigned long", "unsigned long int" },
+    { "unsigned long", "long unsigned int" },
     { "long long", "long long int" },
     { "signed long long", "long long int" },
     { "signed long long int", "long long int" },
     { "unsigned long long", "unsigned long long int" },
+    { "unsigned long long", "long long unsigned int" },
     { "char", "signed char" },
     { "char", "unsigned char" },
     { NULL, NULL }

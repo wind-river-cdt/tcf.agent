@@ -83,6 +83,12 @@
 #define MODE_TYPE   1
 #define MODE_SKIP   2
 
+#define VAL_FLAG_X 0x01
+#define VAL_FLAG_U 0x02
+#define VAL_FLAG_L 0x04
+#define VAL_FLAG_F 0x08
+#define VAL_FLAG_C 0x10
+
 #define SYM_FLAG_TYPE 0xf0000000
 
 static char * text = NULL;
@@ -92,6 +98,7 @@ static int text_ch = 0;
 static int text_sy = 0;
 static int sy_pos = 0;
 static Value text_val;
+static int text_val_flags = 0;
 
 /* Host endianness */
 static int big_endian = 0;
@@ -323,10 +330,31 @@ static int is_name_character(int ch) {
     return 0;
 }
 
+static void parse_fp_number(int pos) {
+    char * end = NULL;
+    double x = strtod(text + pos, &end);
+    text_pos = end - text;
+    next_ch();
+    text_val.type_class = TYPE_CLASS_REAL;
+    if (text_ch == 'f' || text_ch == 'F') {
+        next_ch();
+        text_val_flags |= VAL_FLAG_F;
+        set_fp_value(&text_val, sizeof(float), x);
+    }
+    else {
+        if (text_ch == 'l' || text_ch == 'L') {
+            next_ch();
+            text_val_flags |= VAL_FLAG_L;
+        }
+        set_fp_value(&text_val, sizeof(double), x);
+    }
+}
+
 static void next_sy(void) {
     for (;;) {
         int ch = text_ch;
         sy_pos = text_pos - 1;
+        text_val_flags = 0;
         next_ch();
         switch (ch) {
         case 0:
@@ -512,13 +540,18 @@ static void next_sy(void) {
             text_sy = ch;
             return;
         case '\'':
-            memset(&text_val, 0, sizeof(text_val));
-            text_val.type_class = TYPE_CLASS_INTEGER;
-            set_int_value(&text_val, sizeof(uint16_t), next_char_val());
-            text_val.constant = 1;
-            if (text_ch != '\'') error(ERR_INV_EXPRESSION, "Missing 'single quote'");
-            next_ch();
-            text_sy = SY_VAL;
+            {
+                int value = next_char_val();
+                memset(&text_val, 0, sizeof(text_val));
+                text_val.type_class = TYPE_CLASS_INTEGER;
+                if (value >= 0 && value <= 0x7f) set_int_value(&text_val, sizeof(uint8_t), value);
+                else set_int_value(&text_val, sizeof(uint16_t), value);
+                text_val_flags |= VAL_FLAG_C;
+                text_val.constant = 1;
+                if (text_ch != '\'') error(ERR_INV_EXPRESSION, "Missing 'single quote'");
+                next_ch();
+                text_sy = SY_VAL;
+            }
             return;
         case '"':
             {
@@ -534,28 +567,52 @@ static void next_sy(void) {
             }
             return;
         case '0':
-            if (text_ch == 'x') {
+            {
                 uint64_t value = 0;
-                next_ch();
-                while ((text_ch >= '0' && text_ch <= '9') ||
-                       (text_ch >= 'A' && text_ch <= 'F') ||
-                       (text_ch >= 'a' && text_ch <= 'f')) {
-                    value = (value << 4) | next_hex();
-                }
+                int pos = text_pos - 2;
                 memset(&text_val, 0, sizeof(text_val));
-                text_val.type_class = TYPE_CLASS_CARDINAL;
-                set_int_value(&text_val, sizeof(uint64_t), value);
-                text_val.constant = 1;
-            }
-            else {
-                int64_t value = 0;
-                while (text_ch >= '0' && text_ch <= '7') {
-                    value = (value << 3) | next_oct();
+                if (text_ch == '.' || text_ch == 'e' || text_ch == 'E' || text_ch == 'f' || text_ch == 'F') {
+                    parse_fp_number(pos);
+                    text_val.constant = 1;
+                    text_sy = SY_VAL;
+                    return;
                 }
-                memset(&text_val, 0, sizeof(text_val));
-                text_val.type_class = TYPE_CLASS_INTEGER;
-                set_int_value(&text_val, sizeof(int64_t), value);
+                else if (text_ch == 'x') {
+                    next_ch();
+                    text_val_flags |= VAL_FLAG_X;
+                    text_val.type_class = TYPE_CLASS_CARDINAL;
+                    while ((text_ch >= '0' && text_ch <= '9') ||
+                           (text_ch >= 'A' && text_ch <= 'F') ||
+                           (text_ch >= 'a' && text_ch <= 'f')) {
+                        value = (value << 4) | next_hex();
+                    }
+                }
+                else {
+                    text_val.type_class = TYPE_CLASS_INTEGER;
+                    while (text_ch >= '0' && text_ch <= '7') {
+                        value = (value << 3) | next_oct();
+                        text_val.type_class = TYPE_CLASS_CARDINAL;
+                        text_val_flags |= VAL_FLAG_X;
+                    }
+                }
+                if (value <= 0xff) set_int_value(&text_val, sizeof(uint8_t), value);
+                else if (value <= 0xffff) set_int_value(&text_val, sizeof(uint16_t), value);
+                else if (value <= 0xffffffff) set_int_value(&text_val, sizeof(uint32_t), value);
+                else set_int_value(&text_val, sizeof(uint64_t), value);
                 text_val.constant = 1;
+                for (;;) {
+                    if (text_ch == 'l' || text_ch == 'L') {
+                        text_val_flags |= VAL_FLAG_L;
+                        next_ch();
+                    }
+                    else if (text_ch == 'u' || text_ch == 'U') {
+                        text_val_flags |= VAL_FLAG_U;
+                        next_ch();
+                    }
+                    else {
+                        break;
+                    }
+                }
             }
             text_sy = SY_VAL;
             return;
@@ -567,36 +624,28 @@ static void next_sy(void) {
                     value = (value * 10) + next_dec();
                 }
                 memset(&text_val, 0, sizeof(text_val));
-                if (text_ch == '.' || text_ch == 'e' || text_ch == 'E') {
-                    char * end = NULL;
-                    double x = strtod(text + pos, &end);
-                    text_pos = end - text;
-                    next_ch();
-                    text_val.type_class = TYPE_CLASS_REAL;
-                    if (text_ch == 'f' || text_ch == 'F') {
-                        next_ch();
-                        set_fp_value(&text_val, sizeof(float), x);
-                    }
-                    else {
-                        if (text_ch == 'l' || text_ch == 'L') next_ch();
-                        set_fp_value(&text_val, sizeof(double), x);
-                    }
-#if ENABLE_Symbols
-                    find_symbol_by_name(expression_context, expression_frame,
-                        expression_addr, text_val.size == sizeof(float) ? "float" : "double", &text_val.type);
-                    if (text_val.type != NULL) {
-                        int sym_class = 0;
-                        int type_class = 0;
-                        if (get_symbol_class(text_val.type, &sym_class) < 0 || sym_class != SYM_CLASS_TYPE ||
-                            get_symbol_type_class(text_val.type, &type_class) < 0 || type_class != TYPE_CLASS_REAL) {
-                            text_val.type = NULL;
-                        }
-                    }
-#endif
+                if (text_ch == '.' || text_ch == 'e' || text_ch == 'E' || text_ch == 'f' || text_ch == 'F') {
+                    parse_fp_number(pos);
                 }
                 else {
                     text_val.type_class = TYPE_CLASS_INTEGER;
-                    set_int_value(&text_val, sizeof(int64_t), value);
+                    if (value <= 0x7f) set_int_value(&text_val, sizeof(int8_t), value);
+                    else if (value <= 0x7fff) set_int_value(&text_val, sizeof(int16_t), value);
+                    else if (value <= 0x7fffffff) set_int_value(&text_val, sizeof(int32_t), value);
+                    else set_int_value(&text_val, sizeof(int64_t), value);
+                    for (;;) {
+                        if (text_ch == 'l' || text_ch == 'L') {
+                            text_val_flags |= VAL_FLAG_L;
+                            next_ch();
+                        }
+                        else if (text_ch == 'u' || text_ch == 'U') {
+                            text_val_flags |= VAL_FLAG_U;
+                            next_ch();
+                        }
+                        else {
+                            break;
+                        }
+                    }
                 }
                 text_val.constant = 1;
                 text_sy = SY_VAL;
@@ -1379,6 +1428,24 @@ static void qualified_name_expression(int mode, Value * scope, Value * v) {
     error(ERR_INV_EXPRESSION, "Illegal usage of a type in expression");
 }
 
+#if SERVICE_Symbols
+static int get_std_type(const char * name, int type_class, Symbol ** type, size_t * size) {
+    Symbol * sym = NULL;
+    int sym_class = 0;
+    int sym_type_class = 0;
+    ContextAddress sym_size = 0;
+    if (find_symbol_by_name(expression_context,
+        expression_frame, expression_addr, name, &sym) < 0) return 0;
+    if (sym == NULL) return 0;
+    if (get_symbol_class(sym, &sym_class) < 0 || sym_class != SYM_CLASS_TYPE) return 0;
+    if (get_symbol_type_class(sym, &sym_type_class) < 0 || sym_type_class != type_class) return 0;
+    if (get_symbol_size(sym, &sym_size) < 0 || sym_size == 0) return 0;
+    *type = sym;
+    *size = (size_t)sym_size;
+    return 1;
+}
+#endif
+
 static void primary_expression(int mode, Value * v) {
     if (text_sy == '(') {
         next_sy();
@@ -1388,6 +1455,75 @@ static void primary_expression(int mode, Value * v) {
     }
     else if (text_sy == SY_VAL) {
         *v = text_val;
+#if SERVICE_Symbols
+        if (v->type_class == TYPE_CLASS_INTEGER || v->type_class == TYPE_CLASS_CARDINAL) {
+            size_t size = 0;
+            uint64_t n = to_uns(mode, v);
+            if (text_val_flags & VAL_FLAG_C) {
+                Symbol * type = NULL;
+                if (get_std_type("char", TYPE_CLASS_INTEGER, &type, &size)) {
+                    uint64_t m = ((uint64_t)1 << (size * 8 - 1)) - 1;
+                    if (n <= m) {
+                        v->type = type;
+                        v->type_class = TYPE_CLASS_INTEGER;
+                    }
+                }
+            }
+            else {
+                if ((text_val_flags & (VAL_FLAG_L | VAL_FLAG_U)) == 0) {
+                    Symbol * type = NULL;
+                    if (get_std_type("int", TYPE_CLASS_INTEGER, &type, &size)) {
+                        uint64_t m = ((uint64_t)1 << (size * 8 - 1)) - 1;
+                        if (n <= m) {
+                            v->type = type;
+                            v->type_class = TYPE_CLASS_INTEGER;
+                        }
+                    }
+                }
+                if (v->type == NULL && (text_val_flags & VAL_FLAG_L) == 0 &&
+                        (text_val_flags & (VAL_FLAG_X | VAL_FLAG_U)) != 0) {
+                    Symbol * type = NULL;
+                    if (get_std_type("unsigned int", TYPE_CLASS_CARDINAL, &type, &size)) {
+                        uint64_t m = ((uint64_t)1 << (size * 8)) - 1;
+                        if (n <= m) {
+                            v->type = type;
+                            v->type_class = TYPE_CLASS_CARDINAL;
+                        }
+                    }
+                }
+                if (v->type == NULL && (text_val_flags & VAL_FLAG_U) == 0) {
+                    Symbol * type = NULL;
+                    if (get_std_type("long int", TYPE_CLASS_INTEGER, &type, &size)) {
+                        uint64_t m = ((uint64_t)1 << (size * 8 - 1)) - 1;
+                        if (n <= m) {
+                            v->type = type;
+                            v->type_class = TYPE_CLASS_INTEGER;
+                        }
+                    }
+                }
+                if (v->type == NULL) {
+                    Symbol * type = NULL;
+                    if (get_std_type("long unsigned int", TYPE_CLASS_CARDINAL, &type, &size)) {
+                        uint64_t m = ((uint64_t)1 << (size * 8)) - 1;
+                        if (n <= m) {
+                            v->type = type;
+                            v->type_class = TYPE_CLASS_CARDINAL;
+                        }
+                    }
+                }
+            }
+            if (v->type != NULL && size != v->size) set_int_value(v, size, n);
+        }
+        else if (v->type_class == TYPE_CLASS_REAL) {
+            size_t size = 0;
+            Symbol * type = NULL;
+            const char * name = text_val_flags & VAL_FLAG_F ? "float" : "double";
+            if (get_std_type(name, TYPE_CLASS_REAL, &type, &size)) {
+                v->type = type;
+                if (size != v->size) set_fp_value(v, size, to_double(mode, v));
+            }
+        }
+#endif
         next_sy();
         if (v->type_class == TYPE_CLASS_ARRAY && text_sy == SY_SCOPE) {
             Value x;
