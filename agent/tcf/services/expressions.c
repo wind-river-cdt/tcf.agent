@@ -773,6 +773,7 @@ static int sym2value(int mode, Symbol * sym, Value * v) {
                 }
                 v->size = size;
                 v->value = value;
+                v->loc = state;
             }
             v->big_endian = loc_info->big_endian;
         }
