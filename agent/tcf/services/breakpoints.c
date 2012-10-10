@@ -1251,13 +1251,12 @@ static void plant_at_address_expression(Context * ctx, ContextAddress ip, Breakp
         else {
             size = context_word_size(ctx);
 #if ENABLE_Symbols
-            {
+            if (v.type != NULL) {
                 Symbol * type = v.type;
-                if (type != NULL) {
-                    int type_class = 0;
+                int type_class = 0;
+                if (!error && get_symbol_type_class(type, &type_class) < 0) error = errno;
+                if (!error && type_class == TYPE_CLASS_POINTER) {
                     Symbol * base_type = NULL;
-                    if (!error && get_symbol_type_class(type, &type_class) < 0) error = errno;
-                    if (!error && type_class != TYPE_CLASS_POINTER) error = set_errno(ERR_INV_DATA_TYPE, "Pointer expected");
                     if (!error && get_symbol_base_type(type, &base_type) < 0) error = errno;
                     if (!error && base_type != NULL && get_symbol_size(base_type, &size) < 0) error = errno;
                 }
