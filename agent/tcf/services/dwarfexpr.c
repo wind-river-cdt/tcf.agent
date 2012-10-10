@@ -43,7 +43,7 @@ void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo *
 
     if (Value->mAddr == NULL || Value->mSize == 0) str_exception(ERR_INV_DWARF, "Invalid format of location expression");
 
-    if (Value->mForm == FORM_DATA4 || Value->mForm == FORM_DATA8) {
+    if (Value->mForm == FORM_DATA4 || Value->mForm == FORM_DATA8 || Value->mForm == FORM_SEC_OFFSET) {
         U8_T Base = 0;
         U8_T Offset = 0;
         U8_T AddrMax = ~(U8_T)0;

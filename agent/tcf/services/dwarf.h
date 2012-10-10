@@ -81,6 +81,9 @@
 #define TAG_mutable_type            0x003e
 #define TAG_condition               0x003f
 #define TAG_shared_type             0x0040
+#define TAG_type_unit               0x0041 /* v4 */
+#define TAG_rvalue_reference_type   0x0042 /* v4 */
+#define TAG_template_alias          0x0043 /* v4 */
 #define TAG_lo_user                 0x4080
 #define TAG_wrs_thrown_object       0x4080
 #define TAG_wrs_throw_breakpoint    0x4081
