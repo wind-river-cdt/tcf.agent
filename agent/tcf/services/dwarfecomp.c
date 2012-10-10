@@ -314,13 +314,16 @@ static void op_push_tls_address(void) {
 static void op_call() {
     U8_T ref_id = 0;
     DIO_UnitDescriptor * desc = &expr->unit->mDesc;
-    U8_T dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
+    U8_T dio_pos = 0;
+    U1_T opcode = 0;
     ObjectInfo * ref_obj = NULL;
     DWARFExpressionInfo info;
     PropertyValue pv;
 
+    opcode = expr->expr_addr[expr_pos++];
+    dio_pos = expr->expr_addr + expr_pos - (U1_T *)expr->section->data;
     dio_EnterSection(desc, expr->section, dio_pos);
-    switch (expr->expr_addr[expr_pos]) {
+    switch (opcode) {
     case OP_call2:
         ref_id = desc->mSection->addr + desc->mUnitOffs + dio_ReadU2();
         break;
