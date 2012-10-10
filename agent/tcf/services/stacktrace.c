@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -172,16 +172,35 @@ static void trace_stack(Context * ctx, StackTrace * stack) {
             }
         }
         trace(LOG_STACK, "  cfa      %16"PRIX64, (uint64_t)frame.fp);
-        if (stack->frame_cnt > 0 && frame.fp == prev_fp) {
+        if (!down.has_reg_data) {
             loc_free(down.regs);
             break;
+        }
+        if (stack->frame_cnt > 0 && frame.fp == prev_fp) {
+            /* Compare registers in current and next frame */
+            int equ = 1;
+            RegisterDefinition * r;
+            for (r = get_reg_definitions(ctx); r->name != NULL; r++) {
+                uint64_t v0 = 0, v1 = 0;
+                int f0 = read_reg_value(&frame, r, &v0) == 0;
+                int f1 = read_reg_value(&down, r, &v1) == 0;
+                if (f0 != f1 || (f0 && v0 != v1)) {
+                    equ = 0;
+                    break;
+                }
+            }
+            if (equ) {
+                /* All registers are same - stop tracing */
+                loc_free(down.regs);
+                break;
+            }
         }
         add_frame(stack, &frame);
         prev_fp = frame.fp;
         frame = down;
     }
 
-    if (frame.has_reg_data) add_frame(stack, &frame);
+    if (stack->frame_cnt == 0 || frame.has_reg_data) add_frame(stack, &frame);
     else loc_free(frame.regs);
 
     if (get_error_code(error) == ERR_CACHE_MISS) {
