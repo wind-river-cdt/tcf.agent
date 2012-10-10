@@ -143,7 +143,7 @@ int id2frame(const char * id, Context ** ctx, int * frame) {
 }
 
 const char * frame2id(Context * ctx, int frame) {
-    static char id[256];
+    char id[256];
 
     assert(frame >= 0);
     if (!context_has_state(ctx)) {
@@ -151,11 +151,11 @@ const char * frame2id(Context * ctx, int frame) {
         return NULL;
     }
     snprintf(id, sizeof(id), "FP%d.%s", frame, ctx->id);
-    return id;
+    return tmp_strdup(id);
 }
 
 const char * register2id(Context * ctx, int frame, RegisterDefinition * reg) {
-    static char id[256];
+    char id[256];
     RegisterDefinition * defs = get_reg_definitions(ctx);
     if (frame < 0) {
         snprintf(id, sizeof(id), "R%d.%s", (int)(reg - defs), ctx->id);
@@ -163,7 +163,7 @@ const char * register2id(Context * ctx, int frame, RegisterDefinition * reg) {
     else {
         snprintf(id, sizeof(id), "R%d@%d.%s", (int)(reg - defs), frame, ctx->id);
     }
-    return id;
+    return tmp_strdup(id);
 }
 
 int id2register(const char * id, Context ** ctx, int * frame, RegisterDefinition ** reg_def) {
