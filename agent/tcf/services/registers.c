@@ -352,6 +352,10 @@ void send_event_register_changed(const char * id) {
     }
 
     if (is_intercepted(ctx)) {
+        if (frame >= 0 && frame == get_top_frame(ctx)) {
+            id = register2id(ctx, STACK_TOP_FRAME, def);
+        }
+
         write_stringz(out, "E");
         write_stringz(out, REGISTERS);
         write_stringz(out, "registerChanged");
