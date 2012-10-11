@@ -604,20 +604,18 @@ static void evaluate_expression(void) {
             break;
         case OP_stack_value:
             check_e_stack(1);
-            state->stk_pos--;
-            value_size = sizeof(uint64_t);
+            value_size = state->addr_size;
             value_addr = tmp_alloc(value_size);
-            memcpy(value_addr, state->stk + state->stk_pos, value_size);
-            if (!is_end_of_loc_expr()) inv_dwarf("OP_stack_value must be last instruction");
-            if (big_endian_host() != state->reg_id_scope.big_endian) {
-                size_t i, j, n = value_size >> 1;
-                char * p = (char *)value_addr;
-                for (i = 0, j = value_size - 1; i < n; i++, j--) {
-                    char x = p[i];
-                    p[i] = p[j];
-                    p[j] = x;
+            {
+                unsigned i;
+                uint8_t * buf = value_addr;
+                uint64_t n = state->stk[--state->stk_pos];
+                for (i = 0; i < value_size; i++) {
+                    buf[state->reg_id_scope.big_endian ? value_size - i - 1 : i] = (uint8_t)n;
+                    n >>= 8;
                 }
             }
+            if (!is_end_of_loc_expr()) inv_dwarf("OP_stack_value must be last instruction");
             break;
         case OP_TCF_offset:
             if (reg_def != NULL || value_addr != NULL) add_piece();
