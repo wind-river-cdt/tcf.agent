@@ -104,7 +104,7 @@ int elf_enumerate_symbols (Context * ctx, const char * file_name, EnumerateSymbo
 
         /* Look for the symbol table sections */
 
-        for (ix = 0; ix < file->section_cnt && symtab_idx == 0 && dynsym_idx == 0; ix++) {
+        for (ix = 0; ix < file->section_cnt && (symtab_idx == 0 || dynsym_idx == 0); ix++) {
             ELF_Section * sec = file->sections + ix;
             if (sec->type == SHT_SYMTAB) symtab_idx = ix;
             else if (sec->type == SHT_DYNSYM) dynsym_idx = ix;
