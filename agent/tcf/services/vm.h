@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2011, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -13,6 +13,9 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
+/*
+ * A virtual machine that executes DWARF expressions.
+ */
 
 #ifndef D_vm
 #define D_vm

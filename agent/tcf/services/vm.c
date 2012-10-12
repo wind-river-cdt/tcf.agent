@@ -13,6 +13,10 @@
  *     Wind River Systems - initial API and implementation
  *******************************************************************************/
 
+/*
+ * A virtual machine that executes DWARF expressions.
+ */
+
 #include <tcf/config.h>
 
 #if ENABLE_DebugContext
@@ -608,7 +612,7 @@ static void evaluate_expression(void) {
             value_addr = tmp_alloc(value_size);
             {
                 unsigned i;
-                uint8_t * buf = value_addr;
+                uint8_t * buf = (uint8_t *)value_addr;
                 uint64_t n = state->stk[--state->stk_pos];
                 for (i = 0; i < value_size; i++) {
                     buf[state->reg_id_scope.big_endian ? value_size - i - 1 : i] = (uint8_t)n;
