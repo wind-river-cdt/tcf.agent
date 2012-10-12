@@ -1103,21 +1103,6 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
                         i++;
                     }
                 }
-                if (find_symbol_list == NULL) {
-                    i = 0;
-                    while (type_pseudo_symbols[i].name) {
-                        if (strcmp(name, type_pseudo_symbols[i].name) == 0) {
-                            Symbol * type = NULL;
-                            alloc_int_type_pseudo_symbol(
-                                context_get_group(ctx, CONTEXT_GROUP_SYMBOLS),
-                                type_pseudo_symbols[i].size, type_pseudo_symbols[i].sign, &type);
-                            type->index = i + 1;
-                            add_to_find_symbol_buf(type);
-                            break;
-                        }
-                        i++;
-                    }
-                }
                 clear_trap(&trap);
             }
             else {
@@ -1167,7 +1152,22 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
             if (file == NULL) error = errno;
         }
         elf_list_done(sym_ctx);
-        sym_ip = 0;
+    }
+
+    if (error == 0 && find_symbol_list == NULL) {
+        unsigned i = 0;
+        while (type_pseudo_symbols[i].name) {
+            if (strcmp(name, type_pseudo_symbols[i].name) == 0) {
+                Symbol * type = NULL;
+                alloc_int_type_pseudo_symbol(
+                    context_get_group(ctx, CONTEXT_GROUP_SYMBOLS),
+                    type_pseudo_symbols[i].size, type_pseudo_symbols[i].sign, &type);
+                type->index = i + 1;
+                add_to_find_symbol_buf(type);
+                break;
+            }
+            i++;
+        }
     }
 
     if (error == 0 && find_symbol_list == NULL) error = ERR_SYM_NOT_FOUND;
