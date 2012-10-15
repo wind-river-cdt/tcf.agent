@@ -351,7 +351,7 @@ void send_event_register_changed(const char * id) {
         l->func->register_changed(ctx, frame, def, l->args);
     }
 
-    if (is_intercepted(ctx)) {
+    if (!context_has_state(ctx) || is_intercepted(ctx)) {
         if (frame >= 0 && frame == get_top_frame(ctx)) {
             id = register2id(ctx, STACK_TOP_FRAME, def);
         }
