@@ -1188,6 +1188,17 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
             errno = 0;
             return (ContextAddress)(addr - sec->addr + r->addr);
         }
+        else if (file->type == ET_EXEC || file->type == ET_DYN) {
+            unsigned j;
+            for (j = 1; j < file->section_cnt; j++) {
+                ELF_Section * s = file->sections + j;
+                if (s->addr <= addr && s->addr + s->size > addr &&
+                    s->name != NULL && strcmp(s->name, r->sect_name) == 0) {
+                    errno = 0;
+                    return (ContextAddress)(addr - s->addr + r->addr);
+                }
+            }
+        }
     }
     if (file->type == ET_EXEC) {
         errno = 0;
