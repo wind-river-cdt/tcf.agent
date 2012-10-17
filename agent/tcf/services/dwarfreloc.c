@@ -87,6 +87,8 @@ static void relocate(void * r) {
                 sym_value = bf.st_value;
                 break;
             case SHN_COMMON:
+                str_exception(ERR_INV_FORMAT, "Common relocation record unsupported");
+                break;
             case SHN_UNDEF:
                 str_exception(ERR_INV_FORMAT, "Invalid relocation record");
                 break;
@@ -140,6 +142,8 @@ static void relocate(void * r) {
                 sym_value = bf.st_value;
                 break;
             case SHN_COMMON:
+                str_exception(ERR_INV_FORMAT, "Common relocation record unsupported");
+                break;
             case SHN_UNDEF:
                 str_exception(ERR_INV_FORMAT, "Invalid relocation record");
                 break;
