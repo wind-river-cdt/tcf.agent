@@ -580,6 +580,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\framework\shutdown.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\framework\shutdown.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\framework\signames.c"
 				>
 			</File>

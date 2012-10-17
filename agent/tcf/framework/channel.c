@@ -43,6 +43,9 @@
 #include <tcf/framework/link.h>
 #include <tcf/framework/json.h>
 
+static void trigger_channel_shutdown(ShutdownInfo * obj);
+
+ShutdownInfo channel_shutdown = { trigger_channel_shutdown };
 LINK channel_root = TCF_LIST_INIT(channel_root);
 LINK channel_server_root = TCF_LIST_INIT(channel_server_root);
 
@@ -63,6 +66,26 @@ static int close_listeners_cnt = 0;
 
 static const int BROADCAST_OK_STATES = (1 << ChannelStateConnected) | (1 << ChannelStateRedirectSent) | (1 << ChannelStateRedirectReceived);
 #define isBoardcastOkay(c) ((1 << (c)->state) & BROADCAST_OK_STATES)
+
+static void trigger_channel_shutdown(ShutdownInfo * obj) {
+    LINK * l;
+
+    l = channel_root.next;
+    while (l != &channel_root) {
+        Channel * c = chanlink2channelp(l);
+        l = l->next;
+        if (!is_channel_closed(c)) {
+            channel_close(c);
+        }
+    }
+
+    l = channel_server_root.next;
+    while (l != &channel_server_root) {
+        ChannelServer * s = servlink2channelserverp(l);
+        l = l->next;
+        s->close(s);
+    }
+}
 
 static void write_all(OutputStream * out, int byte) {
     TCFBroadcastGroup * bcg = out2bcast(out);

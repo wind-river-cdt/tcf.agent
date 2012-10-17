@@ -114,6 +114,9 @@
     <ClCompile Include="tcf\framework\proxy.c">
       <Filter>framework</Filter>
     </ClCompile>
+    <ClCompile Include="tcf\framework\shutdown.c">
+      <Filter>framework</Filter>
+    </ClCompile>
     <ClCompile Include="tcf\framework\signames.c">
       <Filter>framework</Filter>
     </ClCompile>
@@ -372,6 +375,9 @@
       <Filter>framework</Filter>
     </ClInclude>
     <ClInclude Include="tcf\framework\proxy.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\framework\shutdown.h">
       <Filter>framework</Filter>
     </ClInclude>
     <ClInclude Include="tcf\framework\signames.h">

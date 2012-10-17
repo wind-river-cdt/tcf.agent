@@ -53,7 +53,8 @@ struct trace_mode trace_mode_table[MAX_TRACE_MODES + 1] = {
     { LOG_ELF, "elf", "ELF reader" },
     { LOG_LUA, "lua", "LUA interpreter" },
     { LOG_STACK, "stack", "stack trace service" },
-    { LOG_PLUGIN, "plugin", "plugins" }
+    { LOG_PLUGIN, "plugin", "plugins" },
+    { LOG_SHUTDOWN, "shutdown", "shutdown of subsystems" }
 };
 
 static pthread_mutex_t mutex;

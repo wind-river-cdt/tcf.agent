@@ -86,6 +86,7 @@ struct ServerInstance {
 
 struct ServerPIPE {
     ChannelServer serv;
+    int closed;
     LINK servlink;
     ServerInstance arr[SERVER_INSTANCE_CNT];
 };
@@ -117,6 +118,8 @@ static void delete_channel(ChannelPIPE * c) {
     channel_clear_broadcast_group(&c->chan);
     close_input_pipe(c);
     list_remove(&c->chan.chanlink);
+    if (list_is_empty(&channel_root) && list_is_empty(&channel_server_root))
+        shutdown_set_stopped(&channel_shutdown);
     c->magic = 0;
     loc_free(c->ibuf.buf);
     loc_free(c->chan.peer_name);
@@ -465,6 +468,7 @@ static ChannelPIPE * create_channel(int fd_inp, int fd_out, ServerInstance * ser
     c->chan.out.write_block = pipe_write_block_stream;
     c->chan.out.splice_block = pipe_splice_block_stream;
     list_add_last(&c->chan.chanlink, &channel_root);
+    shutdown_set_normal(&channel_shutdown);
     c->chan.state = ChannelStateStartWait;
     c->chan.incoming = server != NULL;
     c->chan.start_comm = start_channel;
@@ -698,7 +702,12 @@ static void server_close(ChannelServer * serv) {
     int i;
 
     assert(is_dispatch_thread());
+    if (s->closed)
+        return;
+    s->closed = 1;
     list_remove(&s->serv.servlink);
+    if (list_is_empty(&channel_root) && list_is_empty(&channel_server_root))
+        shutdown_set_stopped(&channel_shutdown);
     list_remove(&s->servlink);
     peer_server_free(s->serv.ps);
     for (i = 0; i < SERVER_INSTANCE_CNT; i++) {
@@ -737,6 +746,7 @@ ChannelServer * channel_pipe_server(PeerServer * ps) {
         s->serv.ps = ps;
         s->serv.close = server_close;
         list_add_last(&s->serv.servlink, &channel_server_root);
+        shutdown_set_normal(&channel_shutdown);
         list_add_last(&s->servlink, &server_list);
         for (i = 0; i < SERVER_INSTANCE_CNT; i++) {
             ServerInstance * ins = s->arr + i;

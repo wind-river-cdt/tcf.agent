@@ -222,6 +222,7 @@
     <ClCompile Include="..\agent\tcf\framework\peer.c" />
     <ClCompile Include="..\agent\tcf\framework\protocol.c" />
     <ClCompile Include="..\agent\tcf\framework\proxy.c" />
+    <ClCompile Include="..\agent\tcf\framework\shutdown.c" />
     <ClCompile Include="..\agent\tcf\framework\streams.c" />
     <ClCompile Include="..\agent\tcf\framework\trace.c" />
     <ClCompile Include="..\agent\system\Windows\tcf\pthreads-win32.c" />
@@ -274,6 +275,7 @@
     <ClInclude Include="..\agent\tcf\framework\plugins.h" />
     <ClInclude Include="..\agent\tcf\framework\protocol.h" />
     <ClInclude Include="..\agent\tcf\framework\proxy.h" />
+    <ClInclude Include="..\agent\tcf\framework\shutdown.h" />
     <ClInclude Include="..\agent\tcf\framework\signames.h" />
     <ClInclude Include="..\agent\tcf\framework\streams.h" />
     <ClInclude Include="..\agent\tcf\framework\tcf.h" />

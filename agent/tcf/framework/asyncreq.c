@@ -34,11 +34,13 @@
 #include <tcf/framework/errors.h>
 #include <tcf/framework/link.h>
 #include <tcf/framework/asyncreq.h>
+#include <tcf/framework/shutdown.h>
 
 #define MAX_WORKER_THREADS 32
 
 static LINK wtlist = TCF_LIST_INIT(wtlist);
 static int wtlist_size = 0;
+static int wtrunning_count = 0;
 static pthread_mutex_t wtlock;
 
 typedef struct WorkerThread {
@@ -49,6 +51,37 @@ typedef struct WorkerThread {
 } WorkerThread;
 
 #define wtlink2wt(A)  ((WorkerThread *)((char *)(A) - offsetof(WorkerThread, wtlink)))
+
+static AsyncReqInfo shutdown_req;
+
+static void trigger_async_shutdown(ShutdownInfo * obj) {
+    check_error(pthread_mutex_lock(&wtlock));
+    while (!list_is_empty(&wtlist)) {
+        WorkerThread * wt = wtlink2wt(wtlist.next);
+        list_remove(&wt->wtlink);
+        wtlist_size--;
+        assert(wt->req == NULL);
+        wt->req = &shutdown_req;
+        check_error(pthread_cond_signal(&wt->cond));
+    }
+    check_error(pthread_mutex_unlock(&wtlock));
+}
+
+static ShutdownInfo async_shutdown = { trigger_async_shutdown };
+
+
+static void worker_thread_exit(void * x) {
+    WorkerThread * wt = (WorkerThread *)x;
+
+    check_error(pthread_cond_destroy(&wt->cond));
+    pthread_join(wt->thread, NULL);
+    loc_free(wt);
+    check_error(pthread_mutex_lock(&wtlock));
+    if (--wtrunning_count == 0)
+        shutdown_set_stopped(&async_shutdown);
+    trace(LOG_ASYNCREQ, "worker_thread_exit %p running threads %d", wt, wtrunning_count);
+    check_error(pthread_mutex_unlock(&wtlock));
+}
 
 static void * worker_thread_handler(void * x) {
     WorkerThread * wt = (WorkerThread *)x;
@@ -191,9 +224,8 @@ static void * worker_thread_handler(void * x) {
          * not created unnecessarily */
         post_event(req->done, req);
         wt->req = NULL;
-        if (wtlist_size >= MAX_WORKER_THREADS) {
-            check_error(pthread_cond_destroy(&wt->cond));
-            loc_free(wt);
+        if (wtlist_size >= MAX_WORKER_THREADS ||
+            async_shutdown.state == SHUTDOWN_STATE_PENDING) {
             check_error(pthread_mutex_unlock(&wtlock));
             break;
         }
@@ -204,9 +236,31 @@ static void * worker_thread_handler(void * x) {
             if (wt->req != NULL) break;
         }
         check_error(pthread_mutex_unlock(&wtlock));
+        if (wt->req == &shutdown_req) break;
     }
-    check_error(pthread_detach(pthread_self()));
+    post_event(worker_thread_exit, wt);
     return NULL;
+}
+
+static void worker_thread_add(AsyncReqInfo * req) {
+    WorkerThread * wt;
+
+    assert(is_dispatch_thread());
+    wt = (WorkerThread *)loc_alloc_zero(sizeof *wt);
+    wt->req = req;
+    check_error(pthread_cond_init(&wt->cond, NULL));
+    check_error(pthread_create(&wt->thread, &pthread_create_attr, worker_thread_handler, wt));
+    if (wtrunning_count++ == 0)
+        shutdown_set_normal(&async_shutdown);
+    trace(LOG_ASYNCREQ, "worker_thread_add %p running threads %d", wt, wtrunning_count);
+}
+
+static void worker_thread_add_deferred(void * x) {
+    AsyncReqInfo * req = (AsyncReqInfo *)x;
+
+    check_error(pthread_mutex_lock(&wtlock));
+    worker_thread_add(req);
+    check_error(pthread_mutex_unlock(&wtlock));
 }
 
 #if ENABLE_AIO
@@ -253,10 +307,11 @@ void async_req_post(AsyncReqInfo * req) {
     check_error(pthread_mutex_lock(&wtlock));
     if (list_is_empty(&wtlist)) {
         assert(wtlist_size == 0);
-        wt = (WorkerThread *)loc_alloc_zero(sizeof *wt);
-        wt->req = req;
-        check_error(pthread_cond_init(&wt->cond, NULL));
-        check_error(pthread_create(&wt->thread, &pthread_create_attr, worker_thread_handler, wt));
+        if (is_dispatch_thread()) {
+            worker_thread_add(req);
+        } else {
+            post_event(worker_thread_add_deferred, req);
+        }
     }
     else {
         wt = wtlink2wt(wtlist.next);

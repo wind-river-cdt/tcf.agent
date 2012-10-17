@@ -156,6 +156,9 @@
     <ClCompile Include="..\agent\tcf\framework\proxy.c">
       <Filter>framework</Filter>
     </ClCompile>
+    <ClCompile Include="..\agent\tcf\framework\shutdown.c">
+      <Filter>framework</Filter>
+    </ClCompile>
     <ClCompile Include="..\agent\tcf\framework\streams.c">
       <Filter>framework</Filter>
     </ClCompile>
@@ -306,6 +309,9 @@
       <Filter>framework</Filter>
     </ClInclude>
     <ClInclude Include="..\agent\tcf\framework\proxy.h">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="..\agent\tcf\framework\shutdown.h">
       <Filter>framework</Filter>
     </ClInclude>
     <ClInclude Include="..\agent\tcf\framework\signames.h">

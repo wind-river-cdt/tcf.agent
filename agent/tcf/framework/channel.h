@@ -23,7 +23,9 @@
 #include <tcf/framework/streams.h>
 #include <tcf/framework/link.h>
 #include <tcf/framework/peer.h>
+#include <tcf/framework/shutdown.h>
 
+extern ShutdownInfo channel_shutdown;
 extern LINK channel_root;
 extern LINK channel_server_root;
 
