@@ -1164,6 +1164,34 @@ static int is_function_prologue(Context * ctx, ContextAddress ip, CodeArea * are
 #endif
     return 0;
 }
+
+#if SERVICE_Symbols
+static void get_machine_code_area(CodeArea * area, void * args) {
+    *(CodeArea **)args = tmp_alloc(sizeof(CodeArea));
+    memcpy(*(CodeArea **)args, area, sizeof(CodeArea));
+}
+#endif
+
+static int is_within_function_epilogue(Context * ctx, ContextAddress ip) {
+#if SERVICE_Symbols
+    Symbol * sym = NULL;
+    int sym_class = SYM_CLASS_UNKNOWN;
+    ContextAddress sym_addr = 0;
+    ContextAddress sym_size = 0;
+    CodeArea * area = NULL;
+    if (find_symbol_by_addr(ctx, STACK_NO_FRAME, ip, &sym) < 0) return 0;
+    if (get_symbol_class(sym, &sym_class) < 0) return 0;
+    if (sym_class != SYM_CLASS_FUNCTION) return 0;
+    if (get_symbol_size(sym, &sym_size) < 0) return 0;
+    if (sym_size == 0) return 0;
+    if (get_symbol_address(sym, &sym_addr) < 0) return 0;
+    if (address_to_line(ctx, sym_addr + sym_size - 1, sym_addr + sym_size, get_machine_code_area, &area)
+            == 0 && area != NULL) {
+        if (ip > area->start_address && ip < area->end_address) return 1;
+    }
+#endif
+    return 0;
+}
 #endif
 
 #if EN_STEP_OVER
@@ -1234,9 +1262,22 @@ static int update_step_machine_state(Context * ctx) {
             else if (addr < ext->step_range_start || addr >= ext->step_range_end) {
                 StackFrame * info = NULL;
                 int n = get_top_frame(ctx);
+                int do_reverse = (ext->step_mode == RM_REVERSE_STEP_OVER || ext->step_mode == RM_REVERSE_STEP_OVER_RANGE
+                        || ext->step_mode == RM_REVERSE_STEP_OVER_LINE);
                 if (n < 0) return -1;
                 if (get_frame_info(ctx, n, &info) < 0) return -1;
                 if (ext->step_frame != info->fp) {
+                    if (do_reverse && is_within_function_epilogue(ctx, addr)) {
+                        /* With some compilers, the stack walking code based on debug information does not work
+                         * correctly if we are in the middle of the function epilogue. In this case, an invalid
+                         * return address is provided but no error is raised. To avoid this issue, do not try to
+                         * get the stack trace of a function while it is in the midle of the epilogue but instead
+                         * skip the epilogue. This code is done only in reverse stepping mode because it is very
+                         * unlikely to meet this condition while doing forward stepping.
+                         */
+                        ext->step_continue_mode = RM_REVERSE_STEP_INTO;
+                        return 0;
+                    }
                     while (n > 0) {
                         if (get_frame_info(ctx, --n, &info) < 0) return -1;
                         if (ext->step_frame == info->fp) {
@@ -1426,6 +1467,18 @@ static int update_step_machine_state(Context * ctx) {
             }
             same_line = is_same_line(ext->step_code_area, area);
             free_code_area(area);
+
+            /* We are doing reverse step-over/into line. The first line has already been skipped, we are now trying to reach
+             * the beginning of previous line. If we are still on same line but have reached the beginning of the line, then we
+             * are done.
+             */
+            if (same_line
+                    && (ext->step_mode == RM_REVERSE_STEP_INTO_LINE || ext->step_mode == RM_REVERSE_STEP_OVER_LINE)
+                    && ext->step_line_cnt > 0 && addr == ext->step_code_area->start_address) {
+                ctx->pending_intercept = 1;
+                ext->step_done = REASON_STEP;
+                return 0;
+            }
             if (!same_line && !is_function_prologue(ctx, addr, ext->step_code_area)) {
                 if ((ext->step_mode != RM_REVERSE_STEP_INTO_LINE && ext->step_mode != RM_REVERSE_STEP_OVER_LINE) ||
                         (ext->step_line_cnt == 0 && addr == ext->step_code_area->start_address) ||
@@ -1440,6 +1493,14 @@ static int update_step_machine_state(Context * ctx) {
             }
             ext->step_range_start = ext->step_code_area->start_address;
             ext->step_range_end = ext->step_code_area->end_address;
+
+            /* When doing reverse step-into/over line, if we have already skipped the first line, we want to reach
+             * the beginning of current line, fix step range to handle this.
+             */
+            if ((ext->step_mode == RM_REVERSE_STEP_INTO_LINE || ext->step_mode == RM_REVERSE_STEP_OVER_LINE)
+                    && ext->step_line_cnt > 0) {
+                ext->step_range_start += 1;
+            }
         }
         break;
 #endif
