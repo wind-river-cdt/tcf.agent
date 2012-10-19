@@ -350,6 +350,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\agent\tcf\framework\shutdown.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\framework\shutdown.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\agent\tcf\framework\signames.c"
 				>
 			</File>
@@ -639,6 +647,10 @@
 			</File>
 			<File
 				RelativePath="..\..\agent\tcf\services\symbols_alloc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\services\symbols_common.c"
 				>
 			</File>
 			<File

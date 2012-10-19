@@ -369,6 +369,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\agent\tcf\services\symbols_common.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\agent\tcf\services\symbols_elf.c"
 				>
 			</File>
@@ -570,6 +574,14 @@
 			</File>
 			<File
 				RelativePath="..\..\agent\tcf\framework\proxy.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\framework\shutdown.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\agent\tcf\framework\shutdown.h"
 				>
 			</File>
 			<File
