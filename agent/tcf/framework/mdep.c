@@ -182,6 +182,19 @@ int wsa_getsockname(int socket, struct sockaddr * name, int * size) {
     return 0;
 }
 
+#undef select
+int wsa_select(int nfds, fd_set * readfds, fd_set * writefds, fd_set * exceptfds, const struct timeval * timeout) {
+    int res = 0;
+    SetLastError(0);
+    WSASetLastError(0);
+    res = select(nfds, readfds, writefds, exceptfds, timeout);
+    if (res != 0) {
+        set_win32_errno(WSAGetLastError());
+        return -1;
+    }
+    return 0;
+}
+
 /* inet_ntop()/inet_pton() are not available before Windows Vista */
 const char * inet_ntop(int af, const void * src, char * dst, socklen_t size) {
     char * str = NULL;

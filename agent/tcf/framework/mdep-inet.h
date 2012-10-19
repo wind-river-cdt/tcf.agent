@@ -56,6 +56,7 @@ extern int inet_pton(int af, const char * src, void * dst);
 #define sendto(socket, buf, size, flags, dest_addr, dest_size) wsa_sendto(socket, buf, size, flags, dest_addr, dest_size)
 #define setsockopt(socket, level, opt, value, size) wsa_setsockopt(socket, level, opt, value, size)
 #define getsockname(socket, name, size) wsa_getsockname(socket, name, size)
+#define select(nfds, readfds, writefds, exceptfds, timeout) wsa_select(nfds, readfds, writefds, exceptfds, timeout);
 
 extern int wsa_socket(int af, int type, int protocol);
 extern int wsa_connect(int socket, const struct sockaddr * addr, int addr_size);
@@ -69,6 +70,7 @@ extern int wsa_sendto(int socket, const void * buf, size_t size, int flags,
                   const struct sockaddr * dest_addr, socklen_t dest_size);
 extern int wsa_setsockopt(int socket, int level, int opt, const char * value, int size);
 extern int wsa_getsockname(int socket, struct sockaddr * name, int * size);
+extern int wsa_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, const struct timeval *timeout);
 
 #ifndef SHUT_WR
 #define SHUT_WR SD_SEND
