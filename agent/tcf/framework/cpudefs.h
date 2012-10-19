@@ -50,7 +50,7 @@ struct NamedRegisterValue {
 
 struct RegisterDefinition {
     const char *    name;          /* pointer to register name */
-    size_t          offset;        /* offset to entry in REG_SET */
+    size_t          offset;        /* byte offset in the regsiers data cache */
     size_t          size;          /* register size in bytes */
     int16_t         dwarf_id;      /* ID of the register in DWARF sections, or -1 */
     int16_t         eh_frame_id;   /* ID of the register in .eh_frame section, or -1 */
