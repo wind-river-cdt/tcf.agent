@@ -34,6 +34,18 @@
 U8_T dwarf_expression_obj_addr = 0;
 U8_T dwarf_expression_pm_value = 0;
 
+static U8_T map_to_link_time_address(Context * ctx, CompUnit * Unit, U8_T Addr) {
+    ELF_File * LT_File = NULL;
+    ELF_Section * LT_Sec = NULL;
+    Addr = elf_map_to_link_time_address(ctx, Addr, &LT_File, &LT_Sec);
+    if (LT_File == NULL ||
+        (LT_File != Unit->mFile &&
+            (LT_File->debug_info_file_name == NULL || strcmp(LT_File->debug_info_file_name, Unit->mFile->name))) ||
+        (Unit->mTextSection != NULL && LT_Sec != Unit->mTextSection))
+        str_exception(ERR_INV_DWARF, "Object location info not available");
+    return Addr;
+}
+
 void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo * Info) {
     CompUnit * Unit = Value->mObject->mCompUnit;
 
@@ -48,6 +60,7 @@ void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo *
         U8_T Offset = 0;
         U8_T AddrMax = ~(U8_T)0;
         DWARFCache * Cache = (DWARFCache *)Unit->mFile->dwarf_dt_cache;
+        U8_T LT_IP = map_to_link_time_address(Value->mContext, Unit, IP);
 
         assert(Cache->magic == DWARF_CACHE_MAGIC);
         if (Cache->mDebugLoc == NULL) str_exception(ERR_INV_DWARF, "Missing .debug_loc section");
@@ -75,11 +88,9 @@ void dwarf_find_expression(PropertyValue * Value, U8_T IP, DWARFExpressionInfo *
             }
             else {
                 U2_T Size = dio_ReadU2();
-                U8_T RTAddr0 = elf_map_to_run_time_address(Value->mContext, Unit->mFile, S0, (ContextAddress)(Base + Addr0));
-                U8_T RTAddr1 = Addr1 - Addr0 + RTAddr0;
-                if (RTAddr0 != 0 && IP >= RTAddr0 && IP < RTAddr1) {
-                    Info->code_addr = RTAddr0;
-                    Info->code_size = RTAddr1 - RTAddr0;
+                if (LT_IP >= Base + Addr0 && LT_IP < Base + Addr1) {
+                    Info->code_addr = Base + Addr0 - LT_IP + IP;
+                    Info->code_size = Addr1 - Addr0;
                     Info->section = Cache->mDebugLoc;
                     Info->expr_addr = dio_GetDataPtr();
                     Info->expr_size = Size;
