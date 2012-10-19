@@ -2994,12 +2994,25 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
             else if (errno != ERR_SYM_NOT_FOUND) {
                 return -1;
             }
-            if (get_num_prop(obj, AT_low_pc, &addr)) {
-                add_location_command(SFT_CMD_NUMBER)->args.num = addr;
-                return 0;
-            }
-            else if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
-                return -1;
+            switch (sym->sym_class) {
+            case SYM_CLASS_FUNCTION:
+            case SYM_CLASS_COMP_UNIT:
+            case SYM_CLASS_BLOCK:
+                if (get_num_prop(obj, AT_entry_pc, &addr)) {
+                    add_location_command(SFT_CMD_NUMBER)->args.num = addr;
+                    return 0;
+                }
+                else if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                    return -1;
+                }
+                if (get_num_prop(obj, AT_low_pc, &addr)) {
+                    add_location_command(SFT_CMD_NUMBER)->args.num = addr;
+                    return 0;
+                }
+                else if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                    return -1;
+                }
+                break;
             }
             if (map_to_sym_table(obj, &s)) return get_location_info(s, res);
             set_errno(ERR_OTHER, "No object location info found in DWARF data");
