@@ -670,6 +670,12 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
         dio_ChkFlag(Form);
         if (dio_gFormData) Info->mFlags |= DOIF_public;
         break;
+    case AT_location:
+    case AT_string_length:
+        if (Form == FORM_DATA4 || Form == FORM_DATA8 || Form == FORM_SEC_OFFSET || Tag == TAG_formal_parameter) {
+            Info->mFlags |= DOIF_need_frame;
+        }
+        break;
     }
     if (Tag == TAG_compile_unit) {
         CompUnit * Unit = Info->mCompUnit;
@@ -1460,6 +1466,7 @@ void read_and_evaluate_dwarf_object_property(Context * Ctx, int Frame, ObjectInf
         case FORM_BLOCK2    :
         case FORM_BLOCK4    :
         case FORM_BLOCK     :
+        case FORM_SEC_OFFSET:
             dwarf_evaluate_expression(Value);
             break;
         }

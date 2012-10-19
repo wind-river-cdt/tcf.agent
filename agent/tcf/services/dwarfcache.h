@@ -66,22 +66,23 @@ struct FileInfo {
 #define TAG_mod_pointer         0x2002
 #define TAG_mod_reference       0x2003
 
-#define DOIF_declaration        0x0001
-#define DOIF_external           0x0002
-#define DOIF_artificial         0x0004
-#define DOIF_specification      0x0008
-#define DOIF_abstract_origin    0x0010
-#define DOIF_extension          0x0020
-#define DOIF_private            0x0040
-#define DOIF_protected          0x0080
-#define DOIF_public             0x0100
-#define DOIF_children_loaded    0x0200
-#define DOIF_ranges             0x0400
-#define DOIF_aranges            0x0800
-#define DOIF_find_mark          0x1000
-#define DOIF_load_mark          0x2000
-#define DOIF_pub_mark           0x4000
-#define DOIF_low_pc             0x8000
+#define DOIF_declaration        0x00001
+#define DOIF_external           0x00002
+#define DOIF_artificial         0x00004
+#define DOIF_specification      0x00008
+#define DOIF_abstract_origin    0x00010
+#define DOIF_extension          0x00020
+#define DOIF_private            0x00040
+#define DOIF_protected          0x00080
+#define DOIF_public             0x00100
+#define DOIF_children_loaded    0x00200
+#define DOIF_ranges             0x00400
+#define DOIF_aranges            0x00800
+#define DOIF_find_mark          0x01000
+#define DOIF_load_mark          0x02000
+#define DOIF_pub_mark           0x04000
+#define DOIF_low_pc             0x08000
+#define DOIF_need_frame         0x10000
 
 struct ObjectInfo {
 
@@ -96,7 +97,7 @@ struct ObjectInfo {
     ObjectInfo * mDefinition;
 
     U2_T mTag;
-    U2_T mFlags;
+    U4_T mFlags;
     CompUnit * mCompUnit;
     ObjectInfo * mType;
     const char * mName;

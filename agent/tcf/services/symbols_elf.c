@@ -275,6 +275,7 @@ static int is_frame_based_object(Symbol * sym) {
     int res = 0;
 
     if (sym->var != NULL) return 1;
+    if (sym->obj != NULL && (sym->obj->mFlags & DOIF_need_frame)) return 1;
 
     switch (sym->sym_class) {
     case SYM_CLASS_VALUE:
@@ -318,7 +319,7 @@ static int is_frame_based_object(Symbol * sym) {
     if (sym->obj != NULL) {
         ContextAddress addr = 0;
         ContextAddress size = 0;
-        save_sym_values ();
+        save_sym_values();
 
         assert(sym->frame == STACK_NO_FRAME);
 
@@ -494,8 +495,8 @@ static int get_num_prop(ObjectInfo * obj, U2_T at, U8_T * res) {
     return 1;
 }
 
-/* Check run-time 'addr' belongs to an object address range(s) */
-static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddress addr) {
+/* Check link-time address 'addr' belongs to an object address range(s) */
+static int check_in_range(ObjectInfo * obj, ContextAddress addr) {
     if (obj->mFlags & DOIF_ranges) {
         Trap trap;
         if (set_trap(&trap)) {
@@ -503,7 +504,6 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
             DWARFCache * cache = get_dwarf_cache(unit->mFile);
             ELF_Section * debug_ranges = cache->mDebugRanges;
             if (debug_ranges != NULL) {
-                ContextAddress lt_addr = addr - rt_offs;
                 ContextAddress base = unit->mObject->u.mCode.mLowPC;
                 int res = 0;
 
@@ -519,7 +519,7 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
                     else {
                         x = base + x;
                         y = base + y;
-                        if (x <= lt_addr && lt_addr < y) {
+                        if (x <= addr && addr < y) {
                             res = 1;
                             break;
                         }
@@ -535,8 +535,7 @@ static int check_in_range(ObjectInfo * obj, ContextAddress rt_offs, ContextAddre
     }
 
     if (obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC) {
-        ContextAddress lt_addr = addr - rt_offs;
-        return lt_addr >= obj->u.mCode.mLowPC && lt_addr < obj->u.mCode.mHighPC.mAddr;
+        return addr >= obj->u.mCode.mLowPC && addr < obj->u.mCode.mHighPC.mAddr;
     }
 
     return 0;
@@ -815,7 +814,7 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
             case TAG_catch_block:
             case TAG_subroutine:
             case TAG_subprogram:
-                if (!check_in_range(obj, rt_offs, ip)) break;
+                if (!check_in_range(obj, ip - rt_offs)) break;
                 find_in_object_tree(obj, level + 1, rt_offs, ip, name);
                 break;
             }
@@ -994,35 +993,7 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
     find_symbol_list = NULL;
     *res = NULL;
 
-#if defined(_WRS_KERNEL)
-    {
-        char * ptr;
-        SYM_TYPE type;
-
-        if (symFindByName(sysSymTbl, name, &ptr, &type) != OK) {
-            error = errno;
-            assert(error != 0);
-            if (error == S_symLib_SYMBOL_NOT_FOUND) error = 0;
-        }
-        else {
-            Symbol * sym = alloc_symbol();
-            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
-            sym->frame = STACK_NO_FRAME;
-            sym->address = (ContextAddress)ptr;
-            sym->has_address = 1;
-
-            if (SYM_IS_TEXT(type)) {
-                sym->sym_class = SYM_CLASS_FUNCTION;
-            }
-            else {
-                sym->sym_class = SYM_CLASS_REFERENCE;
-            }
-            add_to_find_symbol_buf(sym);
-        }
-    }
-#endif
-
-    if (error == 0 && find_symbol_list == NULL && get_sym_context(ctx, frame, ip) < 0) error = errno;
+    if (get_sym_context(ctx, frame, ip) < 0) error = errno;
 
     if (sym_ip != 0) {
 
@@ -1170,6 +1141,34 @@ int find_symbol_by_name(Context * ctx, int frame, ContextAddress ip, const char 
         }
     }
 
+#if defined(_WRS_KERNEL)
+    if (error == 0 && find_symbol_list == NULL) {
+        char * ptr;
+        SYM_TYPE type;
+
+        if (symFindByName(sysSymTbl, name, &ptr, &type) != OK) {
+            error = errno;
+            assert(error != 0);
+            if (error == S_symLib_SYMBOL_NOT_FOUND) error = 0;
+        }
+        else {
+            Symbol * sym = alloc_symbol();
+            sym->ctx = context_get_group(ctx, CONTEXT_GROUP_SYMBOLS);
+            sym->frame = STACK_NO_FRAME;
+            sym->address = (ContextAddress)ptr;
+            sym->has_address = 1;
+
+            if (SYM_IS_TEXT(type)) {
+                sym->sym_class = SYM_CLASS_FUNCTION;
+            }
+            else {
+                sym->sym_class = SYM_CLASS_REFERENCE;
+            }
+            add_to_find_symbol_buf(sym);
+        }
+    }
+#endif
+
     if (error == 0 && find_symbol_list == NULL) error = ERR_SYM_NOT_FOUND;
 
     if (error) {
@@ -1268,11 +1267,11 @@ static int find_by_addr_in_unit(ObjectInfo * obj, int level, ContextAddress rt_o
         case TAG_catch_block:
         case TAG_subroutine:
         case TAG_subprogram:
-            if (check_in_range(obj, rt_offs, addr)) {
+            if (check_in_range(obj, addr - rt_offs)) {
                 object2symbol(obj, res);
                 return 1;
             }
-            if (check_in_range(obj, rt_offs, sym_ip)) {
+            if (check_in_range(obj, sym_ip - rt_offs)) {
                 return find_by_addr_in_unit(get_dwarf_children(obj), level + 1, rt_offs, addr, res);
             }
             break;
@@ -1425,7 +1424,7 @@ static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_
         case TAG_catch_block:
         case TAG_subroutine:
         case TAG_subprogram:
-            if (check_in_range(obj, rt_offs, sym_ip)) {
+            if (check_in_range(obj, sym_ip - rt_offs)) {
                 enumerate_local_vars(get_dwarf_children(obj), level + 1, rt_offs, call_back, args);
                 if (level == 0) return;
             }
@@ -2756,6 +2755,7 @@ static void add_member_location_command(LocationInfo * info, ObjectInfo * obj) {
     case FORM_BLOCK4    :
     case FORM_BLOCK     :
     case FORM_EXPRLOC   :
+    case FORM_SEC_OFFSET:
         add_location_command(SFT_CMD_ARG)->args.arg_no = 0;
         add_dwarf_location_command(info, &v);
         break;
