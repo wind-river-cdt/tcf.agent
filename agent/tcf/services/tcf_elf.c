@@ -124,8 +124,8 @@ static void elf_dispose(ELF_File * file) {
     release_error_report(file->error);
     loc_free(file->pheaders);
     loc_free(file->str_pool);
-    free(file->debug_info_file_name);
-    free(file->name);
+    loc_free(file->debug_info_file_name);
+    loc_free(file->name);
     loc_free(file);
 }
 
@@ -354,12 +354,12 @@ static char * get_debug_info_file_name(ELF_File * file, int * error) {
 #if SERVICE_PathMap
                     lnm = apply_path_map(NULL, NULL, lnm, PATH_MAP_TO_LOCAL);
 #endif
-                    if (stat(lnm, &buf) == 0) return canonicalize_file_name(lnm);
+                    if (stat(lnm, &buf) == 0) return loc_strdup(lnm);
                     snprintf(fnm, sizeof(fnm), "%s.debug", file->name);
 #if SERVICE_PathMap
                     lnm = apply_path_map(NULL, NULL, lnm, PATH_MAP_TO_LOCAL);
 #endif
-                    if (stat(lnm, &buf) == 0) return canonicalize_file_name(lnm);
+                    if (stat(lnm, &buf) == 0) return loc_strdup(lnm);
                 }
                 offs += desc_sz;
                 while (offs % 4 != 0) offs++;
@@ -380,15 +380,15 @@ static char * get_debug_info_file_name(ELF_File * file, int * error) {
                 while (l > 0 && file->name[l - 1] != '/' && file->name[l - 1] != '\\') l--;
                 if (strcmp(file->name + l, name) != 0) {
                     snprintf(fnm, sizeof(fnm), "%.*s%s", l, file->name, name);
-                    if (stat(fnm, &buf) == 0) return canonicalize_file_name(fnm);
+                    if (stat(fnm, &buf) == 0) return loc_strdup(fnm);
                 }
                 snprintf(fnm, sizeof(fnm), "%.*s.debug/%s", l, file->name, name);
-                if (stat(fnm, &buf) == 0) return canonicalize_file_name(fnm);
+                if (stat(fnm, &buf) == 0) return loc_strdup(fnm);
                 snprintf(fnm, sizeof(fnm), "/usr/lib/debug%.*s%s", l, file->name, name);
 #if SERVICE_PathMap
                 lnm = apply_path_map(NULL, NULL, lnm, PATH_MAP_TO_LOCAL);
 #endif
-                if (stat(lnm, &buf) == 0) return canonicalize_file_name(lnm);
+                if (stat(lnm, &buf) == 0) return loc_strdup(lnm);
             }
         }
     }
@@ -421,15 +421,15 @@ static ELF_File * create_elf_cache(const char * file_name) {
     trace(LOG_ELF, "Create ELF file cache %s", file_name);
 
     file = (ELF_File *)loc_alloc_zero(sizeof(ELF_File));
-    file->name = canonicalize_file_name(file_name);
+    file->name = loc_strdup(file_name);
     file->fd = -1;
 
-    if (file->name == NULL || stat(file->name, &st) < 0) {
+    if (stat(file_name, &st) < 0) {
         error = errno;
         memset(&st, 0, sizeof(st));
     }
     else if (st.st_ino == 0) {
-        st.st_ino = elf_ino(file->name);
+        st.st_ino = elf_ino(file_name);
     }
 
     file->dev = st.st_dev;
