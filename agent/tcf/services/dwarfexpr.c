@@ -39,8 +39,7 @@ static U8_T map_to_link_time_address(Context * ctx, CompUnit * Unit, U8_T Addr) 
     ELF_Section * LT_Sec = NULL;
     Addr = elf_map_to_link_time_address(ctx, Addr, &LT_File, &LT_Sec);
     if (LT_File == NULL ||
-        (LT_File != Unit->mFile &&
-            (LT_File->debug_info_file_name == NULL || strcmp(LT_File->debug_info_file_name, Unit->mFile->name))) ||
+        (get_dwarf_file(LT_File) != Unit->mFile) ||
         (Unit->mTextSection != NULL && LT_Sec != Unit->mTextSection))
         str_exception(ERR_INV_DWARF, "Object location info not available");
     return Addr;

@@ -1103,6 +1103,7 @@ static void read_frame_info_section(Context * ctx, U8_T IP, DWARFCache * cache, 
 void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * text_section, U8_T addr) {
     DWARFCache * cache = get_dwarf_cache(file);
     FrameInfoIndex * index = NULL;
+    ELF_File * dwarf_file = NULL;
 
     dwarf_stack_trace_regs_cnt = 0;
     if (dwarf_stack_trace_fp == NULL) {
@@ -1119,16 +1120,15 @@ void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * te
         if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
         index = index->mNext;
     }
-    if (file->debug_info_file_name) {
-        file = elf_open(file->debug_info_file_name);
-        if (file != NULL) {
-            cache = get_dwarf_cache(file);
-            index = cache->mFrameInfo;
-            while (index != NULL) {
-                read_frame_info_section(ctx, addr, cache, index);
-                if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
-                index = index->mNext;
-            }
+
+    dwarf_file = get_dwarf_file(file);
+    if (dwarf_file != file) {
+        cache = get_dwarf_cache(dwarf_file);
+        index = cache->mFrameInfo;
+        while (index != NULL) {
+            read_frame_info_section(ctx, addr, cache, index);
+            if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+            index = index->mNext;
         }
     }
 

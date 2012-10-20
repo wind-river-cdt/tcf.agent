@@ -1537,14 +1537,6 @@ static void free_dwarf_cache(ELF_File * file) {
     }
 }
 
-ELF_File * get_dwarf_file(ELF_File * file) {
-    if (file->debug_info_file_name != NULL && !file->debug_info_file) {
-        ELF_File * debug = elf_open(file->debug_info_file_name);
-        if (debug != NULL) return debug;
-    }
-    return file;
-}
-
 DWARFCache * get_dwarf_cache(ELF_File * file) {
     DWARFCache * Cache = (DWARFCache *)file->dwarf_dt_cache;
     if (Cache == NULL) {

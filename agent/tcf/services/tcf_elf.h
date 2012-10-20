@@ -402,6 +402,11 @@ struct ELF_File {
     ErrorReport * error;
     int fd;
 
+    /* Other names of the file, e.g. symbolic links */
+    char ** names;
+    unsigned names_cnt;
+    unsigned names_max;
+
 #if defined(_WIN32)
     HANDLE mmap_handle;
 #endif
@@ -532,6 +537,13 @@ extern int elf_load(ELF_Section * section);
  */
 typedef void (*ELFCloseListener)(ELF_File *);
 extern void elf_add_close_listener(ELFCloseListener listener);
+
+/*
+ * Return ELF file that contains DWARF info for given file.
+ * On some systems, DWARF is kept in a separate file.
+ * If such file is not available, return 'file'.
+ */
+extern ELF_File * get_dwarf_file(ELF_File * file);
 
 #if ENABLE_DebugContext
 

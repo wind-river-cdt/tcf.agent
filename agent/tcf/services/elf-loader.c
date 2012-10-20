@@ -251,8 +251,7 @@ static ContextAddress find_module(Context * ctx, ELF_File * exe_file, ELF_File *
             elf_map_to_link_time_address(ctx, l_addr, &link_file, NULL);
             if (link_file != NULL) {
                 if (link_file == module) return l_tls_modid;
-                if (link_file->debug_info_file_name != NULL &&
-                    strcmp(link_file->debug_info_file_name, module->name) == 0) return l_tls_modid;
+                if (get_dwarf_file(link_file) == module) return l_tls_modid;
             }
         }
         read_field(ctx, sym_l_next, link, &link);

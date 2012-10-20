@@ -63,8 +63,8 @@ typedef struct FileINode {
 static ELF_File * files = NULL;
 static FileINode * inodes = NULL;
 static ELFCloseListener * listeners = NULL;
-static U4_T listeners_cnt = 0;
-static U4_T listeners_max = 0;
+static unsigned listeners_cnt = 0;
+static unsigned listeners_max = 0;
 static int elf_cleanup_posted = 0;
 static ino_t elf_ino_cnt = 0;
 
@@ -84,6 +84,7 @@ static MemoryMap elf_map;
 #endif
 
 static ELF_File * find_open_file_by_name(const char * name);
+static ELF_File * find_open_file_by_inode(dev_t dev, ino_t ino, int64_t mtime);
 
 void elf_add_close_listener(ELFCloseListener listener) {
     if (listeners_cnt >= listeners_max) {
@@ -94,7 +95,7 @@ void elf_add_close_listener(ELFCloseListener listener) {
 }
 
 static void elf_dispose(ELF_File * file) {
-    U4_T n;
+    unsigned n;
     trace(LOG_ELF, "Dispose ELF file cache %s", file->name);
     for (n = 0; n < listeners_cnt; n++) {
         listeners[n](file);
@@ -121,6 +122,10 @@ static void elf_dispose(ELF_File * file) {
 #if defined(_WIN32)
     if (file->mmap_handle != NULL) CloseHandle(file->mmap_handle);
 #endif
+    for (n = 0; n < file->names_cnt; n++) {
+        loc_free(file->names[n]);
+    }
+    loc_free(file->names);
     release_error_report(file->error);
     loc_free(file->pheaders);
     loc_free(file->str_pool);
@@ -134,15 +139,33 @@ static void free_elf_list_state(ElfListState * state) {
     loc_free(state);
 }
 
+static void add_file_name(ELF_File * file, const char * name) {
+    if (file->names_cnt >= file->names_max) {
+        file->names_max += 8;
+        file->names = (char **)loc_realloc(file->names, sizeof(char *) * file->names_max);
+    }
+    file->names[file->names_cnt++] = loc_strdup(name);
+}
+
+static int file_name_equ(ELF_File * file, const char * name) {
+    unsigned i;
+    if (name == NULL) return 0;
+    if (strcmp(file->name, name) == 0) return 1;
+    for (i = 0; i < file->names_cnt; i++) {
+        if (strcmp(file->names[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
 #if SERVICE_MemoryMap
 static int is_file_mapped_by_mem_map(ELF_File * file, MemoryMap * map) {
     unsigned i;
     for (i = 0; i < map->region_cnt; i++) {
         MemoryRegion * r = map->regions + i;
-        if (r->file_name == NULL) continue;
+        if (file->dev == r->dev && file->ino == r->ino) return 1;
         if (r->dev != 0 && r->dev != file->dev) continue;
         if (r->ino != 0 && r->ino != file->ino) continue;
-        if (strcmp(file->name, r->file_name) == 0) return 1;
+        if (file_name_equ(file, r->file_name)) return 1;
     }
     return 0;
 }
@@ -282,7 +305,7 @@ static ELF_File * find_open_file_by_name(const char * name) {
     ELF_File * prev = NULL;
     ELF_File * file = files;
     while (file != NULL) {
-        if (strcmp(name, file->name) == 0) {
+        if (file_name_equ(file, name)) {
             if (prev != NULL) {
                 prev->next = file->next;
                 file->next = files;
@@ -417,12 +440,10 @@ static ELF_File * create_elf_cache(const char * file_name) {
     int error = 0;
     ELF_File * file = NULL;
     unsigned str_index = 0;
+    char * real_name = NULL;
 
-    trace(LOG_ELF, "Create ELF file cache %s", file_name);
-
-    file = (ELF_File *)loc_alloc_zero(sizeof(ELF_File));
-    file->name = loc_strdup(file_name);
-    file->fd = -1;
+    file = find_open_file_by_name(file_name);
+    if (file != NULL) return file;
 
     if (stat(file_name, &st) < 0) {
         error = errno;
@@ -432,10 +453,32 @@ static ELF_File * create_elf_cache(const char * file_name) {
         st.st_ino = elf_ino(file_name);
     }
 
+    if (!error) {
+        file = find_open_file_by_inode(st.st_dev, st.st_ino, st.st_mtime);
+        if (file != NULL) {
+            add_file_name(file, file_name);
+            return file;
+        }
+    }
+
+    trace(LOG_ELF, "Create ELF file cache %s", file_name);
+
+    file = (ELF_File *)loc_alloc_zero(sizeof(ELF_File));
+    file->fd = -1;
     file->dev = st.st_dev;
     file->ino = st.st_ino;
     file->mtime = st.st_mtime;
     file->size = st.st_size;
+
+    if (error == 0) real_name = canonicalize_file_name(file_name);
+
+    if (real_name == NULL || strcmp(real_name, file_name) == 0) {
+        file->name = loc_strdup(file_name);
+    }
+    else {
+        file->name = loc_strdup(real_name);
+        add_file_name(file, file_name);
+    }
 
     if (error == 0 && (file->fd = open(file->name, O_RDONLY | O_BINARY, 0)) < 0) error = errno;
 
@@ -735,10 +778,8 @@ static ELF_File * create_elf_cache(const char * file_name) {
             if (tbl->sym_count == 0) continue;
             create_symbol_names_hash(tbl);
         }
-    }
-    file->debug_info_file = is_debug_info_file(file);
-    if (error == 0 && !file->debug_info_file) {
-        file->debug_info_file_name = get_debug_info_file_name(file, &error);
+        file->debug_info_file = is_debug_info_file(file);
+        if (!file->debug_info_file) file->debug_info_file_name = get_debug_info_file_name(file, &error);
         if (file->debug_info_file_name) trace(LOG_ELF, "Debug info file found %s", file->debug_info_file_name);
     }
     if (error != 0) {
@@ -749,13 +790,13 @@ static ELF_File * create_elf_cache(const char * file_name) {
         post_event_with_delay(elf_cleanup_event, NULL, 1000000);
         elf_cleanup_posted = 1;
     }
+    free(real_name);
     file->next = files;
     return files = file;
 }
 
 ELF_File * elf_open(const char * file_name) {
-    ELF_File * file = find_open_file_by_name(file_name);
-    if (file == NULL) file = create_elf_cache(file_name);
+    ELF_File * file = create_elf_cache(file_name);
     if (file->error == NULL) return file;
     set_error_report_errno(file->error);
     return NULL;
@@ -846,6 +887,14 @@ int elf_load(ELF_Section * s) {
     return 0;
 }
 
+ELF_File * get_dwarf_file(ELF_File * file) {
+    if (file != NULL && file->debug_info_file_name != NULL) {
+        ELF_File * debug = elf_open(file->debug_info_file_name);
+        if (debug != NULL) return debug;
+    }
+    return file;
+}
+
 #if ENABLE_DebugContext
 
 static ELF_File * find_open_file_by_inode(dev_t dev, ino_t ino, int64_t mtime) {
@@ -873,13 +922,14 @@ ELF_File * elf_open_memory_region_file(MemoryRegion * r, int * error) {
     ino_t ino = r->ino;
     dev_t dev = r->dev;
 
-    if (r->file_name == NULL) return NULL;
     if (dev != 0) {
-        if (ino == 0) ino = elf_ino(r->file_name);
+        if (ino == 0 && r->file_name != NULL) ino = elf_ino(r->file_name);
         if (ino != 0) file = find_open_file_by_inode(dev, ino, 0);
     }
-    if (file == NULL) file = find_open_file_by_name(r->file_name);
-    if (file == NULL) file = create_elf_cache(r->file_name);
+    if (file == NULL) {
+        if (r->file_name == NULL) return NULL;
+        file = create_elf_cache(r->file_name);
+    }
     if (file->error == NULL) {
         if (r->dev != 0 && file->dev != r->dev) return NULL;
         if (r->ino != 0 && file->ino != r->ino) return NULL;
@@ -1001,13 +1051,7 @@ ELF_File * elf_open_inode(Context * ctx, dev_t dev, ino_t ino, int64_t mtime) {
         file = elf_open_memory_region_file(r, &error);
         if (file == NULL) continue;
         if (file->dev == dev && file->ino == ino && file->mtime == mtime) return file;
-        if (file->debug_info_file_name == NULL) continue;
-        assert(!file->debug_info_file);
-        file = elf_open(file->debug_info_file_name);
-        if (file == NULL) {
-            error = errno;
-            continue;
-        }
+        file = get_dwarf_file(file);
         if (file->dev == dev && file->ino == ino && file->mtime == mtime) return file;
     }
     if (error == 0) error = ENOENT;
@@ -1104,16 +1148,17 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
                 if (link_addr_min < p->address) link_addr_min = (ContextAddress)p->address;
                 if (link_addr_max >= p->address + p->mem_size) link_addr_max = (ContextAddress)(p->address + p->mem_size);
                 range = find_comp_unit_addr_range(get_dwarf_cache(file), link_addr_min, link_addr_max);
-                if (range == NULL && file->debug_info_file_name != NULL && !file->debug_info_file) {
-                    ELF_File * debug = elf_open(file->debug_info_file_name);
-                    if (debug == NULL) exception(errno);
-                    if (j < debug->pheader_cnt) {
-                        p = debug->pheaders + j;
-                        link_addr_min = (ContextAddress)(offs_min - p->offset + p->address);
-                        link_addr_max = (ContextAddress)(offs_max - p->offset + p->address);
-                        if (link_addr_min < p->address) link_addr_min = (ContextAddress)p->address;
-                        if (link_addr_max >= p->address + p->mem_size) link_addr_max = (ContextAddress)(p->address + p->mem_size);
-                        range = find_comp_unit_addr_range(get_dwarf_cache(debug), link_addr_min, link_addr_max);
+                if (range == NULL) {
+                    ELF_File * debug = get_dwarf_file(file);
+                    if (debug != file) {
+                        if (j < debug->pheader_cnt) {
+                            p = debug->pheaders + j;
+                            link_addr_min = (ContextAddress)(offs_min - p->offset + p->address);
+                            link_addr_max = (ContextAddress)(offs_max - p->offset + p->address);
+                            if (link_addr_min < p->address) link_addr_min = (ContextAddress)p->address;
+                            if (link_addr_max >= p->address + p->mem_size) link_addr_max = (ContextAddress)(p->address + p->mem_size);
+                            range = find_comp_unit_addr_range(get_dwarf_cache(debug), link_addr_min, link_addr_max);
+                        }
                     }
                 }
                 if (range != NULL && range_rt_addr != NULL) {
@@ -1150,7 +1195,7 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
         MemoryRegion * r = elf_map.regions + i;
         int same_file = 0;
         if (r->dev == 0) {
-            same_file = strcmp(file->name, r->file_name) == 0;
+            same_file = file_name_equ(file, r->file_name);
         }
         else {
            ino_t ino = r->ino;
@@ -1163,8 +1208,7 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
             if (!file->debug_info_file) continue;
             exec = elf_open_memory_region_file(r, NULL);
             if (exec == NULL) continue;
-            if (exec->debug_info_file_name == NULL) continue;
-            if (strcmp(exec->debug_info_file_name, file->name) != 0) continue;
+            if (get_dwarf_file(exec) != file) continue;
         }
         if (r->sect_name == NULL) {
             unsigned j;

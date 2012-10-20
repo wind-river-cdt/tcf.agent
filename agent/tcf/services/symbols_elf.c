@@ -1722,10 +1722,10 @@ int get_stack_tracing_info(Context * ctx, ContextAddress rt_addr, StackTracingIn
 const char * get_symbol_file_name(Context * ctx, MemoryRegion * module) {
     int error = 0;
     ELF_File * file = module ? elf_open_memory_region_file(module, &error) : NULL;
+    file = get_dwarf_file(file);
     errno = error;
     if (file == NULL && module == NULL) return NULL;
     if (file == NULL) return module->file_name;
-    if (file->debug_info_file_name) return file->debug_info_file_name;
     return file->name;
 }
 
