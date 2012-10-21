@@ -704,6 +704,12 @@ static void reg2value(Context * ctx, int frame, RegisterDefinition * def, Value 
     set_value(v, NULL, def->size, def->big_endian);
     v->type_class = def->fp_value ? TYPE_CLASS_REAL : TYPE_CLASS_CARDINAL;
     v->reg = def;
+    v->loc = (LocationExpressionState *)loc_alloc_zero(sizeof(LocationExpressionState));
+    v->loc->ctx = expression_context;
+    v->loc->pieces = (LocationPiece *)loc_alloc_zero(sizeof(LocationPiece));
+    v->loc->pieces_cnt = v->loc->pieces_max = 1;
+    v->loc->pieces->reg = def;
+    v->loc->pieces->size = def->size;
     if (frame == STACK_TOP_FRAME) {
         if (context_read_reg(ctx, def, 0, def->size, v->value) < 0) exception(errno);
     }
@@ -711,6 +717,7 @@ static void reg2value(Context * ctx, int frame, RegisterDefinition * def, Value 
         StackFrame * info = NULL;
         if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
         if (read_reg_bytes(info, def, 0, def->size, (uint8_t *)v->value) < 0) exception(errno);
+        v->loc->stack_frame = info;
     }
 }
 
@@ -3327,7 +3334,7 @@ static void command_create_cache_client(void * x) {
         }
         if (!err && evaluate_type(ctx, frame, 0, e->script, &value) < 0) err = errno;
         if (!err) {
-            e->can_assign = value.remote;
+            e->can_assign = value.remote || (value.loc != NULL && value.loc->pieces_cnt > 0);
             e->has_func_call = expression_has_func_call;
             e->type_class = value.type_class;
             e->size = value.size;
