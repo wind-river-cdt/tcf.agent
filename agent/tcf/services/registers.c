@@ -393,6 +393,7 @@ static void command_get_cache_client(void * x) {
         }
 
         bbf_pos = reg_def->size;
+        memset(bbf, 0, reg_def->size);
         if (frame < 0 || is_top_frame(ctx, frame)) {
             if (context_read_reg(ctx, reg_def, 0, reg_def->size, bbf) < 0) exception(errno);
         }
@@ -560,6 +561,7 @@ static void command_getm_cache_client(void * x) {
                 bbf_len += 0x100 + l->size;
                 bbf = (uint8_t *)loc_realloc(bbf, bbf_len);
             }
+            memset(bbf + bbf_pos, 0, l->size);
             if (l->frame_info == NULL) {
                 if (context_read_reg(l->ctx, l->reg_def, l->offs, l->size, bbf + bbf_pos) < 0) exception(errno);
             }
