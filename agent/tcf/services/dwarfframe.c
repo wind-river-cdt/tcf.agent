@@ -219,81 +219,100 @@ static StackFrameRegisters * get_regs_stack_item(int n) {
 
 static U8_T read_frame_data_pointer(U1_T encoding, ELF_Section ** sec) {
     U8_T v = 0;
-    if (encoding != EH_PE_omit) {
-        U8_T pos = dio_GetPos();
-        switch (encoding & 0xf) {
-        case EH_PE_absptr:
-            v = dio_ReadAddress(sec);
-            break;
-        case EH_PE_uleb128:
-            v = dio_ReadU8LEB128();
-            break;
-        case EH_PE_udata2:
-            v = dio_ReadU2();
-            break;
-        case EH_PE_udata4:
-            v = dio_ReadU4();
-            break;
-        case EH_PE_udata8:
-            v = dio_ReadU8();
-            break;
-        case EH_PE_sleb128:
-            v = dio_ReadS8LEB128();
-            break;
-        case EH_PE_sdata2:
-            v = (I2_T)dio_ReadU2();
-            break;
-        case EH_PE_sdata4:
-            v = (I4_T)dio_ReadU4();
-            break;
-        case EH_PE_sdata8:
-            v = (I8_T)dio_ReadU8();
-            break;
-        default:
-            str_exception(ERR_INV_DWARF, "Unknown encoding of .eh_frame section pointers");
-            break;
+    U8_T pos;
+    unsigned idx;
+    ELF_File * file;
+
+    if (encoding == EH_PE_omit) return 0;
+    pos = dio_GetPos();
+    /* Decode the base or adjust the offset */
+    switch ((encoding >> 4) & 0x7) {
+    case 0:
+    case EH_PB_funcrel:
+        break;
+    case EH_PB_pcrel:
+        if (sec != NULL) {
+            *sec = rules.section;
+            v = pos + rules.section->addr;
         }
-        if (v != 0 && sec != NULL) {
-            switch ((encoding >> 4) & 0x7) {
-            case 0:
-                break;
-            case EH_PB_pcrel:
-                *sec = rules.section;
-                v += rules.section->addr + pos;
-                break;
-            case EH_PB_datarel:
-                *sec = rules.section;
-                v += rules.section->addr;
-                break;
-            case EH_PB_textrel:
-            case EH_PB_funcrel:
-            case EH_PB_aligned:
-            default:
-                str_exception(ERR_INV_DWARF, "Unknown encoding of .eh_frame section pointers");
-                break;
-            }
-            if (encoding & EH_PE_indirect) {
-                unsigned idx;
-                ELF_File * file = rules.section->file;
-                size_t size = rules.address_size;
-                U8_T res = 0;
-                for (idx = 1; idx < file->section_cnt; idx++) {
-                    ELF_Section * sec = file->sections + idx;
-                    if ((sec->flags & SHF_ALLOC) == 0) continue;
-                    if (sec->addr <= v && sec->addr + sec->size >= v + size) {
-                        U1_T * p;
-                        size_t i;
-                        if (sec->data == NULL && elf_load(sec) < 0) exception(errno);
-                        p = (U1_T *)sec->data + (uintptr_t)(v - sec->addr);
-                        for (i = 0; i < size; i++) {
-                            res = (res << 8) | p[file->big_endian ? i : size - i - 1];
-                        }
-                        break;
-                    }
+        break;
+    case EH_PB_datarel:
+        if (sec != NULL) {
+            *sec = rules.section;
+            v = rules.section->addr;
+        }
+        break;
+    case EH_PB_textrel:
+        if (sec != NULL) {
+            file = rules.section->file;
+            for (idx = 1; idx < file->section_cnt; idx++) {
+                ELF_Section * section = file->sections + idx;
+                if ((section->flags & SHF_ALLOC) == 0) continue;
+                if (strcmp(section->name, ".text") == 0) {
+                    *sec = section;
+                    v = section->addr;
                 }
-                v = res;
             }
         }
+    case EH_PB_aligned:
+        if ((pos % rules.address_size) != 0) dio_SetPos(pos + (rules.address_size - (pos % rules.address_size)));
+        break;
+    default:
+        str_exception(ERR_INV_DWARF, "Unknown encoding of .eh_frame section pointers");
+        break;
+    }
+    /* Decode the value */
+    switch (encoding & 0xf) {
+    case EH_PE_absptr:
+        v += dio_ReadAddress(sec);
+        break;
+    case EH_PE_uleb128:
+        v += dio_ReadU8LEB128();
+        break;
+    case EH_PE_udata2:
+        v += dio_ReadU2();
+        break;
+    case EH_PE_udata4:
+        v += dio_ReadU4();
+        break;
+    case EH_PE_udata8:
+        v += dio_ReadU8();
+        break;
+    case EH_PE_sleb128:
+        v += dio_ReadS8LEB128();
+        break;
+    case EH_PE_sdata2:
+        v += (I2_T)dio_ReadU2();
+        break;
+    case EH_PE_sdata4:
+        v += (I4_T)dio_ReadU4();
+        break;
+    case EH_PE_sdata8:
+        v += (I8_T)dio_ReadU8();
+        break;
+    default:
+        str_exception(ERR_INV_DWARF, "Unknown encoding of .eh_frame section pointers");
+        break;
+    }
+    if (encoding & EH_PE_indirect) {
+        size_t size = rules.address_size;
+        U8_T res = 0;
+        file = rules.section->file;
+        for (idx = 1; idx < file->section_cnt; idx++) {
+            ELF_Section * sec = file->sections + idx;
+            if ((sec->flags & SHF_ALLOC) == 0) continue;
+            if (sec->addr <= v && sec->addr + sec->size >= v + size) {
+                U1_T * p;
+                size_t i;
+                if (sec->data == NULL && elf_load(sec) < 0) exception(errno);
+                p = (U1_T *)sec->data + (uintptr_t)(v - sec->addr);
+                for (i = 0; i < size; i++) {
+                    res = (res << 8) | p[file->big_endian ? i : size - i - 1];
+                }
+                break;
+            }
+        }
+        v = res;
     }
     return v;
 }
