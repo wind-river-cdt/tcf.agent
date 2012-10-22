@@ -1186,9 +1186,46 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
     return range;
 }
 
+ContextAddress elf_run_time_address_in_region(Context * ctx, MemoryRegion * r, ELF_File * file, ELF_Section * sec, ContextAddress addr) {
+    unsigned i;
+    errno = 0;
+    if (r->sect_name == NULL) {
+        for (i = 0; i < file->pheader_cnt; i++) {
+            U8_T offs;
+            ELF_PHeader * p = file->pheaders + i;
+            if (p->type != PT_LOAD) continue;
+            if (addr < p->address || addr >= p->address + p->mem_size) continue;
+            if (r->flags) {
+                if ((p->flags & PF_R) && !(r->flags & MM_FLAG_R)) continue;
+                if ((p->flags & PF_W) && !(r->flags & MM_FLAG_W)) continue;
+                if ((p->flags & PF_X) && !(r->flags & MM_FLAG_X)) continue;
+            }
+            offs = addr - p->address + p->offset;
+            if (offs < r->file_offs || offs >= r->file_offs + r->size) continue;
+            return (ContextAddress)(offs - r->file_offs + r->addr);
+        }
+    }
+    else if (sec != NULL && strcmp(sec->name, r->sect_name) == 0) {
+        return (ContextAddress)(addr - sec->addr + r->addr);
+    }
+    else if (file->type == ET_EXEC || file->type == ET_DYN) {
+        for (i = 1; i < file->section_cnt; i++) {
+            ELF_Section * s = file->sections + i;
+            if (s->addr <= addr && s->addr + s->size > addr &&
+                s->name != NULL && strcmp(s->name, r->sect_name) == 0) {
+                return (ContextAddress)(addr - s->addr + r->addr);
+            }
+        }
+    }
+    errno = ERR_INV_ADDRESS;
+    return 0;
+}
+
 ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_Section * sec, ContextAddress addr) {
     unsigned i;
+    ContextAddress rt = 0;
 
+    errno = 0;
     /* Note: 'addr' is link-time address - it cannot be used as elf_get_map() argument */
     if (elf_get_map(ctx, 0, ~(ContextAddress)0, &elf_map) < 0) return 0;
     for (i = 0; i < elf_map.region_cnt; i++) {
@@ -1210,44 +1247,10 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
             if (exec == NULL) continue;
             if (get_dwarf_file(exec) != file) continue;
         }
-        if (r->sect_name == NULL) {
-            unsigned j;
-            for (j = 0; j < file->pheader_cnt; j++) {
-                U8_T offs;
-                ELF_PHeader * p = file->pheaders + j;
-                if (p->type != PT_LOAD) continue;
-                if (addr < p->address || addr >= p->address + p->mem_size) continue;
-                if (r->flags) {
-                    if ((p->flags & PF_R) && !(r->flags & MM_FLAG_R)) continue;
-                    if ((p->flags & PF_W) && !(r->flags & MM_FLAG_W)) continue;
-                    if ((p->flags & PF_X) && !(r->flags & MM_FLAG_X)) continue;
-                }
-                offs = addr - p->address + p->offset;
-                if (offs < r->file_offs || offs >= r->file_offs + r->size) continue;
-                errno = 0;
-                return (ContextAddress)(offs - r->file_offs + r->addr);
-            }
-        }
-        else if (sec != NULL && strcmp(sec->name, r->sect_name) == 0) {
-            errno = 0;
-            return (ContextAddress)(addr - sec->addr + r->addr);
-        }
-        else if (file->type == ET_EXEC || file->type == ET_DYN) {
-            unsigned j;
-            for (j = 1; j < file->section_cnt; j++) {
-                ELF_Section * s = file->sections + j;
-                if (s->addr <= addr && s->addr + s->size > addr &&
-                    s->name != NULL && strcmp(s->name, r->sect_name) == 0) {
-                    errno = 0;
-                    return (ContextAddress)(addr - s->addr + r->addr);
-                }
-            }
-        }
+        rt = elf_run_time_address_in_region(ctx, r, file, sec, addr);
+        if (errno == 0) return rt;
     }
-    if (file->type == ET_EXEC) {
-        errno = 0;
-        return addr;
-    }
+    if (file->type == ET_EXEC) return addr;
     errno = ERR_INV_ADDRESS;
     return 0;
 }

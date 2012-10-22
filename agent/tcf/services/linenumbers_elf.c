@@ -171,7 +171,8 @@ static void call_client(CompUnit * unit, LineNumbersState * state,
     client(&area, args);
 }
 
-static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, unsigned line, unsigned column,
+static void unit_line_to_address(Context * ctx, MemoryRegion * mem, CompUnit * unit,
+                                 unsigned file, unsigned line, unsigned column,
                                  LineNumbersCallBack * client, void * args) {
     if (unit->mStatesCnt >= 2) {
         unsigned l = 0;
@@ -203,7 +204,7 @@ static void unit_line_to_address(Context * ctx, CompUnit * unit, unsigned file, 
                         k--;
                     }
                     for (;;) {
-                        ContextAddress addr = elf_map_to_run_time_address(ctx, unit->mFile, unit->mTextSection, state->mAddress);
+                        ContextAddress addr = elf_run_time_address_in_region(ctx, mem, unit->mFile, unit->mTextSection, state->mAddress);
                         if (errno == 0) {
                             LineNumbersState * code_next = get_next_in_code(unit, state);
                             if (code_next != NULL) {
@@ -234,50 +235,57 @@ int line_to_address(Context * ctx, char * file_name, int line, int column,
                     LineNumbersCallBack * client, void * args) {
     int err = 0;
     Channel * chnl = cache_channel();
+    static MemoryMap map;
 
     if (ctx == NULL) err = ERR_INV_CONTEXT;
     else if (ctx->exited) err = ERR_ALREADY_EXITED;
 
+    if (err == 0 && elf_get_map(ctx, 0, ~(ContextAddress)0, &map) < 0) err = errno;
+
     if (err == 0) {
-        ELF_File * file = elf_list_first(ctx, 0, ~(ContextAddress)0);
-        if (file == NULL) err = errno;
-        if (err == 0) {
-            unsigned h;
-            char * fnm = canonic_path_map_file_name(file_name);
-            h = calc_file_name_hash(fnm);
-            while (file != NULL) {
-                Trap trap;
-                if (set_trap(&trap)) {
-                    DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
+        unsigned i;
+        unsigned h;
+        char * fnm = NULL;
+        for (i = 0; i < map.region_cnt; i++) {
+            Trap trap;
+            MemoryRegion * r = map.regions + i;
+            ELF_File * file = elf_open_memory_region_file(r, NULL);
+            if (file == NULL) continue;
+            if (set_trap(&trap)) {
+                DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
+                if (!cache->mLineInfoLoaded) {
                     ObjectInfo * info = cache->mCompUnits;
                     while (info != NULL) {
                         CompUnit * unit = info->mCompUnit;
                         if (!unit->mLineInfoLoaded) load_line_numbers(unit);
                         info = info->mSibling;
                     }
-                    if (cache->mFileInfoHash) {
-                        FileInfo * f = cache->mFileInfoHash[h % cache->mFileInfoHashSize];
-                        while (f != NULL) {
-                            if (f->mNameHash == h && compare_path(chnl, ctx, fnm, f->mCompUnit->mDir, f->mDir, f->mName)) {
-                                CompUnit * unit = f->mCompUnit;
-                                unsigned j = f - unit->mFiles;
-                                unit_line_to_address(ctx, unit, j, line, column, client, args);
-                            }
-                            f = f->mNextInHash;
-                        }
+                    cache->mLineInfoLoaded = 1;
+                }
+                if (cache->mFileInfoHash) {
+                    FileInfo * f = NULL;
+                    if (fnm == NULL) {
+                        fnm = canonic_path_map_file_name(file_name);
+                        h = calc_file_name_hash(fnm);
                     }
-                    clear_trap(&trap);
+                    f = cache->mFileInfoHash[h % cache->mFileInfoHashSize];
+                    while (f != NULL) {
+                        if (f->mNameHash == h && compare_path(chnl, ctx, fnm, f->mCompUnit->mDir, f->mDir, f->mName)) {
+                            CompUnit * unit = f->mCompUnit;
+                            unsigned j = f - unit->mFiles;
+                            unit_line_to_address(ctx, r, unit, j, line, column, client, args);
+                        }
+                        f = f->mNextInHash;
+                    }
                 }
-                else {
-                    err = trap.error;
-                    trace(LOG_ALWAYS, "Cannot load DWARF line numbers section: %s", err);
-                    break;
-                }
-                file = elf_list_next(ctx);
-                if (file == NULL) err = errno;
+                clear_trap(&trap);
+            }
+            else {
+                err = trap.error;
+                trace(LOG_ALWAYS, "Cannot load DWARF line numbers section: %s", err);
+                break;
             }
         }
-        elf_list_done(ctx);
     }
 
     if (err != 0) {

@@ -254,6 +254,7 @@ struct DWARFCache {
     FrameInfoIndex * mFrameInfo;
     unsigned mFileInfoHashSize;
     FileInfo ** mFileInfoHash;
+    int mLineInfoLoaded;
 };
 
 /* Return DWARF cache for given file, create and populate the cache if needed, throw an exception if error */

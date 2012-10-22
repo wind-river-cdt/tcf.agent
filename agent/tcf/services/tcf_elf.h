@@ -582,6 +582,13 @@ extern int elf_get_map(Context * ctx, ContextAddress addr0, ContextAddress addr1
 extern ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_Section * section, ContextAddress addr);
 
 /*
+ * Return run-time address for link-time address 'addr' in a file 'file' (and optional section 'sec'),
+ * which is mapped to memory context 'ctx' at memory region 'region'.
+ * Clear errno if no errors found, otherwise set errno and return 0.
+ */
+extern ContextAddress elf_run_time_address_in_region(Context * ctx, MemoryRegion * region, ELF_File * file, ELF_Section * sec, ContextAddress addr);
+
+/*
  * Map run-time address in a context to link time address in an ELF file.
  * Return 0 if the address is not currently mapped.
  */
