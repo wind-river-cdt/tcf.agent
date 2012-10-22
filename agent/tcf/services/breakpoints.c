@@ -405,6 +405,9 @@ static void free_instruction(BreakInstruction * bi) {
     loc_free(bi);
 }
 
+static EvaluationRequest * create_evaluation_request(Context * ctx);
+static void post_evaluation_request(EvaluationRequest * req);
+
 static void flush_instructions(void) {
     LINK * l = instructions.next;
     while (l != &instructions) {
@@ -432,7 +435,17 @@ static void flush_instructions(void) {
         bi->valid = 1;
         if (!bi->stepping_over_bp) {
             if (bi->ref_cnt == 0) {
-                if (bi->planted) remove_instruction(bi);
+                if (bi->planted) {
+                    remove_instruction(bi);
+                    if (bi->saved_size == 0) {
+                        /* If hardware breakpoint is removed, it can free hardware resources.
+                         * We have to try to replant other breakpoints in the context. */
+                        EvaluationRequest * req = create_evaluation_request(bi->cb.ctx);
+                        req->bp = NULL;
+                        req->location = 1;
+                        post_evaluation_request(req);
+                    }
+                }
                 free_instruction(bi);
             }
             else if (!bi->planted) {
@@ -1213,6 +1226,11 @@ static void done_all_evaluations(void) {
         assert(cache_enter_cnt == 0);
         assert(generation_done != generation_active);
         flush_instructions();
+    }
+
+    if (list_is_empty(&evaluations_posted)) {
+        assert(cache_enter_cnt == 0);
+        assert(generation_done != generation_active);
         generation_done = generation_active;
         done_replanting_breakpoints();
     }
