@@ -927,12 +927,15 @@ static void channel_close_listener(Channel * c) {
 
 void ini_streams_service(Protocol * proto) {
     int i;
+    static int ini_streams = 0;
 
-    for (i = 0; i < HANDLE_HASH_SIZE; i++) {
-        list_init(&handle_hash[i]);
+    if (ini_streams == 0) {
+        for (i = 0; i < HANDLE_HASH_SIZE; i++) {
+            list_init(&handle_hash[i]);
+        }
+        add_channel_close_listener(channel_close_listener);
+        ini_streams = 1;
     }
-
-    add_channel_close_listener(channel_close_listener);
 
     add_command_handler(proto, STREAMS, "subscribe", command_subscribe);
     add_command_handler(proto, STREAMS, "unsubscribe", command_unsubscribe);
