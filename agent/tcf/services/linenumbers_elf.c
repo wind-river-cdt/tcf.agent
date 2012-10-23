@@ -244,7 +244,7 @@ int line_to_address(Context * ctx, char * file_name, int line, int column,
 
     if (err == 0) {
         unsigned i;
-        unsigned h;
+        unsigned h = 0;
         char * fnm = NULL;
         for (i = 0; i < map.region_cnt; i++) {
             Trap trap;
