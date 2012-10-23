@@ -45,7 +45,7 @@
 #include <tcf/main/cmdline.h>
 
 #define EN_STEP_OVER (SERVICE_Breakpoints && SERVICE_StackTrace && ENABLE_Symbols)
-#define EN_STEP_LINE (SERVICE_LineNumbers)
+#define EN_STEP_LINE (ENABLE_LineNumbers)
 
 #define STOP_ALL_TIMEOUT 1000000
 #define STOP_ALL_MAX_CNT 20
@@ -1149,7 +1149,7 @@ static void update_step_machine_code_area(CodeArea * area, void * args) {
 }
 
 static int is_function_prologue(Context * ctx, ContextAddress ip, CodeArea * area) {
-#if SERVICE_Symbols
+#if ENABLE_Symbols
     Symbol * sym = NULL;
     int sym_class = SYM_CLASS_UNKNOWN;
     ContextAddress sym_addr = 0;
@@ -1165,15 +1165,15 @@ static int is_function_prologue(Context * ctx, ContextAddress ip, CodeArea * are
     return 0;
 }
 
-#if SERVICE_Symbols
+#if ENABLE_Symbols
 static void get_machine_code_area(CodeArea * area, void * args) {
-    *(CodeArea **)args = tmp_alloc(sizeof(CodeArea));
+    *(CodeArea **)args = (CodeArea *)tmp_alloc(sizeof(CodeArea));
     memcpy(*(CodeArea **)args, area, sizeof(CodeArea));
 }
 #endif
 
 static int is_within_function_epilogue(Context * ctx, ContextAddress ip) {
-#if SERVICE_Symbols
+#if ENABLE_Symbols
     Symbol * sym = NULL;
     int sym_class = SYM_CLASS_UNKNOWN;
     ContextAddress sym_addr = 0;
@@ -1451,7 +1451,7 @@ static int update_step_machine_state(Context * ctx) {
             }
             if (ext->step_code_area == NULL) {
                 /* Line info not available for current IP */
-#if SERVICE_Symbols
+#if ENABLE_Symbols
                 if (is_plt_section(ctx, addr) != 0) {
                     /* Continue stepping to skip PLT entry */
                     ext->step_code_area = area;

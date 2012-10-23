@@ -1435,7 +1435,7 @@ static void qualified_name_expression(int mode, Value * scope, Value * v) {
     error(ERR_INV_EXPRESSION, "Illegal usage of a type in expression");
 }
 
-#if SERVICE_Symbols
+#if ENABLE_Symbols
 static int get_std_type(const char * name, int type_class, Symbol ** type, size_t * size) {
     Symbol * sym = NULL;
     int sym_class = 0;
@@ -1462,7 +1462,7 @@ static void primary_expression(int mode, Value * v) {
     }
     else if (text_sy == SY_VAL) {
         *v = text_val;
-#if SERVICE_Symbols
+#if ENABLE_Symbols
         if (v->type_class == TYPE_CLASS_INTEGER || v->type_class == TYPE_CLASS_CARDINAL) {
             size_t size = 0;
             uint64_t n = to_uns(mode, v);

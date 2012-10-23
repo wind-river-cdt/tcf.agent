@@ -84,7 +84,6 @@ static MemoryMap elf_map;
 #endif
 
 static ELF_File * find_open_file_by_name(const char * name);
-static ELF_File * find_open_file_by_inode(dev_t dev, ino_t ino, int64_t mtime);
 
 void elf_add_close_listener(ELFCloseListener listener) {
     if (listeners_cnt >= listeners_max) {
@@ -306,6 +305,26 @@ static ELF_File * find_open_file_by_name(const char * name) {
     ELF_File * file = files;
     while (file != NULL) {
         if (file_name_equ(file, name)) {
+            if (prev != NULL) {
+                prev->next = file->next;
+                file->next = files;
+                files = file;
+            }
+            file->age = 0;
+            return file;
+        }
+        prev = file;
+        file = file->next;
+    }
+    return NULL;
+}
+
+static ELF_File * find_open_file_by_inode(dev_t dev, ino_t ino, int64_t mtime) {
+    ELF_File * prev = NULL;
+    ELF_File * file = files;
+    while (file != NULL) {
+        if (file->dev == dev && file->ino == ino &&
+            (mtime ? file->mtime == mtime : !file->mtime_changed)) {
             if (prev != NULL) {
                 prev->next = file->next;
                 file->next = files;
@@ -896,26 +915,6 @@ ELF_File * get_dwarf_file(ELF_File * file) {
 }
 
 #if ENABLE_DebugContext
-
-static ELF_File * find_open_file_by_inode(dev_t dev, ino_t ino, int64_t mtime) {
-    ELF_File * prev = NULL;
-    ELF_File * file = files;
-    while (file != NULL) {
-        if (file->dev == dev && file->ino == ino &&
-            (mtime ? file->mtime == mtime : !file->mtime_changed)) {
-            if (prev != NULL) {
-                prev->next = file->next;
-                file->next = files;
-                files = file;
-            }
-            file->age = 0;
-            return file;
-        }
-        prev = file;
-        file = file->next;
-    }
-    return NULL;
-}
 
 ELF_File * elf_open_memory_region_file(MemoryRegion * r, int * error) {
     ELF_File * file = NULL;
