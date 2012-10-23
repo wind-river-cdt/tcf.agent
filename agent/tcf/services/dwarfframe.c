@@ -217,7 +217,7 @@ static StackFrameRegisters * get_regs_stack_item(int n) {
     return regs_stack + n;
 }
 
-static U8_T read_frame_data_pointer(U1_T encoding, ELF_Section ** sec) {
+static U8_T read_frame_data_pointer(U1_T encoding, int rel_ok, U8_T func_addr) {
     U8_T v = 0;
     U8_T pos;
     unsigned idx;
@@ -229,31 +229,31 @@ static U8_T read_frame_data_pointer(U1_T encoding, ELF_Section ** sec) {
     switch ((encoding >> 4) & 0x7) {
     case 0:
     case EH_PB_funcrel:
+        v = func_addr;
         break;
     case EH_PB_pcrel:
-        if (sec != NULL) {
-            *sec = rules.section;
+        if (rel_ok) {
             v = pos + rules.section->addr;
         }
         break;
     case EH_PB_datarel:
-        if (sec != NULL) {
-            *sec = rules.section;
+        if (rel_ok) {
             v = rules.section->addr;
         }
         break;
     case EH_PB_textrel:
-        if (sec != NULL) {
+        if (rel_ok) {
             file = rules.section->file;
             for (idx = 1; idx < file->section_cnt; idx++) {
                 ELF_Section * section = file->sections + idx;
                 if ((section->flags & SHF_ALLOC) == 0) continue;
                 if (strcmp(section->name, ".text") == 0) {
-                    *sec = section;
                     v = section->addr;
+                    break;
                 }
             }
         }
+        break;
     case EH_PB_aligned:
         if ((pos % rules.address_size) != 0) dio_SetPos(pos + (rules.address_size - (pos % rules.address_size)));
         break;
@@ -264,7 +264,12 @@ static U8_T read_frame_data_pointer(U1_T encoding, ELF_Section ** sec) {
     /* Decode the value */
     switch (encoding & 0xf) {
     case EH_PE_absptr:
-        v += dio_ReadAddress(sec);
+        {
+            ELF_Section * sec = NULL;
+            v += dio_ReadAddress(&sec);
+            /* Frame info format does not support mutiple TEXT sections,
+             * so 'sec' value is ignored */
+        }
         break;
     case EH_PE_uleb128:
         v += dio_ReadU8LEB128();
@@ -317,7 +322,7 @@ static U8_T read_frame_data_pointer(U1_T encoding, ELF_Section ** sec) {
     return v;
 }
 
-static void exec_stack_frame_instruction(void) {
+static void exec_stack_frame_instruction(U8_T func_addr) {
     RegisterRules * reg;
     U4_T n;
     U1_T op = dio_ReadU1();
@@ -325,7 +330,7 @@ static void exec_stack_frame_instruction(void) {
     case CFA_nop:
         break;
     case CFA_set_loc:
-        rules.location = read_frame_data_pointer(rules.addr_encoding, NULL);
+        rules.location = read_frame_data_pointer(rules.addr_encoding, 1, func_addr);
         break;
     case CFA_advance_loc1:
         rules.location += dio_ReadU1() * rules.code_alignment;
@@ -937,7 +942,7 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
                 break;
             case 'P':
                 rules.prh_encoding = dio_ReadU1();
-                read_frame_data_pointer(rules.prh_encoding, NULL);
+                read_frame_data_pointer(rules.prh_encoding, 0, 0);
                 break;
             case 'R':
                 rules.addr_encoding = dio_ReadU1();
@@ -950,7 +955,7 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
     clear_frame_registers(&frame_regs);
     regs_stack_pos = 0;
     while (dio_GetPos() < cie_end) {
-        exec_stack_frame_instruction();
+        exec_stack_frame_instruction(0);
     }
     copy_register_rules(&cie_regs, &frame_regs);
     dio_SetPos(saved_pos);
@@ -980,11 +985,10 @@ static void read_frame_fde(U8_T IP, U8_T fde_pos) {
     assert(fde_flag);
     if (fde_flag) {
         U8_T Addr, Range;
-        ELF_Section * sec = NULL;
         if (rules.eh_frame) cie_ref = ref_pos - cie_ref;
         if (cie_ref != rules.cie_pos) read_frame_cie(fde_pos, cie_ref);
-        Addr = read_frame_data_pointer(rules.addr_encoding, &sec);
-        Range = read_frame_data_pointer(rules.addr_encoding, NULL);
+        Addr = read_frame_data_pointer(rules.addr_encoding, 1, 0);
+        Range = read_frame_data_pointer(rules.addr_encoding, 0, 0);
         assert(Addr <= IP && Addr + Range > IP);
         if (Addr <= IP && Addr + Range > IP) {
             U8_T location0 = Addr;
@@ -1001,7 +1005,7 @@ static void read_frame_fde(U8_T IP, U8_T fde_pos) {
                     rules.location = Addr + Range;
                     break;
                 }
-                exec_stack_frame_instruction();
+                exec_stack_frame_instruction(Addr);
                 assert(location0 <= IP);
                 if (rules.location > IP) break;
                 location0 = rules.location;
@@ -1061,7 +1065,6 @@ static void create_search_index(DWARFCache * cache, FrameInfoIndex * index) {
         else if (fde_dwarf64) fde_flag = cie_ref != ~(U8_T)0;
         else fde_flag = cie_ref != ~(U4_T)0;
         if (fde_flag) {
-            ELF_Section * sec = NULL;
             FrameInfoRange * range = NULL;
             if (rules.eh_frame) cie_ref = ref_pos - cie_ref;
             if (cie_ref != rules.cie_pos) read_frame_cie(fde_pos, cie_ref);
@@ -1072,8 +1075,8 @@ static void create_search_index(DWARFCache * cache, FrameInfoIndex * index) {
                     index->mFrameInfoRangesMax * sizeof(FrameInfoRange));
             }
             range = index->mFrameInfoRanges + index->mFrameInfoRangesCnt++;
-            range->mAddr = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, &sec);
-            range->mSize = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, NULL);
+            range->mAddr = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, 1, 0);
+            range->mSize = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, 0, 0);
             range->mOffset = fde_pos;
         }
         dio_SetPos(fde_end);
