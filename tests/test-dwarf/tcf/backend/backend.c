@@ -606,7 +606,6 @@ static void loc_var_func(void * args, Symbol * sym) {
             (get_symbol_register(sym, &ctx, &frame, &reg) < 0 || reg == NULL) &&
             (get_symbol_value(sym, &value, &value_size, &value_big_endian) < 0 || value == NULL)) {
         int err = errno;
-        if (errcmp(err, "No object location or value info found") == 0) return;
         if (errcmp(err, "No object location info found") == 0) return;
         if (errcmp(err, "Object is not available at this location") == 0) return;
         if (errcmp(err, "Division by zero in location") == 0) return;
@@ -927,7 +926,7 @@ static void next_pc(void) {
             return;
         }
 
-        while ((mem_map.regions[mem_region_pos].flags & MM_FLAG_X) == 0) {
+        while ((mem_map.regions[mem_region_pos].flags & MM_FLAG_X) == 0 || mem_map.regions[mem_region_pos].size == 0) {
             if (mem_region_pos + 1 < (int)mem_map.region_cnt) {
                 mem_region_pos++;
                 pc = mem_map.regions[mem_region_pos].addr;
@@ -998,8 +997,14 @@ static void next_pc(void) {
                     }
                 }
                 else {
+                    Symbol * fnd_scp_sym = NULL;
                     char * fnd_name = NULL;
                     ContextAddress fnd_addr = 0;
+                    if (find_symbol_in_scope(elf_ctx, STACK_TOP_FRAME, pc, NULL, func_name, &fnd_scp_sym) < 0) {
+                        if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
+                            error("find_symbol_in_scope");
+                        }
+                    }
                     if (get_symbol_name(fnd_sym, &fnd_name) < 0) {
                         error_sym("get_symbol_name", fnd_sym);
                     }
@@ -1078,6 +1083,10 @@ static void next_pc(void) {
                 errno = set_errno(ERR_OTHER, "Invalid line area address");
                 error("line_to_address");
             }
+        }
+        else if (func_object != NULL) {
+            //errno = set_errno(ERR_OTHER, "Line info not found");
+            //error("address_to_line");
         }
 
         lt_file = NULL;
@@ -1209,13 +1218,11 @@ static void next_file(void) {
         r->ino = st.st_ino;
     }
     if (mem_map.region_cnt == 0) {
+        ContextAddress addr = 0x10000;
         for (j = 0; j < f->section_cnt; j++) {
             ELF_Section * sec = f->sections + j;
-            if (sec->size == 0) continue;
             if (sec->name == NULL) continue;
-            if (strcmp(sec->name, ".text") == 0 ||
-                strcmp(sec->name, ".data") == 0 ||
-                strcmp(sec->name, ".bss") == 0) {
+            if (sec->flags & SHF_ALLOC) {
                 MemoryRegion * r = NULL;
                 if (mem_map.region_cnt >= mem_map.region_max) {
                     mem_map.region_max += 8;
@@ -1223,7 +1230,7 @@ static void next_file(void) {
                 }
                 r = mem_map.regions + mem_map.region_cnt++;
                 memset(r, 0, sizeof(MemoryRegion));
-                r->addr = (ContextAddress)(sec->addr + 0x10000);
+                r->addr = addr;
                 r->size = (ContextAddress)sec->size;
                 r->file_offs = sec->offset;
                 r->bss = strcmp(sec->name, ".bss") == 0;
@@ -1231,8 +1238,14 @@ static void next_file(void) {
                 r->ino = st.st_ino;
                 r->file_name = loc_strdup(elf_file_name);
                 r->sect_name = loc_strdup(sec->name);
-                r->flags = MM_FLAG_R | MM_FLAG_W;
+                r->flags = MM_FLAG_R;
+                if (sec->flags & SHF_WRITE) r->flags |= MM_FLAG_W;
+                if (sec->flags & SHF_EXECINSTR) r->flags |= MM_FLAG_X;
                 if (strcmp(sec->name, ".text") == 0) r->flags |= MM_FLAG_X;
+                if (strcmp(sec->name, ".init.text") == 0) r->flags |= MM_FLAG_X;
+                if (strcmp(sec->name, ".exit.text") == 0) r->flags |= MM_FLAG_X;
+                addr += r->size;
+                addr = (addr + 0x10000) & ~(ContextAddress)0xffff;
             }
         }
     }

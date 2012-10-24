@@ -211,7 +211,9 @@ typedef struct Elf32_Shdr {
     Elf32_Word sh_entsize;
 } Elf32_Shdr;
 
+#define SHF_WRITE           0x00000001
 #define SHF_ALLOC           0x00000002
+#define SHF_EXECINSTR       0x00000004
 
 typedef struct Elf32_Phdr {
     Elf32_Word p_type;

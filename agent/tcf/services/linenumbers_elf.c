@@ -120,6 +120,7 @@ static LineNumbersState * get_next_in_code(CompUnit * unit, LineNumbersState * s
         if (next->mFile != state->mFile) break;
         if (next->mLine != state->mLine) break;
         if (next->mColumn != state->mColumn) break;
+        if (next->mSection != state->mSection) return NULL;
         if (next + 1 >= unit->mStates + unit->mStatesCnt) break;
     }
     return next;
@@ -204,7 +205,8 @@ static void unit_line_to_address(Context * ctx, MemoryRegion * mem, CompUnit * u
                         k--;
                     }
                     for (;;) {
-                        ContextAddress addr = elf_run_time_address_in_region(ctx, mem, unit->mFile, unit->mTextSection, state->mAddress);
+                        ELF_Section * sec = state->mSection ? sec = unit->mFile->sections + state->mSection : NULL;
+                        ContextAddress addr = elf_run_time_address_in_region(ctx, mem, unit->mFile, sec, state->mAddress);
                         if (errno == 0) {
                             LineNumbersState * code_next = get_next_in_code(unit, state);
                             if (code_next != NULL) {
@@ -317,7 +319,13 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
             while (l < h) {
                 unsigned k = (h + l) / 2;
                 LineNumbersState * state = unit->mStates + k;
-                if (state->mAddress >= addr_max) {
+                if (state->mSection > range->mSection) {
+                    h = k;
+                }
+                else if (state->mSection < range->mSection) {
+                    l = k + 1;
+                }
+                else if (state->mAddress >= addr_max) {
                     h = k;
                 }
                 else {

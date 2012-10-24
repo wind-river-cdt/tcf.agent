@@ -59,6 +59,13 @@
 #define RULE_VAL_OFFSET         5
 #define RULE_VAL_EXPRESSION     6
 
+struct FrameInfoRange {
+    U4_T mSection;
+    ContextAddress mAddr;
+    ContextAddress mSize;
+    U8_T mOffset;
+};
+
 typedef struct RegisterRules {
     int rule;
     I4_T offset;
@@ -78,6 +85,7 @@ typedef struct StackFrameRegisters {
 typedef struct StackFrameRules {
     Context * ctx;
     ELF_Section * section;
+    ELF_Section * text_section;
     RegisterIdScope reg_id_scope;
     int eh_frame;
     U1_T version;
@@ -94,6 +102,7 @@ typedef struct StackFrameRules {
     U1_T lsda_encoding;
     U1_T prh_encoding;
     U1_T addr_encoding;
+    ELF_Section * loc_section;
     U8_T location;
     int return_address_register;
 } StackFrameRules;
@@ -217,7 +226,7 @@ static StackFrameRegisters * get_regs_stack_item(int n) {
     return regs_stack + n;
 }
 
-static U8_T read_frame_data_pointer(U1_T encoding, int rel_ok, U8_T func_addr) {
+static U8_T read_frame_data_pointer(U1_T encoding, ELF_Section ** sec, U8_T func_addr) {
     U8_T v = 0;
     U8_T pos;
     unsigned idx;
@@ -232,26 +241,18 @@ static U8_T read_frame_data_pointer(U1_T encoding, int rel_ok, U8_T func_addr) {
         v = func_addr;
         break;
     case EH_PB_pcrel:
-        if (rel_ok) {
+        if (sec != NULL) {
             v = pos + rules.section->addr;
         }
         break;
     case EH_PB_datarel:
-        if (rel_ok) {
+        if (sec != NULL) {
             v = rules.section->addr;
         }
         break;
     case EH_PB_textrel:
-        if (rel_ok) {
-            file = rules.section->file;
-            for (idx = 1; idx < file->section_cnt; idx++) {
-                ELF_Section * section = file->sections + idx;
-                if ((section->flags & SHF_ALLOC) == 0) continue;
-                if (strcmp(section->name, ".text") == 0) {
-                    v = section->addr;
-                    break;
-                }
-            }
+        if (sec != NULL && rules.text_section != NULL) {
+            v = rules.text_section->addr;
         }
         break;
     case EH_PB_aligned:
@@ -264,12 +265,7 @@ static U8_T read_frame_data_pointer(U1_T encoding, int rel_ok, U8_T func_addr) {
     /* Decode the value */
     switch (encoding & 0xf) {
     case EH_PE_absptr:
-        {
-            ELF_Section * sec = NULL;
-            v += dio_ReadAddress(&sec);
-            /* Frame info format does not support mutiple TEXT sections,
-             * so 'sec' value is ignored */
-        }
+        v += dio_ReadAddress(sec);
         break;
     case EH_PE_uleb128:
         v += dio_ReadU8LEB128();
@@ -330,7 +326,7 @@ static void exec_stack_frame_instruction(U8_T func_addr) {
     case CFA_nop:
         break;
     case CFA_set_loc:
-        rules.location = read_frame_data_pointer(rules.addr_encoding, 1, func_addr);
+        rules.location = read_frame_data_pointer(rules.addr_encoding, &rules.loc_section, func_addr);
         break;
     case CFA_advance_loc1:
         rules.location += dio_ReadU1() * rules.code_alignment;
@@ -942,7 +938,7 @@ static void read_frame_cie(U8_T fde_pos, U8_T pos) {
                 break;
             case 'P':
                 rules.prh_encoding = dio_ReadU1();
-                read_frame_data_pointer(rules.prh_encoding, 0, 0);
+                read_frame_data_pointer(rules.prh_encoding, NULL, 0);
                 break;
             case 'R':
                 rules.addr_encoding = dio_ReadU1();
@@ -987,8 +983,8 @@ static void read_frame_fde(U8_T IP, U8_T fde_pos) {
         U8_T Addr, Range;
         if (rules.eh_frame) cie_ref = ref_pos - cie_ref;
         if (cie_ref != rules.cie_pos) read_frame_cie(fde_pos, cie_ref);
-        Addr = read_frame_data_pointer(rules.addr_encoding, 1, 0);
-        Range = read_frame_data_pointer(rules.addr_encoding, 0, 0);
+        Addr = read_frame_data_pointer(rules.addr_encoding, &rules.loc_section, 0);
+        Range = read_frame_data_pointer(rules.addr_encoding, NULL, 0);
         assert(Addr <= IP && Addr + Range > IP);
         if (Addr <= IP && Addr + Range > IP) {
             U8_T location0 = Addr;
@@ -1021,6 +1017,8 @@ static void read_frame_fde(U8_T IP, U8_T fde_pos) {
 static int cmp_frame_info_ranges(const void * x, const void * y) {
     FrameInfoRange * rx = (FrameInfoRange *)x;
     FrameInfoRange * ry = (FrameInfoRange *)y;
+    if (rx->mSection < ry->mSection) return -1;
+    if (rx->mSection > ry->mSection) return +1;
     if (rx->mAddr < ry->mAddr) return -1;
     if (rx->mAddr > ry->mAddr) return +1;
     return 0;
@@ -1065,6 +1063,7 @@ static void create_search_index(DWARFCache * cache, FrameInfoIndex * index) {
         else if (fde_dwarf64) fde_flag = cie_ref != ~(U8_T)0;
         else fde_flag = cie_ref != ~(U4_T)0;
         if (fde_flag) {
+            ELF_Section * sec = NULL;
             FrameInfoRange * range = NULL;
             if (rules.eh_frame) cie_ref = ref_pos - cie_ref;
             if (cie_ref != rules.cie_pos) read_frame_cie(fde_pos, cie_ref);
@@ -1075,8 +1074,13 @@ static void create_search_index(DWARFCache * cache, FrameInfoIndex * index) {
                     index->mFrameInfoRangesMax * sizeof(FrameInfoRange));
             }
             range = index->mFrameInfoRanges + index->mFrameInfoRangesCnt++;
-            range->mAddr = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, 1, 0);
-            range->mSize = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, 0, 0);
+            memset(range, 0, sizeof(FrameInfoRange));
+            range->mAddr = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, &sec, 0);
+            range->mSize = (ContextAddress)read_frame_data_pointer(rules.addr_encoding, NULL, 0);
+            if (sec != NULL) {
+                range->mSection = sec->index;
+                index->mRelocatable = 1;
+            }
             range->mOffset = fde_pos;
         }
         dio_SetPos(fde_end);
@@ -1085,14 +1089,30 @@ static void create_search_index(DWARFCache * cache, FrameInfoIndex * index) {
     qsort(index->mFrameInfoRanges, index->mFrameInfoRangesCnt, sizeof(FrameInfoRange), cmp_frame_info_ranges);
 }
 
-static void read_frame_info_section(Context * ctx, U8_T IP, DWARFCache * cache, FrameInfoIndex * index) {
+static void read_frame_info_section(Context * ctx, ELF_Section * text_section,
+                                    U8_T IP, DWARFCache * cache, FrameInfoIndex * index) {
     unsigned l, h;
     ELF_Section * section = index->mSection;
     ELF_File * file = section->file;
+    U2_T sec_idx = 0;
+
+    if (text_section != NULL && text_section->file != file) {
+        unsigned i;
+        assert(get_dwarf_file(text_section->file) == file);
+        for (i = 1; i < file->section_cnt; i++) {
+            ELF_Section * sec = cache->mFile->sections + i;
+            if (sec->name == NULL) continue;
+            if (strcmp(sec->name, text_section->name) == 0) {
+                text_section = sec;
+                break;
+            }
+        }
+    }
 
     memset(&rules, 0, sizeof(StackFrameRules));
     rules.ctx = ctx;
     rules.section = section;
+    rules.text_section = text_section;
     rules.eh_frame = strcmp(section->name, ".eh_frame") == 0;
     rules.reg_id_scope.big_endian = file->big_endian;
     rules.reg_id_scope.machine = file->machine;
@@ -1105,11 +1125,17 @@ static void read_frame_info_section(Context * ctx, U8_T IP, DWARFCache * cache, 
 
     l = 0;
     h = index->mFrameInfoRangesCnt;
+    if (index->mRelocatable && text_section != NULL) sec_idx = text_section->index;
     while (l < h) {
         unsigned k = (l + h) / 2;
         FrameInfoRange * range = index->mFrameInfoRanges + k;
-        assert(index->mFrameInfoRanges[l].mAddr <= index->mFrameInfoRanges[h - 1].mAddr);
-        if (range->mAddr > IP) {
+        if (sec_idx < range->mSection) {
+            h = k;
+        }
+        else if (sec_idx > range->mSection) {
+            l = k + 1;
+        }
+        else if (range->mAddr > IP) {
             h = k;
         }
         else if (range->mAddr + range->mSize <= IP) {
@@ -1123,7 +1149,7 @@ static void read_frame_info_section(Context * ctx, U8_T IP, DWARFCache * cache, 
 }
 
 void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * text_section, U8_T addr) {
-    DWARFCache * cache = get_dwarf_cache(file);
+    DWARFCache * cache = NULL;
     FrameInfoIndex * index = NULL;
     ELF_File * dwarf_file = NULL;
 
@@ -1136,22 +1162,23 @@ void get_dwarf_stack_frame_info(Context * ctx, ELF_File * file, ELF_Section * te
     dwarf_stack_trace_addr = 0;
     dwarf_stack_trace_size = 0;
 
-    index = cache->mFrameInfo;
-    while (index != NULL) {
-        read_frame_info_section(ctx, addr, cache, index);
-        if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
-        index = index->mNext;
-    }
-
     dwarf_file = get_dwarf_file(file);
     if (dwarf_file != file) {
         cache = get_dwarf_cache(dwarf_file);
         index = cache->mFrameInfo;
         while (index != NULL) {
-            read_frame_info_section(ctx, addr, cache, index);
+            read_frame_info_section(ctx, text_section, addr, cache, index);
             if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
             index = index->mNext;
         }
+    }
+
+    cache = get_dwarf_cache(file);
+    index = cache->mFrameInfo;
+    while (index != NULL) {
+        read_frame_info_section(ctx, text_section, addr, cache, index);
+        if (dwarf_stack_trace_fp->cmds_cnt > 0) return;
+        index = index->mNext;
     }
 
     if (text_section != NULL && text_section->name != NULL && strcmp(text_section->name, ".plt") == 0) {

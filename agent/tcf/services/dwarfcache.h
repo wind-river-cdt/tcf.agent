@@ -108,7 +108,10 @@ struct ObjectInfo {
             ContextAddress mLowPC;
             union {
                 U8_T mRanges;
-                ContextAddress mAddr;
+                struct {
+                    ELF_Section * mSection;
+                    ContextAddress mAddr;
+                };
             } mHighPC;
         } mCode;
         struct {
@@ -167,6 +170,7 @@ struct PropertyValue {
 struct LineNumbersState {
     ContextAddress mAddress;
     char * mFileName;
+    U4_T mSection;
     U4_T mStatesIndexPos;
     U4_T mFile;
     U4_T mLine;
@@ -211,18 +215,13 @@ struct CompUnit {
 /* Address range of a compilation unit. A unit can occupy multiple address ranges. */
 struct UnitAddressRange {
     CompUnit * mUnit;       /* Compilation unit */
-    ELF_Section * mSection; /* ELF file section that contains the range */
+    U4_T mSection;          /* Index of ELF file section that contains the range */
     ContextAddress mAddr;   /* Link-time start address of the range */
     ContextAddress mSize;   /* Size of the range */
 };
 
-struct FrameInfoRange {
-    ContextAddress mAddr;
-    ContextAddress mSize;
-    U8_T mOffset;
-};
-
 struct FrameInfoIndex {
+    int mRelocatable;
     ELF_Section * mSection;
     FrameInfoRange * mFrameInfoRanges;
     unsigned mFrameInfoRangesCnt;
@@ -250,6 +249,7 @@ struct DWARFCache {
     UnitAddressRange * mAddrRanges;
     unsigned mAddrRangesCnt;
     unsigned mAddrRangesMax;
+    int mAddrRangesRelocatable;
     PubNamesTable mPubNames;
     FrameInfoIndex * mFrameInfo;
     unsigned mFileInfoHashSize;
@@ -280,7 +280,8 @@ extern void load_line_numbers(CompUnit * unit);
 extern ObjectInfo * find_object(DWARFCache * cache, ContextAddress ID);
 
 /* Search and return first compilation unit address range in given link-time address range 'addr_min'..'addr_max' (inclusive). */
-extern UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ContextAddress addr_min, ContextAddress addr_max);
+extern UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ELF_Section * section,
+    ContextAddress addr_min, ContextAddress addr_max);
 
 /*
  * Read a property of a DWARF object, perform ELF relocations if any.

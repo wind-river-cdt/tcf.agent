@@ -624,6 +624,7 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_high_pc:
         dio_ChkAddr(Form);
         if (Info->mFlags & DOIF_ranges) break;
+        Info->u.mCode.mHighPC.mSection = dio_gFormSection;
         Info->u.mCode.mHighPC.mAddr = (ContextAddress)dio_gFormData;
         break;
     case AT_ranges:
@@ -786,6 +787,8 @@ static void read_object_refs(void) {
 static int addr_ranges_comparator(const void * x, const void * y) {
     UnitAddressRange * rx = (UnitAddressRange *)x;
     UnitAddressRange * ry = (UnitAddressRange *)y;
+    if (rx->mSection < ry->mSection) return -1;
+    if (rx->mSection > ry->mSection) return +1;
     if (rx->mAddr < ry->mAddr) return -1;
     if (rx->mAddr > ry->mAddr) return +1;
     if (rx->mUnit->mObject->mID < ry->mUnit->mObject->mID) return -1;
@@ -801,7 +804,11 @@ static void add_addr_range(ELF_Section * sec, CompUnit * unit, ContextAddress ad
     }
     range = sCache->mAddrRanges + sCache->mAddrRangesCnt++;
     memset(range, 0, sizeof(UnitAddressRange));
-    range->mSection = sec;
+    if (sec != NULL) {
+        assert(sec->file == sCache->mFile);
+        range->mSection = sec->index;
+        sCache->mAddrRangesRelocatable = 1;
+    }
     range->mAddr = addr;
     range->mSize = size;
     range->mUnit = unit;
@@ -847,12 +854,13 @@ static void load_addr_ranges(void) {
                         sCompUnit->mObject->mFlags |= DOIF_aranges;
                         while (dio_GetPos() % (addr_size * 2) != 0) dio_Skip(1);
                         for (;;) {
-                            ELF_Section * range_sec = NULL;
-                            ContextAddress addr = (ContextAddress)dio_ReadAddressX(&range_sec, addr_size);
-                            ContextAddress size = (ContextAddress)dio_ReadAddressX(&range_sec, addr_size);
+                            ELF_Section * addr_sec = NULL;
+                            ELF_Section * size_sec = NULL;
+                            ContextAddress addr = (ContextAddress)dio_ReadAddressX(&addr_sec, addr_size);
+                            ContextAddress size = (ContextAddress)dio_ReadAddressX(&size_sec, addr_size);
                             if (addr == 0 && size == 0) break;
                             if (size == 0) continue;
-                            add_addr_range(range_sec, sCompUnit, addr, size);
+                            add_addr_range(addr_sec, sCompUnit, addr, size);
                         }
                     }
                 }
@@ -1597,6 +1605,7 @@ static void add_state(CompUnit * Unit, LineNumbersState * state) {
         memset(&s, 0, sizeof(s));
         s.mLine = 1;
         s.mFile = state->mFile;
+        s.mSection = state->mSection;
         s.mAddress = state->mAddress;
         add_state(Unit, &s);
     }
@@ -1610,6 +1619,8 @@ static void add_state(CompUnit * Unit, LineNumbersState * state) {
 static int state_address_comparator(const void * x1, const void * x2) {
     LineNumbersState * s1 = (LineNumbersState *)x1;
     LineNumbersState * s2 = (LineNumbersState *)x2;
+    if (s1->mSection < s2->mSection) return -1;
+    if (s1->mSection > s2->mSection) return +1;
     if (s1->mAddress < s2->mAddress) return -1;
     if (s1->mAddress > s2->mAddress) return +1;
     if (s1->mFile < s2->mFile) return -1;
@@ -1630,6 +1641,8 @@ static int state_text_pos_comparator(const void * x1, const void * x2) {
     if (s1->mLine > s2->mLine) return +1;
     if (s1->mColumn < s2->mColumn) return -1;
     if (s1->mColumn > s2->mColumn) return +1;
+    if (s1->mSection < s2->mSection) return -1;
+    if (s1->mSection > s2->mSection) return +1;
     if (s1->mAddress < s2->mAddress) return -1;
     if (s1->mAddress > s2->mAddress) return +1;
     return 0;
@@ -1669,12 +1682,13 @@ static void compute_reverse_lookup_indices(DWARFCache * Cache, CompUnit * Unit) 
 
 static void load_line_numbers_v1(CompUnit * Unit, U4_T unit_size) {
     LineNumbersState state;
-    ELF_Section * s = NULL;
+    ELF_Section * sec = NULL;
     ContextAddress addr = 0;
     U4_T line = 0;
 
     memset(&state, 0, sizeof(state));
-    addr = (ContextAddress)dio_ReadAddress(&s);
+    addr = (ContextAddress)dio_ReadAddress(&sec);
+    if (sec != NULL) state.mSection = sec->index;
     while (dio_GetPos() < Unit->mLineInfoOffs + unit_size) {
         state.mLine = dio_ReadU4();
         state.mColumn = dio_ReadU2();
@@ -1755,6 +1769,7 @@ static void load_line_numbers_v2(CompUnit * Unit, U8_T unit_size, int dwarf64) {
             state.mDiscriminator = 0;
         }
         else if (opcode == 0) {
+            ELF_Section * sec = NULL;
             U4_T op_size = dio_ReadULEB128();
             U8_T op_pos = dio_GetPos();
             switch (dio_ReadU1()) {
@@ -1780,11 +1795,8 @@ static void load_line_numbers_v2(CompUnit * Unit, U8_T unit_size, int dwarf64) {
                 else state.mFlags &= ~LINE_IsStmt;
                 break;
             case DW_LNE_set_address:
-                {
-                    ELF_Section * s = NULL;
-                    state.mAddress = (ContextAddress)dio_ReadAddress(&s);
-                    if (s != Unit->mTextSection) state.mAddress = 0;
-                }
+                state.mAddress = (ContextAddress)dio_ReadAddress(&sec);
+                state.mSection = sec != NULL ? sec->index : 0;
                 break;
             case DW_LNE_set_discriminator:
                 state.mDiscriminator = (U1_T)dio_ReadULEB128();
@@ -1889,13 +1901,36 @@ void load_line_numbers(CompUnit * Unit) {
     }
 }
 
-UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ContextAddress addr_min, ContextAddress addr_max) {
+UnitAddressRange * find_comp_unit_addr_range(DWARFCache * cache, ELF_Section * section,
+                                             ContextAddress addr_min, ContextAddress addr_max) {
     unsigned l = 0;
     unsigned h = cache->mAddrRangesCnt;
+    U4_T s = 0;
+
+    if (cache->mAddrRangesRelocatable && section != NULL) {
+        if (section->file == cache->mFile) {
+            s = section->index;
+        }
+        else {
+            unsigned i;
+            assert(get_dwarf_file(section->file) == cache->mFile);
+            for (i = 1; i < cache->mFile->section_cnt; i++) {
+                ELF_Section * sec = cache->mFile->sections + i;
+                if (sec->name == NULL) continue;
+                if (strcmp(sec->name, section->name) == 0) {
+                    s = i;
+                    break;
+                }
+            }
+        }
+    }
+
     while (l < h) {
         unsigned k = (h + l) / 2;
         UnitAddressRange * rk = cache->mAddrRanges + k;
-        if (rk->mAddr <= addr_max && rk->mAddr + rk->mSize > addr_min) {
+        if (rk->mSection > s) h = k;
+        else if (rk->mSection < s) l = k + 1;
+        else if (rk->mAddr <= addr_max && rk->mAddr + rk->mSize > addr_min) {
             int first = 1;
             if (k > 0) {
                 UnitAddressRange * rp = rk - 1;

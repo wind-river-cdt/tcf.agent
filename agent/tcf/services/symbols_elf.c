@@ -86,6 +86,14 @@ static ContextAddress sym_ip;
 #define save_sym_values() Context * org_ctx = sym_ctx; int org_frame = sym_frame; ContextAddress org_ip = sym_ip
 #define restore_sym_values() sym_ctx = org_ctx; sym_frame = org_frame; sym_ip = org_ip
 
+typedef struct {
+    ELF_File * file;
+    ELF_Section * section;
+    ContextAddress lt_addr;
+    ContextAddress rt_addr;
+    CompUnit * unit;
+} UnitAddress;
+
 typedef long ConstantValueType;
 
 static struct ConstantPseudoSymbol {
@@ -496,7 +504,7 @@ static int get_num_prop(ObjectInfo * obj, U2_T at, U8_T * res) {
 }
 
 /* Check link-time address 'addr' belongs to an object address range(s) */
-static int check_in_range(ObjectInfo * obj, ContextAddress addr) {
+static int check_in_range(ObjectInfo * obj, UnitAddress * addr) {
     if (obj->mFlags & DOIF_ranges) {
         Trap trap;
         if (set_trap(&trap)) {
@@ -509,19 +517,24 @@ static int check_in_range(ObjectInfo * obj, ContextAddress addr) {
 
                 dio_EnterSection(&unit->mDesc, debug_ranges, obj->u.mCode.mHighPC.mRanges);
                 for (;;) {
-                    ELF_Section * sec = NULL;
-                    U8_T x = dio_ReadAddress(&sec);
-                    U8_T y = dio_ReadAddress(&sec);
+                    ELF_Section * x_sec = NULL;
+                    ELF_Section * y_sec = NULL;
+                    U8_T x = dio_ReadAddress(&x_sec);
+                    U8_T y = dio_ReadAddress(&y_sec);
                     if (x == 0 && y == 0) break;
                     if (x == ((U8_T)1 << unit->mDesc.mAddressSize * 8) - 1) {
                         base = (ContextAddress)y;
                     }
                     else {
-                        x = base + x;
-                        y = base + y;
-                        if (x <= addr && addr < y) {
-                            res = 1;
-                            break;
+                        if (x_sec == NULL) x_sec = unit->mTextSection;
+                        if (y_sec == NULL) y_sec = unit->mTextSection;
+                        if (x_sec == addr->section && y_sec == addr->section) {
+                            x = base + x;
+                            y = base + y;
+                            if (x <= addr->lt_addr && addr->lt_addr < y) {
+                                res = 1;
+                                break;
+                            }
                         }
                     }
                 }
@@ -534,8 +547,8 @@ static int check_in_range(ObjectInfo * obj, ContextAddress addr) {
         return 0;
     }
 
-    if (obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC) {
-        return addr >= obj->u.mCode.mLowPC && addr < obj->u.mCode.mHighPC.mAddr;
+    if (obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC && obj->u.mCode.mHighPC.mSection == addr->section) {
+        return addr->lt_addr >= obj->u.mCode.mLowPC && addr->lt_addr < obj->u.mCode.mHighPC.mAddr;
     }
 
     return 0;
@@ -791,14 +804,14 @@ static void find_by_name_in_pub_names(DWARFCache * cache, const char * name) {
 }
 
 static void find_in_object_tree(ObjectInfo * parent, unsigned level,
-        ContextAddress rt_offs, ContextAddress ip, const char * name) {
+                                UnitAddress * ip, const char * name) {
     ObjectInfo * children = get_dwarf_children(parent);
     ObjectInfo * obj = NULL;
     ObjectInfo * sym_this = NULL;
     int obj_ptr_chk = 0;
     U8_T obj_ptr_id = 0;
 
-    if (ip != 0) {
+    if (ip) {
         /* Search nested scope */
         obj = children;
         while (obj != NULL) {
@@ -814,8 +827,8 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
             case TAG_catch_block:
             case TAG_subroutine:
             case TAG_subprogram:
-                if (!check_in_range(obj, ip - rt_offs)) break;
-                find_in_object_tree(obj, level + 1, rt_offs, ip, name);
+                if (!check_in_range(obj, ip)) break;
+                find_in_object_tree(obj, level + 1, ip, name);
                 break;
             }
             obj = obj->mSibling;
@@ -851,7 +864,7 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
             if (set_trap(&trap)) {
                 find_symbol_list = NULL;
                 type = get_original_type(type->mType);
-                find_in_object_tree(type, level, 0, 0, name);
+                find_in_object_tree(type, level, NULL, name);
                 sort_find_symbol_buf();
                 this_list = find_symbol_list;
                 clear_trap(&trap);
@@ -877,7 +890,7 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
         ObjectInfo * name_space;
         read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, parent, AT_extension, &p);
         name_space = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
-        if (name_space != NULL) find_in_object_tree(name_space, level, 0, 0, name);
+        if (name_space != NULL) find_in_object_tree(name_space, level, NULL, name);
     }
 
     /* Search imported and inherited objects */
@@ -885,10 +898,10 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
     while (obj != NULL) {
         switch (obj->mTag) {
         case TAG_enumeration_type:
-            find_in_object_tree(obj, level, 0, 0, name);
+            find_in_object_tree(obj, level, NULL, name);
             break;
         case TAG_inheritance:
-            find_in_object_tree(obj->mType, level, 0, 0, name);
+            find_in_object_tree(obj->mType, level, NULL, name);
             break;
         case TAG_imported_declaration:
             if (obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
@@ -904,7 +917,7 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
             }
             break;
         case TAG_imported_module:
-            find_in_object_tree(obj, level, 0, 0, name);
+            find_in_object_tree(obj, level, NULL, name);
             {
                 PropertyValue p;
                 ObjectInfo * module;
@@ -914,7 +927,7 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
                     Trap trap;
                     if (set_trap(&trap)) {
                         module->mFlags |= DOIF_find_mark;
-                        find_in_object_tree(module, level, 0, 0, name);
+                        find_in_object_tree(module, level, NULL, name);
                         clear_trap(&trap);
                         module->mFlags &= ~DOIF_find_mark;
                     }
@@ -930,13 +943,26 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
     }
 }
 
-static void find_in_dwarf(const char * name) {
+static void find_unit(Context * ctx, ContextAddress addr, UnitAddress * unit) {
     ContextAddress rt_addr = 0;
-    UnitAddressRange * range = elf_find_unit(sym_ctx, sym_ip, sym_ip, &rt_addr);
+    UnitAddressRange * range = elf_find_unit(ctx, addr, addr, &rt_addr);
+    memset(unit, 0, sizeof(UnitAddress));
     if (range != NULL) {
-        CompUnit * unit = range->mUnit;
-        find_in_object_tree(unit->mObject, 2, rt_addr - range->mAddr, sym_ip, name);
-        if (unit->mBaseTypes != NULL) find_in_object_tree(unit->mBaseTypes->mObject, 2, 0, 0, name);
+        unit->file = range->mUnit->mFile;
+        if (range->mSection) unit->section = unit->file->sections + range->mSection;
+        unit->lt_addr = addr - rt_addr + range->mAddr;
+        unit->rt_addr = addr;
+        unit->unit = range->mUnit;
+    }
+}
+
+static void find_in_dwarf(const char * name) {
+    UnitAddress addr;
+    find_unit(sym_ctx, sym_ip, &addr);
+    if (addr.unit != NULL) {
+        CompUnit * unit = addr.unit;
+        find_in_object_tree(unit->mObject, 2, &addr, name);
+        if (unit->mBaseTypes != NULL) find_in_object_tree(unit->mBaseTypes->mObject, 2, NULL, name);
     }
 }
 
@@ -1197,35 +1223,32 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
     if (get_sym_context(ctx, frame, ip) < 0) error = errno;
 
     if (!error && scope == NULL && sym_ip != 0) {
-        ELF_File * file = elf_list_first(sym_ctx, sym_ip, sym_ip);
-        if (file == NULL) error = errno;
-        while (error == 0 && file != NULL) {
-            Trap trap;
-            if (set_trap(&trap)) {
+        Trap trap;
+        if (set_trap(&trap)) {
+            ELF_File * file = NULL;
+            ELF_Section * sec = NULL;
+            ContextAddress addr = elf_map_to_link_time_address(ctx, sym_ip, &file, &sec);
+            if (file != NULL) {
                 DWARFCache * cache = get_dwarf_cache(get_dwarf_file(file));
-                UnitAddressRange * range = find_comp_unit_addr_range(cache, sym_ip, sym_ip);
+                UnitAddressRange * range = find_comp_unit_addr_range(cache, sec, addr, addr);
                 if (range != NULL) {
-                    find_in_object_tree(range->mUnit->mObject, 2, 0, 0, name);
+                    find_in_object_tree(range->mUnit->mObject, 2, NULL, name);
                 }
                 if (find_symbol_list == NULL) {
                     find_by_name_in_sym_table(file, name, 0);
                 }
-                clear_trap(&trap);
             }
-            else {
-                error = trap.error;
-                break;
-            }
-            file = elf_list_next(sym_ctx);
-            if (file == NULL) error = errno;
+            clear_trap(&trap);
         }
-        elf_list_done(sym_ctx);
+        else {
+            error = trap.error;
+        }
     }
 
     if (!error && find_symbol_list == NULL && scope != NULL && scope->obj != NULL) {
         Trap trap;
         if (set_trap(&trap)) {
-            find_in_object_tree(scope->obj, 2, 0, 0, name);
+            find_in_object_tree(scope->obj, 2, NULL, name);
             clear_trap(&trap);
         }
         else {
@@ -1253,7 +1276,7 @@ int find_symbol_in_scope(Context * ctx, int frame, ContextAddress ip, Symbol * s
     return 0;
 }
 
-static int find_by_addr_in_unit(ObjectInfo * obj, int level, ContextAddress rt_offs, ContextAddress addr, Symbol ** res) {
+static int find_by_addr_in_unit(ObjectInfo * obj, int level, UnitAddress * addr, UnitAddress * ip, Symbol ** res) {
     while (obj != NULL) {
         switch (obj->mTag) {
         case TAG_compile_unit:
@@ -1267,12 +1290,12 @@ static int find_by_addr_in_unit(ObjectInfo * obj, int level, ContextAddress rt_o
         case TAG_catch_block:
         case TAG_subroutine:
         case TAG_subprogram:
-            if (check_in_range(obj, addr - rt_offs)) {
+            if (check_in_range(obj, addr)) {
                 object2symbol(obj, res);
                 return 1;
             }
-            if (check_in_range(obj, sym_ip - rt_offs)) {
-                return find_by_addr_in_unit(get_dwarf_children(obj), level + 1, rt_offs, addr, res);
+            if (check_in_range(obj, ip)) {
+                return find_by_addr_in_unit(get_dwarf_children(obj), level + 1, addr, ip, res);
             }
             break;
         case TAG_formal_parameter:
@@ -1284,14 +1307,14 @@ static int find_by_addr_in_unit(ObjectInfo * obj, int level, ContextAddress rt_o
                 U8_T lc = 0;
                 /* Ignore location evaluation errors. For example, the error can be caused by
                  * the object not being mapped into the context memory */
-                if (get_num_prop(obj, AT_location, &lc) && lc <= addr) {
+                if (get_num_prop(obj, AT_location, &lc) && lc <= addr->rt_addr) {
                     U8_T sz = 0;
                     if (!get_num_prop(obj, AT_byte_size, &sz)) {
                         /* If object size unknown, continue search */
                         if (get_error_code(errno) == ERR_SYM_NOT_FOUND) break;
                         exception(errno);
                     }
-                    if (lc + sz > addr) {
+                    if (lc + sz > addr->rt_addr) {
                         object2symbol(obj, res);
                         return 1;
                     }
@@ -1375,24 +1398,31 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
 int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol ** res) {
     Trap trap;
     int found = 0;
-    ContextAddress rt_addr = 0;
-    UnitAddressRange * range = NULL;
+    UnitAddress loc;
+    UnitAddress ip;
 
     find_symbol_list = NULL;
     if (!set_trap(&trap)) return -1;
     if (frame == STACK_TOP_FRAME && (frame = get_top_frame(ctx)) < 0) exception(errno);
     if (get_sym_context(ctx, frame, addr) < 0) exception(errno);
-    range = elf_find_unit(sym_ctx, addr, addr, &rt_addr);
-    if (range != NULL) found = find_by_addr_in_unit(
-        get_dwarf_children(range->mUnit->mObject),
-        0, rt_addr - range->mAddr, addr, res);
+    find_unit(sym_ctx, addr, &loc);
+    find_unit(sym_ctx, sym_ip, &ip);
+    if (loc.unit != NULL) {
+        found = find_by_addr_in_unit(
+            get_dwarf_children(loc.unit->mObject),
+            0, &loc, ip.unit ? &ip : NULL, res);
+    }
     if (!found) found = find_by_addr_in_sym_tables(addr, res);
-    if (!found && sym_ip != 0) {
+    if (!found && ip.unit != NULL) {
         /* Search in compilation unit that contains stack frame PC */
-        range = elf_find_unit(sym_ctx, sym_ip, sym_ip, &rt_addr);
-        if (range != NULL) found = find_by_addr_in_unit(
-            get_dwarf_children(range->mUnit->mObject),
-            0, rt_addr - range->mAddr, addr, res);
+        if (loc.file == NULL) {
+            loc.lt_addr = elf_map_to_link_time_address(sym_ctx, addr, &loc.file, &loc.section);
+        }
+        if (loc.file != NULL) {
+            found = find_by_addr_in_unit(
+                get_dwarf_children(ip.unit->mObject),
+                0, &loc, &ip, res);
+        }
     }
     if (!found) exception(ERR_SYM_NOT_FOUND);
     clear_trap(&trap);
@@ -1409,8 +1439,8 @@ int find_next_symbol(Symbol ** sym) {
     return -1;
 }
 
-static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_offs,
-                                 EnumerateSymbolsCallBack * call_back, void * args) {
+static void enumerate_local_vars(ObjectInfo * obj, int level,
+        UnitAddress * ip, EnumerateSymbolsCallBack * call_back, void * args) {
     while (obj != NULL) {
         switch (obj->mTag) {
         case TAG_compile_unit:
@@ -1424,8 +1454,8 @@ static void enumerate_local_vars(ObjectInfo * obj, int level, ContextAddress rt_
         case TAG_catch_block:
         case TAG_subroutine:
         case TAG_subprogram:
-            if (check_in_range(obj, sym_ip - rt_offs)) {
-                enumerate_local_vars(get_dwarf_children(obj), level + 1, rt_offs, call_back, args);
+            if (check_in_range(obj, ip)) {
+                enumerate_local_vars(get_dwarf_children(obj), level + 1, ip, call_back, args);
                 if (level == 0) return;
             }
             break;
@@ -1451,11 +1481,11 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * call_
     if (!set_trap(&trap)) return -1;
     if (get_sym_context(ctx, frame, 0) < 0) exception(errno);
     if (sym_ip != 0) {
-        ContextAddress rt_addr = 0;
-        UnitAddressRange * range = elf_find_unit(sym_ctx, sym_ip, sym_ip, &rt_addr);
-        if (range != NULL) enumerate_local_vars(
-            get_dwarf_children(range->mUnit->mObject),
-            0, rt_addr - range->mAddr, call_back, args);
+        UnitAddress ip;
+        find_unit(sym_ctx, sym_ip, &ip);
+        if (ip.unit != NULL) enumerate_local_vars(
+            get_dwarf_children(ip.unit->mObject),
+            0, &ip, call_back, args);
     }
     clear_trap(&trap);
     return 0;
@@ -2941,6 +2971,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                 return -1;
             }
         }
+#if 0
 #if SERVICE_StackTrace || ENABLE_ContextProxy
         if (obj->mTag == TAG_formal_parameter) {
             /* Search call site info */
@@ -2981,6 +3012,7 @@ int get_location_info(const Symbol * sym, LocationInfo ** res) {
                 exception(ERR_SYM_NOT_FOUND);
             }
         }
+#endif
 #endif
         {
             U8_T addr = 0;
