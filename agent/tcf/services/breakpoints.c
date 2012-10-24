@@ -343,7 +343,6 @@ static BreakInstruction * find_instruction(Context * ctx, int virtual_addr,
         ContextAddress address, unsigned access_types, ContextAddress access_size) {
     int hash = addr2instr_hash(ctx, address);
     LINK * l = addr2instr[hash].next;
-    if (address == 0) return NULL;
     assert(virtual_addr || is_canonical_addr(ctx, address));
     while (l != addr2instr + hash) {
         BreakInstruction * bi = link_adr2bi(l);
