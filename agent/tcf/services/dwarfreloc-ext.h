@@ -18,7 +18,12 @@
 #include <machine/i386/tcf/dwarfreloc-mdep.h>
 #undef elf_relocate
 
+#define elf_relocate elf_relocate_x86_64
+#include <machine/x86_64/tcf/dwarfreloc-mdep.h>
+#undef elf_relocate
+
 static ElfRelocateFunc elf_relocate_funcs[] = {
     { EM_386, elf_relocate_i386 },
+    { EM_X86_64, elf_relocate_x86_64 },
     { EM_NONE, NULL }
 };

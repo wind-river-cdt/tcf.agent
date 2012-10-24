@@ -712,6 +712,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\dwarfreloc-ext.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\dwarfreloc.c"
 				>
 			</File>

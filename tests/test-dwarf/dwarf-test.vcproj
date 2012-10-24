@@ -510,6 +510,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\agent\tcf\services\dwarfreloc-ext.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\agent\tcf\services\dwarfreloc.c"
 				>
 			</File>
