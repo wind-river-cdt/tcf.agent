@@ -118,6 +118,12 @@ extern BreakpointInfo * create_breakpoint(BreakpointAttribute * attrs);
 extern void change_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * attrs);
 
 /*
+ * Return breakpoint status information as a JSON string.
+ * Clients should dispose the string using loc_free().
+ */
+extern char * get_breakpoint_status(BreakpointInfo * bp);
+
+/*
  * Delete a breakpoint.
  * If other (remote) client also created a breakpoint with same ID,
  * the breakpoint will be deleted when both clients have requested it to be deleted.

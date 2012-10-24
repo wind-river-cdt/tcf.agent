@@ -2395,6 +2395,16 @@ void change_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * att
     }
 }
 
+char * get_breakpoint_status(BreakpointInfo * bp) {
+    char * res = NULL;
+    ByteArrayOutputStream buf;
+    OutputStream * out = create_byte_array_output_stream(&buf);
+    write_breakpoint_status(out, bp);
+    write_stream(out, 0);
+    get_byte_array_output_stream_data(&buf, &res, NULL);
+    return res;
+}
+
 void delete_breakpoint(BreakpointInfo * bp) {
     BreakpointRef * br = find_breakpoint_ref(bp, NULL);
     assert(br != NULL && br->channel == NULL);
