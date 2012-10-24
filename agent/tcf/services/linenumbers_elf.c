@@ -205,7 +205,7 @@ static void unit_line_to_address(Context * ctx, MemoryRegion * mem, CompUnit * u
                         k--;
                     }
                     for (;;) {
-                        ELF_Section * sec = state->mSection ? sec = unit->mFile->sections + state->mSection : NULL;
+                        ELF_Section * sec = state->mSection ? unit->mFile->sections + state->mSection : NULL;
                         ContextAddress addr = elf_run_time_address_in_region(ctx, mem, unit->mFile, sec, state->mAddress);
                         if (errno == 0) {
                             LineNumbersState * code_next = get_next_in_code(unit, state);
