@@ -1343,6 +1343,7 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
                 sym_class = SYM_CLASS_VALUE;
                 break;
             }
+            if (sym_info.name != NULL && sym_info.name[0] == '$') break;
             /* fall through */
         case STT_FUNC:
         case STT_GNU_IFUNC:
