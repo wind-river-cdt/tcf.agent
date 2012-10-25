@@ -63,121 +63,202 @@ static void add_char(char ch) {
     str_buf[str_pos++] = ch;
 }
 
+static int parse_wildcard(const char ** q) {
+    const char * c = *q;
+    str_pos = 0;
+    add_char(*c++);
+    if (*c == '*'){
+        add_char(*c++);
+    }
+    if ((*c != '\0') && (*c != '/')) {
+        set_errno(ERR_OTHER, "Invalid context query syntax: * and ** are"
+                             " the only valid wildcards");
+        return -1;
+    }
+    *q = c;
+    add_char('\0');
+    return 0;
+}
+
+static int parse_number(const char ** q) {
+    const char * c = *q;
+    str_pos = 0;
+    while (*c && ((*c >= '0') && (*c <= '9'))) {
+        add_char(*c++);
+    }
+    if (*c != ',' && *c != '/' && *c != '\0' ) {
+        set_errno(ERR_OTHER, "Invalid context query syntax: expecting [0-9] "
+                             "or ',' or '/' after number");
+        return -1;
+    }
+
+    *q = c;
+    add_char('\0');
+    return 0;
+}
+
+static int parse_symbol(const char **q) {
+    const char * c = *q;
+    str_pos = 0;
+    while (*c) {
+        if ((*c != '_') &&
+            (((*c < '0') || (*c > '9')) &&
+             ((*c < 'a') || (*c > 'z')) &&
+             ((*c < 'A') || (*c > 'Z')))) {
+            break;
+        }
+        add_char(*c++);
+    }
+
+    if ((*c != '/') && (*c != '=') && (*c != ',') && (*c != '\0')) {
+        set_errno(ERR_OTHER, "Invalid context query syntax:"
+                  " unquoted strings must only contain"
+                  " alphanumerical characters or '_'");
+        return -1;
+    }
+
+    *q = c;
+    add_char('\0');
+    return 0;
+}
+
+static int parse_quoted_string(const char **q) {
+    const char * c = *q;
+    str_pos = 0;
+    c++;
+    while (*c != '"') {
+        if (*c == '\\') {
+            c++;
+            if (*c != '\\' && *c != '"') {
+                set_errno(ERR_OTHER, "Invalid context query syntax: \" and \\"
+                          " are the only characters that can be escaped");
+                return -1;
+            }
+        } else if (*c == '\0') {
+            set_errno(ERR_OTHER, "Invalid context query syntax: missing closing"
+                      " quote character");
+            return -1;
+        }
+        add_char(*c++);
+    }
+    c++;
+    *q = c;
+    add_char('\0');
+    return 0;
+}
+
+static int parse_string(const char **q) {
+    const char * c = *q;
+
+    if (*c == '"') {
+        if (parse_quoted_string(&c) < 0) return -1;
+    } else {
+        if (parse_symbol(&c) < 0) return -1;
+    }
+    *q = c;
+    return 0;
+}
+
+static int parse_value(const char **q) {
+    const char * c = *q;
+
+    if ((*c >= '0') && (*c <= '9')) {
+        if (parse_number(&c) < 0) return -1;
+    } else if (*c == '"') {
+        if (parse_quoted_string(&c) < 0) return -1;
+    } else {
+        if (parse_symbol(&c) < 0) return -1;
+    }
+    *q = c;
+    return 0;
+}
+
+static Attribute * parse_property(const char **q) {
+    const char * c = *q;
+    Attribute * attr = (Attribute *)tmp_alloc_zero(sizeof(Attribute));
+
+    if (parse_string(&c) < 0) return NULL;
+    attr->name = tmp_strdup(str_buf);
+
+    if (*c == '=') {
+        c++;
+        if ((*c == '/') || (*c == '=') || (*c == ',') || (*c == '\0')) {
+            set_errno(ERR_OTHER, "Invalid context query syntax: missing value");
+            return NULL;
+        }
+
+        if (parse_value(&c) < 0) return NULL;
+        attr->value = tmp_strdup(str_buf);
+        if (*c == '=') {
+            set_errno(ERR_OTHER, "Invalid context query syntax: can't assign "
+                                 "several values to a property at the same "
+                                 "time");
+            return NULL;
+        }
+    }
+    if (attr->value == NULL) {
+        attr->value = attr->name;
+        attr->name = NULL;
+    }
+    *q = c;
+    return attr;
+}
+
 int parse_context_query(const char * q) {
     str_pos = 0;
     str_buf = NULL;
     attrs = NULL;
     abs_path = 0;
 
-    if ((q == NULL) || (*q == 0)) return 0;
+    if ((q == NULL) || (*q == '\0')) return 0;
 
     str_max = 64;
     str_buf = (char *)tmp_alloc(str_max);
     if ((abs_path = *q == '/') != 0) q++;
-    while (*q) {
-        Attribute * attr = (Attribute *)tmp_alloc_zero(sizeof(Attribute));
-        for (;;) {
-            str_pos = 0;
-            while (*q) {
-                if (*q == '*'){
-                    add_char(*q++);
-                    if (*q == '*'){
-                        add_char(*q++);
-                    }
-                    if ((*q != 0) && (*q != '/')) {
-                        set_errno(ERR_OTHER, "Invalid context query syntax: * and ** are the only wildcards available");
-                        return -1;
-                    }
-                }
-                else if (*q != '"') {
-                    if ((*q >= '0') && (*q <= '9')) {
-                        while (*q) {
-                            if ((*q < '0') || (*q > '9')) {
-                                set_errno(ERR_OTHER, "Invalid context query syntax: symbols must begin by a letter: a-z, A-Z or _");
-                                return -1;
-                            }
-
-                            add_char(*q++);
-
-                            if ((*q == '/') || (*q == '=') || (*q == ',')) {
-                                break;
-                            }
-                        }
-                    }
-                    else {
-                        while (*q) {
-                            if ((*q != '_') &&
-                                (((*q < '0') || (*q > '9')) &&
-                                 ((*q < 'a') || (*q > 'z')) &&
-                                 ((*q < 'A') || (*q > 'Z')))) {
-                                set_errno(ERR_OTHER, "Invalid context query syntax: unquoted strings must only contain alphanumerical characters or '_'");
-                                return -1;
-                            }
-
-                            add_char(*q++);
-
-                            if ((*q == '/') || (*q == '=') || (*q == ',')) {
-                                break;
-                            }
-                        }
-                    }
-                }
-                else {
-                    q++;
-                    while (*q != '"') {
-                        if (*q == '\\') {
-                            q++;
-                            if (*q != '\\' && *q != '"') {
-                                set_errno(ERR_OTHER, "Invalid context query syntax: \" and \\ are the only characters that can be escaped");
-                                return -1;
-                            }
-                        }
-                        else if (*q == 0) {
-                            set_errno(ERR_OTHER, "Invalid context query syntax: missing closing quote character");
-                            return -1;
-                        }
-                        add_char(*q++);
-                    }
-                    q++;
-                }
-                if ((*q == '/') ||  (*q == '=') || (*q == ','))
-                    break;
-            }
-            add_char(0);
-            if (*q == ',') {
-                Attribute * a = attr;
-                attr->value = tmp_strdup(str_buf);
-                attr = (Attribute *)tmp_alloc_zero(sizeof(Attribute));
-                attr->next = a;
-                q++;
-            }
-            else if (attr->name == NULL && *q == '=') {
-                attr->name = tmp_strdup(str_buf);
-                q++;
-            }
-            else {
-                attr->value = tmp_strdup(str_buf);
-                if (*q != 0) q++;
-                else {
-                    if (*(q-1) == '=') {
-                        set_errno(ERR_OTHER, "Invalid context query syntax: missing value");
-                        return -1;
-                    }
-                    if (*(q-1) == ',') {
-                        set_errno(ERR_OTHER, "Invalid context query syntax: missing property");
-                        return -1;
-                    }
-                }
-                break;
-            }
-        }
-        attr->parent = attrs;
-        attrs = attr;
-    }
-    if (*(q-1) == '/') {
-        set_errno(ERR_OTHER, "Invalid context query syntax: missing context name, property or wildcard");
+    if ((*q == '/') || (*q == '=') || (*q == ',') || (*q == '\0')) {
+        set_errno(ERR_OTHER, "Invalid context query syntax: missing context "
+                             "name, property or wildcard");
         return -1;
     }
+
+    Attribute * attr = NULL;
+    while (*q) {
+        Attribute * a;
+        str_pos = 0;
+        if (*q == '*'){
+            if (parse_wildcard(&q) < 0) return -1;
+            a = (Attribute *) tmp_alloc_zero(sizeof(Attribute));
+            a->value = tmp_strdup(str_buf);
+        } else {
+            a = parse_property(&q);
+            if (a == NULL) return -1;
+        }
+
+        a->next = attr;
+        attr = a;
+
+        if (*q == '/') { /* start parsing a new part */
+            attr->parent = attrs;
+            attrs = attr;
+            attr = NULL;
+            q++;
+            if ((*q == '/') || (*q == '=') || (*q == ',') || (*q == '\0')) {
+                set_errno(ERR_OTHER, "Invalid context query syntax: missing "
+                                     "context name, property or wildcard");
+                return -1;
+            }
+        }
+        else if (*q == ',') { /* start parsing a new property */
+            q++;
+            if ((*q == '/') || (*q == '=') || (*q == ',') || (*q == '\0')) {
+                set_errno(ERR_OTHER, "Invalid context query syntax: "
+                                     "missing property");
+                return -1;
+            }
+        }
+    }
+    attr->parent = attrs;
+    attrs = attr;
 
     return 0;
 }
