@@ -619,13 +619,14 @@ static void read_object_info(U2_T Tag, U2_T Attr, U2_T Form) {
     case AT_low_pc:
         dio_ChkAddr(Form);
         Info->u.mCode.mLowPC = (ContextAddress)dio_gFormData;
+        if (dio_gFormSection) Info->u.mCode.mSection = dio_gFormSection;
         Info->mFlags |= DOIF_low_pc;
         break;
     case AT_high_pc:
         dio_ChkAddr(Form);
         if (Info->mFlags & DOIF_ranges) break;
-        Info->u.mCode.mHighPC.mSection = dio_gFormSection;
         Info->u.mCode.mHighPC.mAddr = (ContextAddress)dio_gFormData;
+        if (dio_gFormSection) Info->u.mCode.mSection = dio_gFormSection;
         break;
     case AT_ranges:
         dio_ChkData(Form);

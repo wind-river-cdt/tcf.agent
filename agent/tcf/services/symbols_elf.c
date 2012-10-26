@@ -547,7 +547,7 @@ static int check_in_range(ObjectInfo * obj, UnitAddress * addr) {
         return 0;
     }
 
-    if (obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC && obj->u.mCode.mHighPC.mSection == addr->section) {
+    if (obj->u.mCode.mHighPC.mAddr > obj->u.mCode.mLowPC && obj->u.mCode.mSection == addr->section) {
         return addr->lt_addr >= obj->u.mCode.mLowPC && addr->lt_addr < obj->u.mCode.mHighPC.mAddr;
     }
 

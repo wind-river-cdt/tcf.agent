@@ -105,13 +105,11 @@ struct ObjectInfo {
     union {
         U2_T mFundType;
         struct {
+            ELF_Section * mSection;
             ContextAddress mLowPC;
             union {
                 U8_T mRanges;
-                struct {
-                    ELF_Section * mSection;
-                    ContextAddress mAddr;
-                };
+                ContextAddress mAddr;
             } mHighPC;
         } mCode;
         struct {
