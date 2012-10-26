@@ -1227,7 +1227,6 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
     unsigned i;
     ContextAddress rt = 0;
 
-    errno = 0;
     /* Note: 'addr' is link-time address - it cannot be used as elf_get_map() argument */
     if (elf_get_map(ctx, 0, ~(ContextAddress)0, &elf_map) < 0) return 0;
     for (i = 0; i < elf_map.region_cnt; i++) {
@@ -1252,7 +1251,10 @@ ContextAddress elf_map_to_run_time_address(Context * ctx, ELF_File * file, ELF_S
         rt = elf_run_time_address_in_region(ctx, r, file, sec, addr);
         if (errno == 0) return rt;
     }
-    if (file->type == ET_EXEC) return addr;
+    if (file->type == ET_EXEC) {
+        errno = 0;
+        return addr;
+    }
     errno = ERR_INV_ADDRESS;
     return 0;
 }
