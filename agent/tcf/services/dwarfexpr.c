@@ -144,7 +144,7 @@ void dwarf_evaluate_expression(PropertyValue * Value) {
     }
 
     dwarf_find_expression(Value, IP, &Info);
-    dwarf_transform_expression(Value->mContext, IP, &Info);
+    dwarf_transform_expression(Value->mContext, IP, Value->mFrame == STACK_NO_FRAME, &Info);
     State->code = Info.expr_addr;
     State->code_len = Info.expr_size;
     State->code_pos = 0;

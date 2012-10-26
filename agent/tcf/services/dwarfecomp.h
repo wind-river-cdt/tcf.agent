@@ -27,7 +27,7 @@
 
 #include <tcf/services/dwarfexpr.h>
 
-extern void dwarf_transform_expression(Context * ctx, ContextAddress ip, DWARFExpressionInfo * info);
+extern void dwarf_transform_expression(Context * ctx, ContextAddress ip, int chk_frame, DWARFExpressionInfo * info);
 
 #endif /* ENABLE_ELF && ENABLE_DebugContext */
 

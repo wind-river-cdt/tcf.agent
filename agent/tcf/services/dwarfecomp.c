@@ -48,6 +48,7 @@ static DWARFExpressionInfo * expr = NULL;
 static size_t expr_pos = 0;
 static Context * expr_ctx = NULL;
 static U8_T expr_ip = 0;
+static int expr_chk_frame = 0;
 
 static void add(unsigned n) {
     if (buf_pos >= buf_max) {
@@ -384,6 +385,11 @@ static void adjust_jumps(void) {
     }
 }
 
+static void check_frame(void) {
+    if (!expr_chk_frame) return;
+    str_fmt_exception(ERR_OTHER, "Object location is relative to a stack frame");
+}
+
 static void add_expression(DWARFExpressionInfo * info) {
     DWARFExpressionInfo * org_expr = expr;
     size_t org_expr_pos = expr_pos;
@@ -426,7 +432,10 @@ static void add_expression(DWARFExpressionInfo * info) {
             break;
         case OP_const:
         case OP_reg:
+            copy(1 + info->unit->mDesc.mAddressSize);
+            break;
         case OP_basereg:
+            check_frame();
             copy(1 + info->unit->mDesc.mAddressSize);
             break;
         case OP_const2u:
@@ -441,10 +450,6 @@ static void add_expression(DWARFExpressionInfo * info) {
         case OP_const8s:
             copy(9);
             break;
-        case OP_constu:
-        case OP_consts:
-        case OP_plus_uconst:
-        case OP_regx:
         case OP_breg0:
         case OP_breg1:
         case OP_breg2:
@@ -477,6 +482,15 @@ static void add_expression(DWARFExpressionInfo * info) {
         case OP_breg29:
         case OP_breg30:
         case OP_breg31:
+            check_frame();
+            add(op);
+            expr_pos++;
+            copy_leb128();
+            break;
+        case OP_regx:
+        case OP_constu:
+        case OP_consts:
+        case OP_plus_uconst:
         case OP_piece:
             add(op);
             expr_pos++;
@@ -501,6 +515,12 @@ static void add_expression(DWARFExpressionInfo * info) {
             }
             break;
         case OP_bregx:
+            check_frame();
+            add(op);
+            expr_pos++;
+            copy_leb128();
+            copy_leb128();
+            break;
         case OP_bit_piece:
             add(op);
             expr_pos++;
@@ -521,6 +541,7 @@ static void add_expression(DWARFExpressionInfo * info) {
             }
             break;
         case OP_fbreg:
+            check_frame();
             op_fbreg();
             break;
         case OP_addr:
@@ -563,12 +584,13 @@ static void add_expression(DWARFExpressionInfo * info) {
     jumps = org_jumps;
 }
 
-void dwarf_transform_expression(Context * ctx, ContextAddress ip, DWARFExpressionInfo * info) {
+void dwarf_transform_expression(Context * ctx, ContextAddress ip, int chk_frame, DWARFExpressionInfo * info) {
     buf_pos = 0;
     buf_max = info->expr_size * 2;
     buf = (U1_T *)tmp_alloc(buf_max);
     expr_ctx = ctx;
     expr_ip = ip;
+    expr_chk_frame = chk_frame;
     expr = NULL;
     jumps = NULL;
     add_expression(info);

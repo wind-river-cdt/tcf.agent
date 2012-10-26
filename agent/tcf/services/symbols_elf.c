@@ -2741,7 +2741,7 @@ static void add_dwarf_location_command(LocationInfo * l, PropertyValue * v) {
     LocationExpressionCommand * cmd = add_location_command(SFT_CMD_LOCATION);
 
     dwarf_find_expression(v, sym_ip, &info);
-    dwarf_transform_expression(sym_ctx, sym_ip, &info);
+    dwarf_transform_expression(sym_ctx, sym_ip, v->mFrame == STACK_NO_FRAME, &info);
     if (l->code_size == 0) {
         l->code_addr = info.code_addr;
         l->code_size = info.code_size;
