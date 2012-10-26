@@ -121,6 +121,7 @@ static LineNumbersState * get_next_in_code(CompUnit * unit, LineNumbersState * s
         if (next->mLine != state->mLine) break;
         if (next->mColumn != state->mColumn) break;
         if (next->mSection != state->mSection) return NULL;
+        if (next->mFlags & LINE_EndSequence) break;
         if (next + 1 >= unit->mStates + unit->mStatesCnt) break;
     }
     return next;
