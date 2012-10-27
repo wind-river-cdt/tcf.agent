@@ -307,6 +307,14 @@ static void addr_to_line_callback(CodeArea * area, void * args) {
         errno = set_errno(ERR_OTHER, "Invalid line area end line number");
         error("address_to_line");
     }
+    if (area->next_address < area->end_address && area->next_address >= area->start_address) {
+        errno = set_errno(ERR_OTHER, "Invalid line area end address");
+        error("address_to_line");
+    }
+    if (area->end_address - area->start_address >= 0x100000) {
+        errno = set_errno(ERR_OTHER, "Invalid line area end address");
+        error("address_to_line");
+    }
     *dst = *area;
 }
 
@@ -901,6 +909,7 @@ static void next_pc(void) {
     ELF_File * lt_file;
     ELF_Section * lt_sec;
     ObjectInfo * func_object = NULL;
+    char * func_name = NULL;
     struct timespec time_now;
     Trap trap;
     int test_cnt = 0;
@@ -942,6 +951,7 @@ static void next_pc(void) {
         set_regs_PC(elf_ctx, pc);
         send_context_changed_event(elf_ctx);
 
+        func_name = NULL;
         func_object = NULL;
         if (find_symbol_by_addr(elf_ctx, STACK_NO_FRAME, pc, &sym) < 0) {
             if (get_error_code(errno) != ERR_SYM_NOT_FOUND) {
@@ -950,7 +960,6 @@ static void next_pc(void) {
         }
         else {
             int i;
-            char * func_name = NULL;
             ContextAddress func_addr = 0;
             ContextAddress func_size = 0;
             Symbol * func_type = NULL;
@@ -1135,7 +1144,7 @@ static void next_pc(void) {
         }
 
         test_cnt++;
-        if (test_cnt % 4 == 0) tmp_gc();
+        tmp_gc();
 
         if (loaded) {
             struct timespec time_diff;
