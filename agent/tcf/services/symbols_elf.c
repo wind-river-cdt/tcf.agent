@@ -1406,7 +1406,8 @@ int find_symbol_by_addr(Context * ctx, int frame, ContextAddress addr, Symbol **
     if (frame == STACK_TOP_FRAME && (frame = get_top_frame(ctx)) < 0) exception(errno);
     if (get_sym_context(ctx, frame, addr) < 0) exception(errno);
     find_unit(sym_ctx, addr, &loc);
-    find_unit(sym_ctx, sym_ip, &ip);
+    if (addr == sym_ip) ip = loc;
+    else find_unit(sym_ctx, sym_ip, &ip);
     if (loc.unit != NULL) {
         found = find_by_addr_in_unit(
             get_dwarf_children(loc.unit->mObject),
