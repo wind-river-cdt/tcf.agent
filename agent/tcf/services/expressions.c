@@ -225,14 +225,17 @@ static void error(int no, const char * fmt, ...) {
     str_exception(no, buf);
 }
 
+#define next_ch_fast() { \
+    if (text_pos < text_len) text_ch = (unsigned char)text[text_pos++]; \
+}
+
 static void next_ch(void) {
-    if (text_pos >= text_len) return;
-    text_ch = (unsigned char)text[text_pos++];
+    next_ch_fast();
 }
 
 static int next_hex(void) {
     int ch = text_ch;
-    next_ch();
+    next_ch_fast();
     if (ch >= '0' && ch <= '9') return ch - '0';
     if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
     if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
@@ -242,7 +245,7 @@ static int next_hex(void) {
 
 static int next_oct(void) {
     int ch = text_ch;
-    next_ch();
+    next_ch_fast();
     if (ch >= '0' && ch <= '7') return ch - '0';
     error(ERR_INV_EXPRESSION, "Invalid octal number");
     return 0;
@@ -250,7 +253,7 @@ static int next_oct(void) {
 
 static int next_dec(void) {
     int ch = text_ch;
-    next_ch();
+    next_ch_fast();
     if (ch >= '0' && ch <= '9') return ch - '0';
     error(ERR_INV_EXPRESSION, "Invalid decimal number");
     return 0;
@@ -293,7 +296,7 @@ static int next_char_val(void) {
     else {
         n = text_ch;
     }
-    next_ch();
+    next_ch_fast();
     return n;
 }
 
@@ -314,7 +317,7 @@ static void set_string_text_val(int pos, int len, int in_quotes) {
     else {
         while (cnt < len) {
             ((char *)text_val.value)[cnt++] = (char)text_ch;
-            next_ch();
+            next_ch_fast();
         }
     }
     ((char *)text_val.value)[cnt] = 0;
@@ -355,7 +358,7 @@ static void next_sy(void) {
         int ch = text_ch;
         sy_pos = text_pos - 1;
         text_val_flags = 0;
-        next_ch();
+        next_ch_fast();
         switch (ch) {
         case 0:
             text_sy = 0;
@@ -670,7 +673,7 @@ static void next_sy(void) {
                     int pos = text_pos + 1;
                     next_ch();
                     while (text_ch != '}') {
-                        next_ch();
+                        next_ch_fast();
                         len++;
                     }
                     set_string_text_val(pos, len, 0);
@@ -683,7 +686,7 @@ static void next_sy(void) {
                 int len = 1;
                 int pos = text_pos - 1;
                 while (is_name_character(text_ch)) {
-                    next_ch();
+                    next_ch_fast();
                     len++;
                 }
                 set_string_text_val(pos, len, 0);
