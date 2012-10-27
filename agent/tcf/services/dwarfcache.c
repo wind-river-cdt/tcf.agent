@@ -875,24 +875,27 @@ static void load_addr_ranges(void) {
     if (sCache->mCompUnits != NULL) {
         ObjectInfo * info = sCache->mCompUnits;
         while (info != NULL) {
-            if ((info->mFlags & DOIF_aranges) == 0) {
+            if (info->mFlags & DOIF_low_pc) {
                 CompUnit * unit = info->mCompUnit;
                 ContextAddress base = info->u.mCode.mLowPC;
                 if (info->mFlags & DOIF_ranges) {
                     if (debug_ranges != NULL) {
                         dio_EnterSection(&unit->mDesc, debug_ranges, info->u.mCode.mHighPC.mRanges);
                         for (;;) {
-                            ELF_Section * sec = NULL;
-                            U8_T x = dio_ReadAddress(&sec);
-                            U8_T y = dio_ReadAddress(&sec);
+                            ELF_Section * sec_x = NULL;
+                            ELF_Section * sec_y = NULL;
+                            U8_T x = dio_ReadAddress(&sec_x);
+                            U8_T y = dio_ReadAddress(&sec_y);
                             if (x == 0 && y == 0) break;
-                            if (sec != unit->mTextSection) exception(ERR_INV_DWARF);
                             if (x == ((U8_T)1 << unit->mDesc.mAddressSize * 8) - 1) {
                                 base = (ContextAddress)y;
                             }
                             else if (y > x) {
+                                ELF_Section * sec = unit->mTextSection;
                                 x = base + x;
                                 y = base + y;
+                                if (sec_x != NULL) sec = sec_x;
+                                else if (sec_y != NULL) sec = sec_y;
                                 add_addr_range(sec, unit, (ContextAddress)x, (ContextAddress)(y - x));
                             }
                         }

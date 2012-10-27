@@ -1107,6 +1107,17 @@ void elf_list_done(Context * ctx) {
     free_elf_list_state(state);
 }
 
+static ELF_Section * find_section_by_offset(ELF_File * file, U8_T offs) {
+    unsigned i;
+    for (i = 1; i < file->section_cnt; i++) {
+        ELF_Section * sec = file->sections + i;
+        if (sec->size == 0) continue;
+        if (offs < sec->offset) continue;
+        if (offs < sec->offset + sec->size) return sec;
+    }
+    return NULL;
+}
+
 UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, ContextAddress addr_max, ContextAddress * range_rt_addr) {
     unsigned i, j;
     UnitAddressRange * range = NULL;
@@ -1133,6 +1144,7 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
                 U8_T offs_min = 0;
                 U8_T offs_max = 0;
                 ELF_PHeader * p = file->pheaders + j;
+                ELF_Section * sec = NULL;
                 if (p->type != PT_LOAD) continue;
                 if (r->flags) {
                     if ((p->flags & PF_R) && !(r->flags & MM_FLAG_R)) continue;
@@ -1146,18 +1158,12 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
                 link_addr_max = (ContextAddress)(offs_max - p->offset + p->address);
                 if (link_addr_min < p->address) link_addr_min = (ContextAddress)p->address;
                 if (link_addr_max >= p->address + p->mem_size) link_addr_max = (ContextAddress)(p->address + p->mem_size);
-                range = find_comp_unit_addr_range(get_dwarf_cache(file), NULL, link_addr_min, link_addr_max);
+                sec = find_section_by_offset(file, offs_min);
+                range = find_comp_unit_addr_range(get_dwarf_cache(file), sec, link_addr_min, link_addr_max);
                 if (range == NULL) {
                     ELF_File * debug = get_dwarf_file(file);
                     if (debug != file) {
-                        if (j < debug->pheader_cnt) {
-                            p = debug->pheaders + j;
-                            link_addr_min = (ContextAddress)(offs_min - p->offset + p->address);
-                            link_addr_max = (ContextAddress)(offs_max - p->offset + p->address);
-                            if (link_addr_min < p->address) link_addr_min = (ContextAddress)p->address;
-                            if (link_addr_max >= p->address + p->mem_size) link_addr_max = (ContextAddress)(p->address + p->mem_size);
-                            range = find_comp_unit_addr_range(get_dwarf_cache(debug), NULL, link_addr_min, link_addr_max);
-                        }
+                        range = find_comp_unit_addr_range(get_dwarf_cache(debug), sec, link_addr_min, link_addr_max);
                     }
                 }
                 if (range != NULL && range_rt_addr != NULL) {
