@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2006, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -183,16 +183,20 @@ U1_T dio_ReadU1(void) {
 #define dio_ReadU1() (sDataPos < sDataLen ? sData[sDataPos++] : dio_ReadU1F())
 
 U2_T dio_ReadU2(void) {
-    U2_T x0 = dio_ReadU1();
-    U2_T x1 = dio_ReadU1();
+    U2_T x0, x1;
+    if (sDataPos + 2 > sDataLen) exception(ERR_EOF);
+    x0 = sData[sDataPos++];
+    x1 = sData[sDataPos++];
     return sBigEndian ? (x0 << 8) | x1 : x0 | (x1 << 8);
 }
 
 U4_T dio_ReadU4(void) {
-    U4_T x0 = dio_ReadU1();
-    U4_T x1 = dio_ReadU1();
-    U4_T x2 = dio_ReadU1();
-    U4_T x3 = dio_ReadU1();
+    U4_T x0, x1, x2, x3;
+    if (sDataPos + 4 > sDataLen) exception(ERR_EOF);
+    x0 = sData[sDataPos++];
+    x1 = sData[sDataPos++];
+    x2 = sData[sDataPos++];
+    x3 = sData[sDataPos++];
     return sBigEndian ?
         (x0 << 24) | (x1 << 16) | (x2 << 8) | x3:
         x0 | (x1 << 8) | (x2 << 16) | (x3 << 24);
