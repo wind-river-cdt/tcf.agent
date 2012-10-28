@@ -127,13 +127,14 @@ static LineNumbersState * get_next_in_code(CompUnit * unit, LineNumbersState * s
     return next;
 }
 
-static void call_client(CompUnit * unit, LineNumbersState * state,
+static void call_client(Context * ctx, CompUnit * unit, LineNumbersState * state,
                         LineNumbersState * code_next, LineNumbersState * text_next,
                         ContextAddress state_addr, LineNumbersCallBack * client, void * args) {
     CodeArea area;
     FileInfo * file_info = unit->mFiles + state->mFile;
 
     if (code_next == NULL) return;
+    assert(state->mSection == code_next->mSection);
 
     memset(&area, 0, sizeof(area));
     area.start_line = state->mLine;
@@ -162,7 +163,16 @@ static void call_client(CompUnit * unit, LineNumbersState * state,
     area.file_size = file_info->mSize;
     area.start_address = state_addr;
     area.end_address = code_next->mAddress - state->mAddress + state_addr;
-    if (text_next != NULL) area.next_address = text_next->mAddress - state->mAddress + state_addr;
+    if (text_next != NULL) {
+        if (text_next->mSection == state->mSection) {
+            area.next_address = text_next->mAddress - state->mAddress + state_addr;
+        }
+        else {
+            ELF_Section * s = NULL;
+            if (text_next->mSection) s = unit->mFile->sections + text_next->mSection;
+            area.next_address = elf_map_to_run_time_address(ctx, unit->mFile, s, text_next->mAddress);
+        }
+    }
     area.isa = state->mISA;
     area.is_statement = (state->mFlags & LINE_IsStmt) != 0;
     area.basic_block = (state->mFlags & LINE_BasicBlock) != 0;
@@ -217,7 +227,7 @@ static void unit_line_to_address(Context * ctx, MemoryRegion * mem, CompUnit * u
                                 if (next_line > line || (next_line == line && next_column > column)) {
                                     assert(state->mLine <= line);
                                     assert(state->mLine < line || state->mColumn <= column);
-                                    call_client(unit, state, code_next, text_next, addr, client, args);
+                                    call_client(ctx, unit, state, code_next, text_next, addr, client, args);
                                 }
                             }
                         }
@@ -346,7 +356,7 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
                             LineNumbersState * code_next = get_next_in_code(unit, state);
                             if (code_next != NULL && state->mAddress < code_next->mAddress) {
                                 LineNumbersState * text_next = get_next_in_text(unit, state);
-                                call_client(unit, state, code_next, text_next, state->mAddress - range->mAddr + range_rt_addr, client, args);
+                                call_client(ctx, unit, state, code_next, text_next, state->mAddress - range->mAddr + range_rt_addr, client, args);
                             }
                             if (++k >= unit->mStatesCnt) break;
                             state = unit->mStates + k;
