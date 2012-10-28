@@ -153,6 +153,8 @@ static Symbol * find_symbol_list = NULL;
 
 #define SYMBOL_MAGIC 0x34875234
 
+#define equ_symbol_names(x, y) (*x == *y && cmp_symbol_names(x, y) == 0)
+
 /* This function is used for DWARF testing */
 extern ObjectInfo * get_symbol_object(Symbol * sym);
 ObjectInfo * get_symbol_object(Symbol * sym) {
@@ -637,12 +639,12 @@ static int symbol_equ_comparator(const void * x, const void * y) {
     Symbol * sx = *(Symbol **)x;
     Symbol * sy = *(Symbol **)y;
 
-    if ((uintptr_t)sx->obj < (uintptr_t)sy->obj) return -1;
-    if ((uintptr_t)sx->obj > (uintptr_t)sy->obj) return +1;
-    if ((uintptr_t)sx->var < (uintptr_t)sy->var) return -1;
-    if ((uintptr_t)sx->var > (uintptr_t)sy->var) return +1;
-    if ((uintptr_t)sx->tbl < (uintptr_t)sy->tbl) return -1;
-    if ((uintptr_t)sx->tbl > (uintptr_t)sy->tbl) return +1;
+    if (sx->obj < sy->obj) return -1;
+    if (sx->obj > sy->obj) return +1;
+    if (sx->var < sy->var) return -1;
+    if (sx->var > sy->var) return +1;
+    if (sx->tbl < sy->tbl) return -1;
+    if (sx->tbl > sy->tbl) return +1;
     if (sx->index < sy->index) return -1;
     if (sx->index > sy->index) return +1;
     return 0;
@@ -722,13 +724,10 @@ static void sort_find_symbol_buf(void) {
     find_symbol_list = NULL;
     /* Remove duplicate entries */
     qsort(buf, cnt, sizeof(Symbol *), symbol_equ_comparator);
-    for (pos = 0; pos < cnt - 1; pos++) {
-        s = buf[pos];
-        if (s->obj || s->tbl) {
-            Symbol * q = buf[pos + 1];
-            if (s->obj == q->obj && s->var == q->var &&
-                s->tbl == q->tbl && s->index == q->index) s->dup = 1;
-        }
+    for (pos = 1; pos < cnt; pos++) {
+        Symbol ** p = buf + pos;
+        if (symbol_equ_comparator(p - 1, p)) continue;
+        (*p)->dup = 1;
     }
     /* Final sort */
     qsort(buf, cnt, sizeof(Symbol *), symbol_prt_comparator);
@@ -772,7 +771,7 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
                     n = tbl->mNext[n].mNext;
                     if (obj->mTag != decl->mTag) continue;
                     if (obj->mFlags & DOIF_declaration) continue;
-                    if (cmp_symbol_names(obj->mName, decl->mName) != 0) continue;
+                    if (!equ_symbol_names(obj->mName, decl->mName)) continue;
                     if (cmp_object_profiles(decl, obj) == 0) continue;
                     def = obj;
                     break;
@@ -795,7 +794,7 @@ static void find_by_name_in_pub_names(DWARFCache * cache, const char * name) {
         unsigned n = tbl->mHash[calc_symbol_name_hash(name) % tbl->mHashSize];
         while (n != 0) {
             ObjectInfo * obj = tbl->mNext[n].mObject;
-            if (cmp_symbol_names(obj->mName, name) == 0) {
+            if (equ_symbol_names(obj->mName, name)) {
                 add_obj_to_find_symbol_buf(obj, 1);
             }
             n = tbl->mNext[n].mNext;
@@ -838,7 +837,7 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
     /* Search current scope */
     obj = children;
     while (obj != NULL) {
-        if (obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
+        if (obj->mName != NULL && equ_symbol_names(obj->mName, name)) {
             add_obj_to_find_symbol_buf(find_definition(obj), level);
         }
         if (parent->mTag == TAG_subprogram && ip != 0) {
@@ -904,13 +903,13 @@ static void find_in_object_tree(ObjectInfo * parent, unsigned level,
             find_in_object_tree(obj->mType, level, NULL, name);
             break;
         case TAG_imported_declaration:
-            if (obj->mName != NULL && cmp_symbol_names(obj->mName, name) == 0) {
+            if (obj->mName != NULL && equ_symbol_names(obj->mName, name)) {
                 PropertyValue p;
                 ObjectInfo * decl;
                 read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_import, &p);
                 decl = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)p.mValue);
                 if (decl != NULL) {
-                    if (obj->mName != NULL || (decl->mName != NULL && cmp_symbol_names(decl->mName, name) == 0)) {
+                    if (obj->mName != NULL || (decl->mName != NULL && equ_symbol_names(decl->mName, name))) {
                         add_obj_to_find_symbol_buf(find_definition(decl), level);
                     }
                 }
@@ -979,7 +978,7 @@ static void find_by_name_in_sym_table(ELF_File * file, const char * name, int gl
         while (n) {
             ELF_SymbolInfo sym_info;
             unpack_elf_symbol_info(tbl, n, &sym_info);
-            if (cmp_symbol_names(name, sym_info.name) == 0 && (!globals || sym_info.bind == STB_GLOBAL || sym_info.bind == STB_WEAK)) {
+            if (equ_symbol_names(name, sym_info.name) && (!globals || sym_info.bind == STB_GLOBAL || sym_info.bind == STB_WEAK)) {
                 ContextAddress addr = 0;
                 if (sym_info.section_index != SHN_ABS && syminfo2address(prs, &sym_info, &addr) == 0) {
                     UnitAddressRange * range = elf_find_unit(sym_ctx, addr, addr, NULL);
@@ -993,7 +992,7 @@ static void find_by_name_in_sym_table(ELF_File * file, const char * name, int gl
                                 case TAG_subroutine:
                                 case TAG_subprogram:
                                 case TAG_variable:
-                                    if (cmp_symbol_names(obj->mName, name) == 0) {
+                                    if (equ_symbol_names(obj->mName, name)) {
                                         add_obj_to_find_symbol_buf(obj, 0);
                                     }
                                     break;
