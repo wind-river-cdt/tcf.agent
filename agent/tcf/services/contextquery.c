@@ -205,6 +205,8 @@ static Attribute * parse_property(const char **q) {
 }
 
 int parse_context_query(const char * q) {
+    Attribute * attr = NULL;
+
     str_pos = 0;
     str_buf = NULL;
     attrs = NULL;
@@ -221,7 +223,6 @@ int parse_context_query(const char * q) {
         return -1;
     }
 
-    Attribute * attr = NULL;
     while (*q) {
         Attribute * a;
         str_pos = 0;
