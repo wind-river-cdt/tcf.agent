@@ -1539,7 +1539,7 @@ static void create_symbol_addr_search_index(ELF_Section * sec) {
                     add = 1;
                 }
             }
-            if (add) {
+            if (add && type != STT_GNU_IFUNC) {
                 ELF_SecSymbol * s = NULL;
                 if (file->machine == EM_ARM) {
                     if (type == STT_FUNC || type == STT_ARM_TFUNC) {

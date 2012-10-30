@@ -1336,6 +1336,7 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
     while (sym_info.sym_section != NULL) {
         int sym_class = SYM_CLASS_UNKNOWN;
         assert(sym_info.section == section);
+        assert(sym_info.type != STT_GNU_IFUNC);
         switch (sym_info.type) {
         case STT_NOTYPE:
             /* Check if the NOTYPE symbol is for a section allocated in memory */
@@ -1346,7 +1347,6 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
             if (sym_info.name != NULL && sym_info.name[0] == '$') break;
             /* fall through */
         case STT_FUNC:
-        case STT_GNU_IFUNC:
             sym_class = SYM_CLASS_FUNCTION;
             break;
         case STT_OBJECT:
