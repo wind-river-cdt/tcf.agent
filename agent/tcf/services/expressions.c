@@ -1846,14 +1846,18 @@ static void op_sizeof(int mode, Value * v) {
     if (type_name(mode, &type) && (!p || text_sy == ')')) {
         if (mode != MODE_SKIP) {
             ContextAddress type_size = 0;
+            Symbol * s_type = NULL;
+            size_t s_size = 0;
 #if ENABLE_Symbols
             if (get_symbol_size(type, &type_size) < 0) {
                 error(errno, "Cannot retrieve symbol size");
             }
+            get_std_type("size_t", TYPE_CLASS_CARDINAL, &s_type, &s_size);
 #endif
-            set_ctx_word_value(v, type_size);
-            v->type = NULL;
+            v->type = s_type;
             v->type_class = TYPE_CLASS_CARDINAL;
+            if (s_size == 0) s_size = context_word_size(expression_context);
+            set_int_value(v, s_size, type_size);
             v->constant = 1;
         }
     }
@@ -1863,9 +1867,15 @@ static void op_sizeof(int mode, Value * v) {
         next_sy();
         unary_expression(mode == MODE_NORMAL ? MODE_TYPE : mode, v);
         if (mode != MODE_SKIP) {
-            set_ctx_word_value(v, v->size);
-            v->type = NULL;
+            Symbol * s_type = NULL;
+            size_t s_size = 0;
+#if ENABLE_Symbols
+            get_std_type("size_t", TYPE_CLASS_CARDINAL, &s_type, &s_size);
+#endif
+            v->type = s_type;
             v->type_class = TYPE_CLASS_CARDINAL;
+            if (s_size == 0) s_size = context_word_size(expression_context);
+            set_int_value(v, s_size, v->size);
             v->constant = 1;
         }
     }
@@ -2189,6 +2199,22 @@ static void postfix_expression(int mode, Value * v) {
     }
 }
 
+static void set_bool_value(Value * v, uint64_t n) {
+    Symbol * type = NULL;
+    int type_class = TYPE_CLASS_ENUMERATION;
+    size_t size = 0;
+#if ENABLE_Symbols
+    if (!get_std_type("bool", TYPE_CLASS_ENUMERATION, &type, &size)) {
+        get_std_type("int", TYPE_CLASS_INTEGER, &type, &size);
+        type_class = TYPE_CLASS_INTEGER;
+    }
+#endif
+    if (size == 0) size = context_word_size(expression_context);
+    v->type = type;
+    v->type_class = type_class;
+    set_int_value(v, size, n);
+}
+
 /* Note: lazy_unary_expression() does not set v->size if v->sym != NULL */
 static void lazy_unary_expression(int mode, Value * v) {
     switch (text_sy) {
@@ -2218,15 +2244,20 @@ static void lazy_unary_expression(int mode, Value * v) {
                 error(ERR_INV_EXPRESSION, "Numeric types expected");
             }
             else if (v->type_class == TYPE_CLASS_REAL) {
-                set_fp_value(v, sizeof(double), -to_double(mode, v));
+                set_fp_value(v, v->size, -to_double(mode, v));
             }
             else if (v->type_class != TYPE_CLASS_CARDINAL) {
                 int64_t value = -to_int(mode, v);
-                v->type_class = TYPE_CLASS_INTEGER;
-                set_int_value(v, sizeof(int64_t), value);
+                if (v->type_class == TYPE_CLASS_INTEGER) {
+                    set_int_value(v, v->size, value);
+                }
+                else {
+                    v->type_class = TYPE_CLASS_INTEGER;
+                    set_int_value(v, context_word_size(expression_context), value);
+                    v->type = NULL;
+                }
             }
             assert(!v->remote);
-            v->type = NULL;
         }
         break;
     case '!':
@@ -2237,12 +2268,9 @@ static void lazy_unary_expression(int mode, Value * v) {
                 error(ERR_INV_EXPRESSION, "Integral types expected");
             }
             else {
-                int32_t value = !to_int(mode, v);
-                v->type_class = TYPE_CLASS_INTEGER;
-                set_int_value(v, sizeof(int32_t), value);
+                set_bool_value(v, !to_int(mode, v));
             }
             assert(!v->remote);
-            v->type = NULL;
         }
         break;
     case '~':
@@ -2268,10 +2296,9 @@ static void lazy_unary_expression(int mode, Value * v) {
             }
             else {
                 int64_t value = ~to_int(mode, v);
-                set_int_value(v, sizeof(int64_t), value);
+                set_int_value(v, v->size, value);
             }
             assert(!v->remote);
-            v->type = NULL;
         }
         break;
 #if ENABLE_Symbols
@@ -2704,10 +2731,8 @@ static void relational_expression(int mode, Value * v) {
                 }
             }
             if (mode != MODE_NORMAL) value = 0;
-            v->type_class = TYPE_CLASS_INTEGER;
-            v->type = NULL;
             v->constant = v->constant && x.constant;
-            set_int_value(v, sizeof(uint32_t), value);
+            set_bool_value(v, value);
         }
     }
 }
@@ -2734,10 +2759,8 @@ static void equality_expression(int mode, Value * v) {
             }
             if (sy == SY_NEQ) value = !value;
             if (mode != MODE_NORMAL) value = 0;
-            v->type_class = TYPE_CLASS_INTEGER;
-            v->type = NULL;
             v->constant = v->constant && x.constant;
-            set_int_value(v, sizeof(uint32_t), value);
+            set_bool_value(v, value);
         }
     }
 }
