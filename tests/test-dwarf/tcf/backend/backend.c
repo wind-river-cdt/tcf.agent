@@ -307,7 +307,9 @@ static void addr_to_line_callback(CodeArea * area, void * args) {
         errno = set_errno(ERR_OTHER, "Invalid line area end line number");
         error("address_to_line");
     }
-    if (area->next_address < area->end_address && area->next_address >= area->start_address) {
+    if (area->next_address != 0 &&
+            area->next_address < area->end_address &&
+            area->next_address >= area->start_address) {
         errno = set_errno(ERR_OTHER, "Invalid line area end address");
         error("address_to_line");
     }
@@ -805,53 +807,57 @@ static void loc_var_func(void * args, Symbol * sym) {
             }
         }
         else if (container_class == SYM_CLASS_COMP_UNIT && type_name != NULL) {
-            Symbol * find_sym = NULL;
-            unsigned find_cnt = 0;
-            unsigned find_max = 16;
-            Symbol ** find_syms = (Symbol **)tmp_alloc(sizeof(Symbol *) * find_max);
-            unsigned i;
-            if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, type_name, &find_sym) < 0) {
-                error("find_symbol_by_name");
-            }
-            find_syms[find_cnt++] = find_sym;
-            while (find_next_symbol(&find_sym) == 0) {
-                if (find_cnt >= find_max) {
-                    find_max *= 2;
-                    find_syms = (Symbol **)tmp_realloc(find_syms, sizeof(Symbol *) * find_max);
+            /* This test is too slow, don't run it evry time */
+            static unsigned cnt = 0;
+            if (strcmp(type_name, "int") != 0 && cnt++ % 33 == 0) {
+                Symbol * find_sym = NULL;
+                unsigned find_cnt = 0;
+                unsigned find_max = 16;
+                Symbol ** find_syms = (Symbol **)tmp_alloc(sizeof(Symbol *) * find_max);
+                unsigned i;
+                if (find_symbol_by_name(elf_ctx, STACK_NO_FRAME, 0, type_name, &find_sym) < 0) {
+                    error("find_symbol_by_name");
                 }
                 find_syms[find_cnt++] = find_sym;
-            }
-            for (i = 0; i < find_cnt; i++) {
-                int find_class = 0;
-                SYM_FLAGS find_flags = 0;
-                ContextAddress find_size = 0;
-                find_sym = find_syms[i];
-                if (get_symbol_class(find_sym, &find_class) < 0) {
-                    error("get_symbol_class");
-                }
-                if (get_symbol_flags(find_sym, &find_flags) < 0) {
-                    error("get_symbol_flags");
-                }
-                switch (find_class) {
-                case SYM_CLASS_TYPE:
-                    if (get_symbol_size(find_sym, &find_size) == 0) {
-                        Value v;
-                        uint64_t n = 0;
-                        char * expr = (char *)tmp_alloc(512);
-                        const char * id = symbol2id(find_sym);
-                        sprintf(expr, "sizeof(${%s})", id);
-                        if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
-                            error("evaluate_expression");
-                        }
-                        if (value_to_unsigned(&v, &n) < 0) {
-                            error("value_to_unsigned");
-                        }
-                        if (n != find_size) {
-                            errno = ERR_OTHER;
-                            error("invalid result of evaluate_expression");
-                        }
+                while (find_next_symbol(&find_sym) == 0) {
+                    if (find_cnt >= find_max) {
+                        find_max *= 2;
+                        find_syms = (Symbol **)tmp_realloc(find_syms, sizeof(Symbol *) * find_max);
                     }
-                    break;
+                    find_syms[find_cnt++] = find_sym;
+                }
+                for (i = 0; i < find_cnt; i++) {
+                    int find_class = 0;
+                    SYM_FLAGS find_flags = 0;
+                    ContextAddress find_size = 0;
+                    find_sym = find_syms[i];
+                    if (get_symbol_class(find_sym, &find_class) < 0) {
+                        error("get_symbol_class");
+                    }
+                    if (get_symbol_flags(find_sym, &find_flags) < 0) {
+                        error("get_symbol_flags");
+                    }
+                    switch (find_class) {
+                    case SYM_CLASS_TYPE:
+                        if (get_symbol_size(find_sym, &find_size) == 0) {
+                            Value v;
+                            uint64_t n = 0;
+                            char * expr = (char *)tmp_alloc(512);
+                            const char * id = symbol2id(find_sym);
+                            sprintf(expr, "sizeof(${%s})", id);
+                            if (evaluate_expression(elf_ctx, STACK_NO_FRAME, 0, expr, 0, &v) < 0) {
+                                error("evaluate_expression");
+                            }
+                            if (value_to_unsigned(&v, &n) < 0) {
+                                error("value_to_unsigned");
+                            }
+                            if (n != find_size) {
+                                errno = ERR_OTHER;
+                                error("invalid result of evaluate_expression");
+                            }
+                        }
+                        break;
+                    }
                 }
             }
         }
