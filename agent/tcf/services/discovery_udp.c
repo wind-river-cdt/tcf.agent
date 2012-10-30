@@ -370,10 +370,14 @@ static int send_packet(ip_ifc_info * ifc, struct sockaddr_in * addr) {
     return 0;
 }
 
+static int is_ip_peer(PeerServer * ps) {
+    const char * prot = peer_server_getprop(ps, "TransportName", NULL);
+    return prot != NULL && (strcmp(prot, "TCP") == 0 || strcmp(prot, "SSL") == 0);
+}
+
 static int udp_send_peer_info(PeerServer * ps, void * arg) {
     struct sockaddr_in * addr = (struct sockaddr_in *)arg;
     const char * host = NULL;
-    const char * prot;
     struct in_addr peer_addr;
     int n;
 
@@ -381,8 +385,7 @@ static int udp_send_peer_info(PeerServer * ps, void * arg) {
     if ((ps->flags & PS_FLAG_DISCOVERABLE) == 0) return 0;
 
     memset(&peer_addr, 0, sizeof(peer_addr));
-    prot = peer_server_getprop(ps, "TransportName", NULL);
-    if (prot != NULL && (strcmp(prot, "TCP") == 0 || strcmp(prot, "SSL") == 0)) {
+    if (is_ip_peer(ps)) {
         host = peer_server_getprop(ps, "Host", NULL);
         if (host == NULL || inet_pton(AF_INET, host, &peer_addr) <= 0) return 0;
     }
@@ -526,20 +529,40 @@ static void udp_send_ack_slaves_all(struct sockaddr_in * addr, time_t timenow) {
 }
 
 static int add_peer_id(PeerServer * ps, void * arg) {
+    ip_ifc_info * ifc = (ip_ifc_info *)arg;
+    struct in_addr peer_addr;
+    const char * host = NULL;
+
     if ((ps->flags & PS_FLAG_PRIVATE) != 0) return 0;
     if ((ps->flags & PS_FLAG_DISCOVERABLE) == 0) return 0;
     if ((ps->flags & PS_FLAG_LOCAL) == 0) return 0;
+
+    memset(&peer_addr, 0, sizeof(peer_addr));
+    if (is_ip_peer(ps)) {
+        host = peer_server_getprop(ps, "Host", NULL);
+        if (host == NULL || inet_pton(AF_INET, host, &peer_addr) <= 0) return 0;
+    }
+
+    if (ifc->addr != htonl(INADDR_LOOPBACK)) {
+        if (host == NULL) return 0;
+        assert(peer_addr.s_addr != INADDR_ANY);
+        if ((ifc->addr & ifc->mask) != (peer_addr.s_addr & ifc->mask)) {
+            /* Peer address does not belong to subnet of this interface */
+            return 0;
+        }
+    }
+
     app_strz(ps->id);
     return 0;
 }
 
 static void udp_send_peer_removed(void) {
     int n;
-    send_size = 8;
-    send_buf[4] = UDP_PEERS_REMOVED;
-    peer_server_iter(add_peer_id, NULL);
     for (n = 0; n < ifc_cnt; n++) {
         ip_ifc_info * ifc = ifc_list + n;
+        send_size = 8;
+        send_buf[4] = UDP_PEERS_REMOVED;
+        peer_server_iter(add_peer_id, ifc);
         send_packet(ifc, NULL);
     }
 }
@@ -671,24 +694,21 @@ static void udp_receive_ack_info(void) {
         peer_server_addprop(ps, loc_strdup(name), loc_strdup(value));
         p++;
     }
-    if (p != NULL && ps->id != NULL) {
-        const char * prot = peer_server_getprop(ps, "TransportName", NULL);
-        if (prot != NULL && (strcmp(prot, "TCP") == 0 || strcmp(prot, "SSL") == 0)) {
-            const char * host = peer_server_getprop(ps, "Host", NULL);
-            if (host != NULL) {
-                struct in_addr peer_addr;
-                memset(&peer_addr, 0, sizeof(peer_addr));
-                if (inet_pton(AF_INET, host, &peer_addr) > 0) {
-                    int n;
-                    for (n = 0; n < ifc_cnt; n++) {
-                        ip_ifc_info * ifc = ifc_list + n;
-                        if ((ifc->addr & ifc->mask) == (peer_addr.s_addr & ifc->mask)) {
-                            trace(LOG_DISCOVERY, "ACK_INFO from %s:%d, ID=%s",
-                                inet_ntoa(recvreq_addr.sin_addr), ntohs(recvreq_addr.sin_port), ps->id);
-                            ps->flags = PS_FLAG_DISCOVERABLE;
-                            peer_server_add(ps, PEER_DATA_RETENTION_PERIOD);
-                            return;
-                        }
+    if (p != NULL && ps->id != NULL && is_ip_peer(ps)) {
+        const char * host = peer_server_getprop(ps, "Host", NULL);
+        if (host != NULL) {
+            struct in_addr peer_addr;
+            memset(&peer_addr, 0, sizeof(peer_addr));
+            if (inet_pton(AF_INET, host, &peer_addr) > 0) {
+                int n;
+                for (n = 0; n < ifc_cnt; n++) {
+                    ip_ifc_info * ifc = ifc_list + n;
+                    if ((ifc->addr & ifc->mask) == (peer_addr.s_addr & ifc->mask)) {
+                        trace(LOG_DISCOVERY, "ACK_INFO from %s:%d, ID=%s",
+                            inet_ntoa(recvreq_addr.sin_addr), ntohs(recvreq_addr.sin_port), ps->id);
+                        ps->flags = PS_FLAG_DISCOVERABLE;
+                        peer_server_add(ps, PEER_DATA_RETENTION_PERIOD);
+                        return;
                     }
                 }
             }
