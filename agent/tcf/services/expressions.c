@@ -2244,12 +2244,12 @@ static void lazy_unary_expression(int mode, Value * v) {
                 error(ERR_INV_EXPRESSION, "Numeric types expected");
             }
             else if (v->type_class == TYPE_CLASS_REAL) {
-                set_fp_value(v, v->size, -to_double(mode, v));
+                set_fp_value(v, (size_t)v->size, -to_double(mode, v));
             }
             else if (v->type_class != TYPE_CLASS_CARDINAL) {
                 int64_t value = -to_int(mode, v);
                 if (v->type_class == TYPE_CLASS_INTEGER) {
-                    set_int_value(v, v->size, value);
+                    set_int_value(v, (size_t)v->size, value);
                 }
                 else {
                     v->type_class = TYPE_CLASS_INTEGER;
@@ -2296,7 +2296,7 @@ static void lazy_unary_expression(int mode, Value * v) {
             }
             else {
                 int64_t value = ~to_int(mode, v);
-                set_int_value(v, v->size, value);
+                set_int_value(v, (size_t)v->size, value);
             }
             assert(!v->remote);
         }
