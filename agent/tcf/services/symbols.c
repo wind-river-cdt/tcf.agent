@@ -108,8 +108,10 @@ static void command_get_context_cache_client(void * x) {
         get_symbol_container(sym, &container);
         has_frame = get_symbol_frame(sym, &ctx, &frame) == 0;
         has_size = get_symbol_size(sym, &size) == 0;
-        has_length = get_symbol_length(sym, &length) == 0;
-        if (has_length) has_lower_bound = get_symbol_lower_bound(sym, &lower_bound) == 0;
+        if (type_class == TYPE_CLASS_ARRAY) {
+            has_length = get_symbol_length(sym, &length) == 0;
+            if (has_length) has_lower_bound = get_symbol_lower_bound(sym, &lower_bound) == 0;
+        }
         if (sym_class == SYM_CLASS_REFERENCE || sym_class == SYM_CLASS_FUNCTION || sym_class == SYM_CLASS_VALUE) {
             LocationInfo * loc_info = NULL;
             if (has_frame && get_location_info(sym, &loc_info) == 0) {
