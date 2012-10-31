@@ -1326,6 +1326,18 @@ static int find_by_addr_in_unit(ObjectInfo * obj, int level, UnitAddress * addr,
     return 0;
 }
 
+static int is_valid_elf_symbol(ELF_SymbolInfo * info) {
+    switch (info->type) {
+    case STT_NOTYPE:
+        if (info->name != NULL && info->name[0] == '$') break;
+        return 1;
+    case STT_FUNC:
+    case STT_OBJECT:
+        return 1;
+    }
+    return 0;
+}
+
 static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
     ELF_File * file = NULL;
     ELF_Section * section = NULL;
@@ -1334,40 +1346,14 @@ static int find_by_addr_in_sym_tables(ContextAddress addr, Symbol ** res) {
     if (section == NULL) return 0;
     elf_find_symbol_by_address(section, lt_addr, &sym_info);
     while (sym_info.sym_section != NULL) {
-        int sym_class = SYM_CLASS_UNKNOWN;
-        assert(sym_info.section == section);
-        assert(sym_info.type != STT_GNU_IFUNC);
-        switch (sym_info.type) {
-        case STT_NOTYPE:
-            /* Check if the NOTYPE symbol is for a section allocated in memory */
-            if (sym_info.section == NULL || (sym_info.section->flags & SHF_ALLOC) == 0) {
-                sym_class = SYM_CLASS_VALUE;
-                break;
-            }
-            if (sym_info.name != NULL && sym_info.name[0] == '$') break;
-            /* fall through */
-        case STT_FUNC:
-            sym_class = SYM_CLASS_FUNCTION;
-            break;
-        case STT_OBJECT:
-            sym_class = SYM_CLASS_REFERENCE;
-            break;
-        }
-        if (sym_class != SYM_CLASS_UNKNOWN) {
+        if (is_valid_elf_symbol(&sym_info)) {
             ContextAddress sym_addr = (ContextAddress)sym_info.value;
             if (file->type == ET_REL) sym_addr += (ContextAddress)section->addr;
             assert(sym_addr <= lt_addr);
             /* Check if the searched address is part of symbol address range
              * or if symbol is a label (function + size of 0). */
-            if (sym_addr + sym_info.size > lt_addr ||
-                    (sym_class == SYM_CLASS_FUNCTION && sym_info.size == 0)) {
-                Symbol * sym = alloc_symbol();
-                sym->frame = STACK_NO_FRAME;
-                sym->ctx = context_get_group(sym_ctx, CONTEXT_GROUP_SYMBOLS);
-                sym->tbl = sym_info.sym_section;
-                sym->index = sym_info.sym_index;
-                sym->sym_class = sym_class;
-                *res = sym;
+            if (sym_addr + sym_info.size > lt_addr || sym_info.size == 0) {
+                elf_tcf_symbol(sym_ctx, &sym_info, res);
                 return 1;
             }
             return 0;
@@ -1514,7 +1500,7 @@ static void tmp_app_hex(char ch, uint64_t n) {
     tmp_app_char(ch);
     do {
         int d = (int)(n & 0xf);
-        buf[i++] = d < 10 ? '0' + d : 'A' + d - 10;
+        buf[i++] = (char)(d < 10 ? '0' + d : 'A' + d - 10);
         n = n >> 4;
     }
     while (n != 0);
