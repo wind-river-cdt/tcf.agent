@@ -700,9 +700,7 @@ static void next_sy(void) {
     }
 }
 
-static void reg2value(Context * ctx, int frame, RegisterDefinition * def, Value * v) {
-    if (ctx->exited) exception(ERR_ALREADY_EXITED);
-    if (!ctx->stopped) str_exception(ERR_IS_RUNNING, "Cannot read CPU register");
+static void reg2value(int mode, Context * ctx, int frame, RegisterDefinition * def, Value * v) {
     memset(v, 0, sizeof(Value));
     set_value(v, NULL, def->size, def->big_endian);
     v->type_class = def->fp_value ? TYPE_CLASS_REAL : TYPE_CLASS_CARDINAL;
@@ -713,14 +711,18 @@ static void reg2value(Context * ctx, int frame, RegisterDefinition * def, Value 
     v->loc->pieces_cnt = v->loc->pieces_max = 1;
     v->loc->pieces->reg = def;
     v->loc->pieces->size = def->size;
-    if (frame == STACK_TOP_FRAME) {
-        if (context_read_reg(ctx, def, 0, def->size, v->value) < 0) exception(errno);
-    }
-    else {
-        StackFrame * info = NULL;
-        if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
-        if (read_reg_bytes(info, def, 0, def->size, (uint8_t *)v->value) < 0) exception(errno);
-        v->loc->stack_frame = info;
+    if (mode == MODE_NORMAL) {
+        if (ctx->exited) exception(ERR_ALREADY_EXITED);
+        if (!ctx->stopped) str_exception(ERR_IS_RUNNING, "Cannot read CPU register");
+        if (frame == STACK_TOP_FRAME) {
+            if (context_read_reg(ctx, def, 0, def->size, v->value) < 0) exception(errno);
+        }
+        else {
+            StackFrame * info = NULL;
+            if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
+            if (read_reg_bytes(info, def, 0, def->size, (uint8_t *)v->value) < 0) exception(errno);
+            v->loc->stack_frame = info;
+        }
     }
 }
 
@@ -904,7 +906,7 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
             if (def != NULL) {
                 while (def->name != NULL) {
                     if (strcmp(name + 1, def->name) == 0) {
-                        reg2value(expression_context, expression_frame, def, v);
+                        reg2value(mode, expression_context, expression_frame, def, v);
                         return SYM_CLASS_REFERENCE;
                     }
                     def++;
@@ -1007,7 +1009,7 @@ static int qualified_name(int mode, Value * scope, SYM_FLAGS flags, Value * v) {
                 if (id2register(id, &ctx, &frame, &def) >= 0) {
                     if (frame == STACK_TOP_FRAME) frame = expression_frame;
                     sym_class = SYM_CLASS_UNKNOWN;
-                    reg2value(ctx, frame, def, v);
+                    reg2value(mode, ctx, frame, def, v);
                     ok = 1;
                 }
 #if ENABLE_Symbols
@@ -1732,14 +1734,14 @@ static void op_field(int mode, Value * v) {
             RegisterDefinition * def = NULL;
             if (id2register(id, &ctx, &frame, &def) < 0) exception(errno);
             if (frame == STACK_TOP_FRAME) frame = expression_frame;
-            reg2value(ctx, frame, def, v);
+            reg2value(mode, ctx, frame, def, v);
         }
         else {
             RegisterDefinition * def = get_reg_definitions(expression_context);
             if (def != NULL) {
                 while (def->name != NULL) {
                     if (def->parent == v->reg && strcmp(name, def->name) == 0) {
-                        reg2value(expression_context, expression_frame, def, v);
+                        reg2value(mode, expression_context, expression_frame, def, v);
                         return;
                     }
                     def++;
