@@ -163,6 +163,12 @@ extern char ** get_context_breakpoint_ids(Context * ctx);
  */
 extern int skip_breakpoint(Context * ctx, int single_step);
 
+/*
+ * Return 1 if the context is stepping over a software breakpoint,
+ * Return 0 otherwise.
+ */
+extern int is_skipping_breakpoint(Context * ctx);
+
 /* Return 1 if break instruction is planted at given address in the context memory */
 extern int is_breakpoint_address(Context * ctx, ContextAddress address);
 

@@ -2611,6 +2611,11 @@ int skip_breakpoint(Context * ctx, int single_step) {
     return 1;
 }
 
+int is_skipping_breakpoint(Context * ctx) {
+    ContextExtensionBP * ext = EXT(ctx);
+    return ext->stepping_over_bp != NULL;
+}
+
 BreakpointInfo * create_eventpoint(const char * location, Context * ctx, EventPointCallBack * callback, void * callback_args) {
     static const char * attr_list[] = { BREAKPOINT_ENABLED, BREAKPOINT_LOCATION };
     BreakpointInfo * bp = (BreakpointInfo *)loc_alloc_zero(sizeof(BreakpointInfo));
