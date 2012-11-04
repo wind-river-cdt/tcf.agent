@@ -15,7 +15,7 @@
  *******************************************************************************/
 
 /*
- * Machine and OS dependend definitions for threads.
+ * Machine and OS dependent definitions for threads.
  */
 
 #ifndef D_mdep_threads

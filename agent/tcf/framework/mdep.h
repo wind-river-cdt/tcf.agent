@@ -15,7 +15,7 @@
  *******************************************************************************/
 
 /*
- * Machine and OS dependend definitions.
+ * Machine and OS dependent definitions.
  * This module implements host OS abstraction layer that helps make
  * agent code portable between Linux, Windows, VxWorks and potentially other OSes.
  *

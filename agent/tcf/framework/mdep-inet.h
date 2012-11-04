@@ -15,7 +15,7 @@
  *******************************************************************************/
 
 /*
- * Machine and OS dependend definitions for networking.
+ * Machine and OS dependent definitions for networking.
  */
 
 #ifndef D_mdep_inet
