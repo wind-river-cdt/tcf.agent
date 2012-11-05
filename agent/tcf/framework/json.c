@@ -44,6 +44,8 @@
 #define ENCODING_BINARY     0
 #define ENCODING_BASE64     1
 
+#define ignore_whitespace(ch, inp)  do { while (isspace(ch)) (ch) = read_stream(inp); } while (0)
+
 static char * buf = NULL;
 static size_t buf_pos = 0;
 static size_t buf_size = 0;
@@ -226,6 +228,7 @@ static unsigned read_esc_char(InputStream * inp, char * utf8) {
 int json_read_string(InputStream * inp, char * str, size_t size) {
     unsigned i = 0;
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == 'n') {
         json_test_char(inp, 'u');
         json_test_char(inp, 'l');
@@ -259,6 +262,7 @@ int json_read_string(InputStream * inp, char * str, size_t size) {
 char * json_read_alloc_string(InputStream * inp) {
     char * str;
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == 'n') {
         json_test_char(inp, 'u');
         json_test_char(inp, 'l');
@@ -289,6 +293,7 @@ char * json_read_alloc_string(InputStream * inp) {
 
 int json_read_boolean(InputStream * inp) {
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == 'f') {
         json_test_char(inp, 'a');
         json_test_char(inp, 'l');
@@ -310,6 +315,7 @@ long json_read_long(InputStream * inp) {
     long res;
     int neg = 0;
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == '-') {
         neg = 1;
         ch = read_stream(inp);
@@ -330,10 +336,11 @@ unsigned long json_read_ulong(InputStream * inp) {
     unsigned long res;
     int neg = 0;
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == '-') {
         neg = 1;
         ch = read_stream(inp);
-    }
+    }    
     if (ch < '0' || ch > '9') exception(ERR_JSON_SYNTAX);
     res = ch - '0';
     for (;;) {
@@ -350,6 +357,7 @@ int64_t json_read_int64(InputStream * inp) {
     int64_t res;
     int neg = 0;
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == '-') {
         neg = 1;
         ch = read_stream(inp);
@@ -370,6 +378,7 @@ uint64_t json_read_uint64(InputStream * inp) {
     uint64_t res;
     int neg = 0;
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == '-') {
         neg = 1;
         ch = read_stream(inp);
@@ -425,6 +434,7 @@ double json_read_double(InputStream * inp) {
 
 int json_read_struct(InputStream * inp, JsonStructCallBack * call_back, void * arg) {
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == 'n') {
         json_test_char(inp, 'u');
         json_test_char(inp, 'l');
@@ -454,6 +464,7 @@ int json_read_struct(InputStream * inp, JsonStructCallBack * call_back, void * a
 
 char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == 'n') {
         json_test_char(inp, 'u');
         json_test_char(inp, 'l');
@@ -544,6 +555,7 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
 */
 int json_read_array(InputStream * inp, JsonArrayCallBack * call_back, void * arg) {
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == 'n') {
         json_test_char(inp, 'u');
         json_test_char(inp, 'l');
