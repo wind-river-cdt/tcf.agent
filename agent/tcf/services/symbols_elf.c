@@ -188,6 +188,7 @@ static int get_sym_context(Context * ctx, int frame, ContextAddress addr) {
         StackFrame * info = NULL;
         if (get_frame_info(ctx, frame, &info) < 0) return -1;
         if (read_reg_value(info, get_PC_definition(ctx), &ip) < 0) return -1;
+        if (!info->is_top_frame && ip > 0) ip--;
         sym_ip = (ContextAddress)ip;
     }
     sym_ctx = ctx;

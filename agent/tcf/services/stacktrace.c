@@ -64,7 +64,7 @@ int get_next_stack_frame(StackFrame * frame, StackFrame * down) {
     if (read_reg_value(frame, get_PC_definition(ctx), &ip) < 0) {
         if (frame->is_top_frame) error = errno;
     }
-    else if (get_stack_tracing_info(ctx, (ContextAddress)ip, &info) < 0) {
+    else if (get_stack_tracing_info(ctx, (ContextAddress)(frame->is_top_frame ? ip : ip - 1), &info) < 0) {
         error = errno;
     }
     else if (info != NULL) {
