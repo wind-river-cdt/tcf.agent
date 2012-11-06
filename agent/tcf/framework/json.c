@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
+#include <ctype.h>
 #include <tcf/framework/json.h>
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/exceptions.h>
@@ -340,7 +341,7 @@ unsigned long json_read_ulong(InputStream * inp) {
     if (ch == '-') {
         neg = 1;
         ch = read_stream(inp);
-    }    
+    }
     if (ch < '0' || ch > '9') exception(ERR_JSON_SYNTAX);
     res = ch - '0';
     for (;;) {
