@@ -1858,7 +1858,7 @@ int safe_context_single_step(Context * ctx) {
     assert(safe_event_list != NULL);
     assert(ext->safe_single_step == 0);
     ext->safe_single_step = 1;
-    res = context_single_step(ctx);
+    res = context_resume(ctx, RM_STEP_INTO, 0, 0);
     assert(res < 0 || !ctx->stopped);
     if (res < 0) ext->safe_single_step = 0;
     return res;
