@@ -1255,9 +1255,11 @@ ChannelServer * channel_tcp_server(PeerServer * ps) {
      * the client specified a port that the system converts to a
      * dynamic port number. */
     sinlen = sizeof sin;
-    if (getsockname(sock, (struct sockaddr *)&sin, &sinlen) != 0) {
+    if (getsockname(sock, (struct sockaddr *)&sin, &sinlen) < 0) {
+        error = errno;
         trace(LOG_ALWAYS, "getsockname error: %s", errno_to_str(errno));
         closesocket(sock);
+        errno = error;
         return NULL;
     }
     snprintf(port_str, sizeof(port_str), "%d", ntohs(sin.sin_port));
