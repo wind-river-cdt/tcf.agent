@@ -344,16 +344,29 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
         src = canonic_path_map_file_name(r->src);
         k = (unsigned int) strlen(src);
         if (strncmp(src, fnm, k)) continue;
-        if (fnm[k] != 0 && fnm[k] != '/' && fnm[k] != '\\') {
-            /* skip this rule only if it's not re-rooting the file-system */
-            if ((k != 1) || (src[0] != '/')) continue;
-            k = 0;
+
+        if (fnm[k] == 0) {
+            /* perfect match */
+            buf = tmp_strdup(r->dst);
+        } else {
+            const size_t dst_len = strlen(r->dst);
+            const char last_dest_char = dst_len == 0 ? 0 : r->dst[dst_len - 1];
+            if (fnm[k] != '/' && fnm[k] != '\\') {
+                if (!(last_dest_char == '/' || last_dest_char == '\\')) {
+                    const char last_src_char = k == 0 ? 0 : r->src[k - 1];
+                    if (!(last_src_char == '/' || last_src_char == '\\'))
+                        /* prevent matching mid-filename */
+                        continue;
+                }
+                /* re-add initial path separator */
+                --k;
+            } else if (last_dest_char == '/' || last_dest_char == '\\')
+                /* strip extra path separator */
+                ++k;
+
+            buf = tmp_strdup2(r->dst, fnm + k);
         }
-        if (r->dst[0] != 0) {
-            size_t j = strlen(r->dst) - 1;
-            if (fnm[k] != 0 && (r->dst[j] == '/' || r->dst[j] == '\\')) k++;
-        }
-        buf = tmp_strdup2(r->dst, fnm + k);
+
         if (mode != PATH_MAP_TO_LOCAL || stat(buf, &st) == 0) return buf;
     }
 
