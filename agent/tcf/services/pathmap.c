@@ -26,6 +26,11 @@
 #include <tcf/services/contextquery.h>
 #include <tcf/services/pathmap.h>
 
+
+static int is_separator(const char c) {
+    return ((c == '/') || (c == '\\'));
+}
+
 char * canonic_path_map_file_name(const char * fnm) {
     char * buf;
     size_t buf_pos = 0;
@@ -39,11 +44,11 @@ char * canonic_path_map_file_name(const char * fnm) {
         if (ch == '/' && buf_pos >= 2 && buf[buf_pos - 1] == '/') continue;
         if (ch == '/' && *fnm == 0 && buf_pos > 0 && buf[buf_pos - 1] != ':') break;
         if (ch == '.' && (buf_pos == 0 || buf[buf_pos - 1] == '/')) {
-            if (*fnm == '/' || *fnm == '\\') {
+            if (is_separator(*fnm)) {
                 fnm++;
                 continue;
             }
-            if (buf_pos > 0 && *fnm == '.' && (fnm[1] == '/' || fnm[1] == '\\')) {
+            if (buf_pos > 0 && *fnm == '.' && is_separator(fnm[1])) {
                 size_t j = buf_pos - 1;
                 if (j > 0 && buf[j - 1] != '/') {
                     buf[buf_pos] = 0;
@@ -351,16 +356,16 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
         } else {
             const size_t dst_len = strlen(r->dst);
             const char last_dest_char = dst_len == 0 ? 0 : r->dst[dst_len - 1];
-            if (fnm[k] != '/' && fnm[k] != '\\') {
-                if (!(last_dest_char == '/' || last_dest_char == '\\')) {
+            if (!is_separator(fnm[k])) {
+                if (!is_separator(last_dest_char)) {
                     const char last_src_char = k == 0 ? 0 : r->src[k - 1];
-                    if (!(last_src_char == '/' || last_src_char == '\\'))
+                    if (!is_separator(last_src_char))
                         /* prevent matching mid-filename */
                         continue;
                 }
                 /* re-add initial path separator */
                 --k;
-            } else if (last_dest_char == '/' || last_dest_char == '\\')
+            } else if (is_separator(last_dest_char))
                 /* strip extra path separator */
                 ++k;
 
