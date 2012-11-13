@@ -516,7 +516,12 @@ static int check_in_range(ObjectInfo * obj, UnitAddress * addr) {
             ELF_Section * debug_ranges = cache->mDebugRanges;
             if (debug_ranges != NULL) {
                 ContextAddress base = unit->mObject->u.mCode.mLowPC;
+                U8_T entry_pc = 0;
                 int res = 0;
+
+                if (obj->mTag == TAG_inlined_subroutine &&
+                    get_num_prop(obj, AT_entry_pc, &entry_pc))
+                    base = (ContextAddress)entry_pc;
 
                 dio_EnterSection(&unit->mDesc, debug_ranges, obj->u.mCode.mHighPC.mRanges);
                 for (;;) {
@@ -619,6 +624,31 @@ static int cmp_object_profiles(ObjectInfo * x, ObjectInfo * y) {
     if (x->mName == y->mName) return 1;
     if (x->mName == NULL || y->mName == NULL) return 0;
     return strcmp(x->mName, y->mName) == 0;
+}
+
+static const char * get_linkage_name(ObjectInfo * obj) {
+    Trap trap;
+    PropertyValue p;
+    if ((obj->mFlags & DOIF_linkage_name) && set_trap(&trap)) {
+        read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
+        clear_trap(&trap);
+        if (p.mAddr != NULL) return (char *)p.mAddr;
+    }
+    if ((obj->mFlags & DOIF_mangled_name) && set_trap(&trap)) {
+        read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
+        clear_trap(&trap);
+        if (p.mAddr != NULL) return (char *)p.mAddr;
+    }
+    return obj->mName;
+}
+
+static int cmp_object_linkage_names(ObjectInfo * x, ObjectInfo * y) {
+    const char * xname = get_linkage_name(x);
+    const char * yname = get_linkage_name(y);
+    if (xname == yname) return 1;
+    if (xname == NULL) return 0;
+    if (yname == NULL) return 0;
+    return strcmp(xname, yname) == 0;
 }
 
 static int symbol_priority(ObjectInfo * obj) {
@@ -773,7 +803,8 @@ static ObjectInfo * find_definition(ObjectInfo * decl) {
                     if (obj->mTag != decl->mTag) continue;
                     if (obj->mFlags & DOIF_declaration) continue;
                     if (!equ_symbol_names(obj->mName, decl->mName)) continue;
-                    if (cmp_object_profiles(decl, obj) == 0) continue;
+                    if (!cmp_object_profiles(decl, obj)) continue;
+                    if (!cmp_object_linkage_names(decl, obj)) continue;
                     def = obj;
                     break;
                 }
@@ -1815,22 +1846,7 @@ static int map_to_sym_table(ObjectInfo * obj, Symbol ** sym) {
                 }
             }
             if (file != NULL) {
-                Trap trap;
-                if (set_trap(&trap)) {
-                    PropertyValue p;
-                    read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_MIPS_linkage_name, &p);
-                    if (p.mAddr != NULL) find_by_name_in_sym_table(file, (char *)p.mAddr, 1);
-                    clear_trap(&trap);
-                }
-                else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && set_trap(&trap)) {
-                    PropertyValue p;
-                    read_and_evaluate_dwarf_object_property(sym_ctx, sym_frame, obj, AT_mangled, &p);
-                    if (p.mAddr != NULL) find_by_name_in_sym_table(file, (char *)p.mAddr, 1);
-                    clear_trap(&trap);
-                }
-                else if (get_error_code(trap.error) == ERR_SYM_NOT_FOUND && obj->mName != NULL) {
-                    find_by_name_in_sym_table(file, obj->mName, 1);
-                }
+                find_by_name_in_sym_table(file, get_linkage_name(obj), 1);
             }
         }
         while (find_symbol_list != NULL) {
@@ -2464,6 +2480,8 @@ int get_symbol_index_type(const Symbol * sym, Symbol ** index_type) {
 int get_symbol_container(const Symbol * sym, Symbol ** container) {
     ObjectInfo * obj = sym->obj;
     if (obj != NULL) {
+        U8_T origin = 0;
+        U8_T spec = 0;
         ObjectInfo * parent = NULL;
         if (unpack(sym) < 0) return -1;
         if (sym->sym_class == SYM_CLASS_TYPE) {
@@ -2482,6 +2500,17 @@ int get_symbol_container(const Symbol * sym, Symbol ** container) {
             }
         }
         parent = get_dwarf_parent(obj);
+        if (parent != NULL && parent->mTag == TAG_compile_unit) {
+            if ((obj->mFlags & DOIF_abstract_origin) && get_num_prop(obj, AT_abstract_origin, &origin)) {
+                ObjectInfo * org = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)origin);
+                if (org != NULL) obj = org;
+            }
+            if ((obj->mFlags & DOIF_specification) && get_num_prop(obj, AT_specification_v2, &spec)) {
+                ObjectInfo * spc = find_object(get_dwarf_cache(obj->mCompUnit->mFile), (ContextAddress)spec);
+                if (spc != NULL) obj = spc;
+            }
+            parent = get_dwarf_parent(obj);
+        }
         if (parent != NULL) {
             object2symbol(parent, container);
             return 0;

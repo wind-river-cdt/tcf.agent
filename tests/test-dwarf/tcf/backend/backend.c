@@ -426,15 +426,52 @@ static void test_enumeration_type(Symbol * type) {
 static void test_composite_type(Symbol * type) {
     int i;
     int count = 0;
+    char * type_name = NULL;
+    Symbol * org_type = type;
     Symbol ** children = NULL;
+    for (;;) {
+        SYM_FLAGS flags = 0;
+        if (get_symbol_flags(org_type, &flags) < 0) {
+            error("get_symbol_flags");
+        }
+        if ((flags & SYM_FLAG_TYPEDEF) == 0) break;
+        if (get_symbol_type(org_type, &org_type) < 0) {
+            error("get_symbol_base_type");
+        }
+    }
+    if (get_symbol_name(org_type, &type_name) < 0) {
+        error("get_symbol_name");
+    }
     if (get_symbol_children(type, &children, &count) < 0) {
         error_sym("get_symbol_children", type);
     }
     for (i = 0; i < count; i++) {
         int member_class = 0;
+        Symbol * member_container = NULL;
+        int container_class = 0;
         ContextAddress offs = 0;
         if (get_symbol_class(children[i], &member_class) < 0) {
             error_sym("get_symbol_class", children[i]);
+        }
+        if (get_symbol_container(children[i], &member_container) < 0) {
+            error("get_symbol_container");
+        }
+        if (get_symbol_class(member_container, &container_class) < 0) {
+            error("get_symbol_class");
+        }
+        if (container_class != SYM_CLASS_TYPE) {
+            errno = ERR_OTHER;
+            error("Invalid result of get_symbol_container()");
+        }
+        if (type_name != NULL) {
+            char * container_name = NULL;
+            if (get_symbol_name(member_container, &container_name) < 0) {
+                error("get_symbol_name");
+            }
+            if (container_name == NULL || strcmp(container_name, type_name) != 0) {
+                errno = ERR_OTHER;
+                error("Invalid result of get_symbol_container()");
+            }
         }
         if (member_class == SYM_CLASS_REFERENCE) {
             if (get_symbol_address(children[i], &offs) < 0) {
