@@ -2224,7 +2224,7 @@ int get_symbol_type_class(const Symbol * sym, int * type_class) {
 int get_symbol_update_policy(const Symbol * sym, char ** id, int * policy) {
     assert(sym->magic == SYMBOL_MAGIC);
     *id = sym->ctx->id;
-    *policy = context_has_state(sym->ctx) ? UPDATE_ON_EXE_STATE_CHANGES : UPDATE_ON_MEMORY_MAP_CHANGES;
+    *policy = sym->frame != STACK_NO_FRAME ? UPDATE_ON_EXE_STATE_CHANGES : UPDATE_ON_MEMORY_MAP_CHANGES;
     return 0;
 }
 
