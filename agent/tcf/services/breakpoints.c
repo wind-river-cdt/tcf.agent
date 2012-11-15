@@ -438,7 +438,10 @@ static void flush_instructions(void) {
                     remove_instruction(bi);
                     if (bi->saved_size == 0 && bi->virtual_addr) {
                         /* If hardware breakpoint is removed, it can free hardware resources.
-                         * We have to try to replant other breakpoints in the context. */
+                         * We have to try to replant other breakpoints in the context.
+                         * Note: bi->cb.ctx cannot be used to replant non-virtual breakpoint,
+                         * because in such case the context represents canonical address space,
+                         * which can be different from the breakpoint address space. */
                         EvaluationRequest * req = create_evaluation_request(bi->cb.ctx);
                         req->bp = NULL;
                         req->location = 1;
