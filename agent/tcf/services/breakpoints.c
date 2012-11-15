@@ -436,7 +436,7 @@ static void flush_instructions(void) {
             if (bi->ref_cnt == 0) {
                 if (bi->planted) {
                     remove_instruction(bi);
-                    if (bi->saved_size == 0) {
+                    if (bi->saved_size == 0 && bi->virtual_addr) {
                         /* If hardware breakpoint is removed, it can free hardware resources.
                          * We have to try to replant other breakpoints in the context. */
                         EvaluationRequest * req = create_evaluation_request(bi->cb.ctx);
