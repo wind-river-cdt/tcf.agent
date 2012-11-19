@@ -777,7 +777,7 @@ static void read_object_refs(void) {
             if (ref.obj->mFlags & DOIF_abstract_origin) {
                 if ((ref.obj->mTag == TAG_variable && (ref.obj->mFlags & DOIF_external)) ||
                         ref.obj->mTag == TAG_subprogram ||
-                        (ref.obj->mTag == TAG_formal_parameter && ref.obj->mParent->mTag == TAG_subprogram))
+                        (ref.obj->mTag == TAG_formal_parameter && ref.obj->mParent != NULL && ref.obj->mParent->mTag == TAG_subprogram))
                     ref.org->mDefinition = ref.obj;
             }
             if (ref.obj->mFlags & DOIF_external) {
