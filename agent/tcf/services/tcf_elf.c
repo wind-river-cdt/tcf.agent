@@ -1762,6 +1762,14 @@ int elf_get_plt_entry_size(ELF_File * file, unsigned * first_size, unsigned * en
     return -1;
 }
 
+void elf_invalidate(void) {
+    while (files != NULL) {
+        ELF_File * file = files;
+        files = file->next;
+        elf_dispose(file);
+    }
+}
+
 void ini_elf(void) {
 }
 

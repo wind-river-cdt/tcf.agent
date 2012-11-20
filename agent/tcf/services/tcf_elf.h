@@ -651,6 +651,11 @@ extern int elf_find_plt_dynsym(ELF_Section * plt, unsigned entry,
 extern int elf_get_plt_entry_size(ELF_File * file, unsigned * first_size, unsigned * entry_size);
 
 /*
+ * Invalidate and dispose cached ELF data.
+ */
+extern void elf_invalidate(void);
+
+/*
  * Initialize ELF support module.
  */
 extern void ini_elf(void);
