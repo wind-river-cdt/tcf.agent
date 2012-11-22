@@ -1207,7 +1207,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                     list_add_first(&prs2->ctxl, &detach_list);
                     break;
                 }
-                prs2->ref_count = 0;
+                prs2->ref_count--;
                 link_context(prs2);
                 send_context_created_event(prs2);
             }
