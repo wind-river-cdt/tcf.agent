@@ -164,6 +164,35 @@ int context_attach_self(void) {
     return 0;
 }
 
+static void proc_get_children(pid_t pid, int * cnt, pid_t ** pids) {
+    char dir[FILE_PATH_SIZE];
+    DIR * proc;
+    static int max_threads_cnt = 0;
+    int threads_cnt = 0;
+    static int * thread_pid = NULL;
+
+    *cnt = 0;
+
+    snprintf(dir, sizeof(dir), "/proc/%d/task", pid);
+    proc = opendir(dir);
+    if (proc == NULL) return;
+    for (;;) {
+        struct dirent * ent = readdir(proc);
+        if (ent == NULL) break;
+        if (ent->d_name[0] >= '1' && ent->d_name[0] <= '9') {
+            pid_t pid = atol(ent->d_name);
+            if (threads_cnt >= max_threads_cnt) {
+                max_threads_cnt += 10;
+                thread_pid = loc_realloc(thread_pid, max_threads_cnt * sizeof(pid_t));
+            }
+            thread_pid[threads_cnt++] = pid;
+        }
+    }
+    closedir(proc);
+    *cnt = threads_cnt;
+    *pids = thread_pid;
+}
+
 int context_attach(pid_t pid, ContextAttachCallBack * done, void * data, int mode) {
     Context * ctx = NULL;
     ContextExtensionLinux * ext = NULL;
@@ -1011,6 +1040,36 @@ static pid_t get_thread_group_id(pid_t pid) {
     return res;
 }
 
+static Context * add_thread(Context * parent, Context * creator, pid_t pid) {
+    Context * ctx;
+    assert (parent != NULL);
+    ctx = create_context(pid2id(pid, EXT(parent)->pid));
+    EXT(ctx)->pid = pid;
+    EXT(ctx)->attach_mode = EXT(parent)->attach_mode;
+    EXT(ctx)->sigstop_posted = (EXT(ctx)->attach_mode & CONTEXT_ATTACH_SELF) == 0;
+    EXT(ctx)->waitpid_posted = 1;
+    alloc_regs(ctx);
+    ctx->mem = parent;
+    ctx->big_endian = parent->big_endian;
+    ctx->sig_dont_stop = ctx->sig_dont_stop;
+    ctx->sig_dont_pass = ctx->sig_dont_pass;
+    ctx->creator = creator;
+    if (creator) creator->ref_count++;
+    (ctx->parent = parent)->ref_count++;
+    if (EXT(parent)->detach_req) {
+        ctx->exiting = 1;
+        EXT(ctx)->detach_req = 1;
+    }
+    else if ((creator == NULL || parent != creator->parent) && (EXT(parent)->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
+        ctx->pending_intercept = 1;
+    }
+    list_add_last(&ctx->cldl, &parent->children);
+    link_context(ctx);
+    trace(LOG_EVENTS, "event: new context 0x%x, id %s", ctx, ctx->id);
+    send_context_created_event(ctx);
+    return ctx;
+}
+
 static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     int stopped_by_exception = 0;
     unsigned long msg = 0;
@@ -1024,30 +1083,33 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     if (ctx == NULL) {
         Context * prs = find_pending_attach(pid);
         if (prs != NULL) {
+            unsigned n;
+            int cnt = 0;
+            int * pids = NULL;
             assert(prs->ref_count == 0);
             assert(!EXT(prs)->detach_req);
-            ctx = create_context(pid2id(pid, pid));
-            EXT(ctx)->pid = pid;
-            alloc_regs(ctx);
-            if ((EXT(prs)->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
-                ctx->pending_intercept = 1;
-            }
-            ctx->mem = prs;
-            ctx->big_endian = prs->big_endian;
-            EXT(ctx)->attach_mode = EXT(prs)->attach_mode;
-            EXT(ctx)->sigstop_posted = (EXT(ctx)->attach_mode & CONTEXT_ATTACH_SELF) == 0;
-            EXT(ctx)->waitpid_posted = 1;
-            (ctx->parent = prs)->ref_count++;
-            list_add_last(&ctx->cldl, &prs->children);
             link_context(prs);
-            link_context(ctx);
             send_context_created_event(prs);
-            send_context_created_event(ctx);
+            ctx = add_thread(prs, NULL, pid);
+            proc_get_children(pid, &cnt, &pids);
+            for (n = 0; n < cnt; n++) {
+                if (pids[n] == pid) continue;
+                if (ptrace(PTRACE_ATTACH, pids[n],0,0) != 0) {
+                    trace(LOG_ALWAYS, "error: ptrace(PTRACE_ATTACH) failed: pid %d, error %d %s",
+                    pids[n], errno, errno_to_str(errno));
+                }
+                add_waitpid_process(pids[n]);
+            }
             if (EXT(prs)->attach_callback) {
                 EXT(prs)->attach_callback(0, prs, EXT(prs)->attach_data);
                 EXT(prs)->attach_callback = NULL;
                 EXT(prs)->attach_data = NULL;
             }
+        }
+        else {
+            pid_t ppid = get_thread_group_id(pid);
+            Context * parent = context_find_from_pid(ppid, 0);
+            if (parent != NULL) ctx = add_thread(parent, NULL, pid);
         }
     }
 
@@ -1150,30 +1212,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 link_context(prs2);
                 send_context_created_event(prs2);
             }
-
-            ctx2 = create_context(pid2id(msg, EXT(prs2)->pid));
-            EXT(ctx2)->pid = msg;
-            EXT(ctx2)->attach_mode = EXT(prs2)->attach_mode;
-            EXT(ctx2)->sigstop_posted = 1;
-            EXT(ctx2)->waitpid_posted = 1;
-            alloc_regs(ctx2);
-            ctx2->mem = prs2;
-            ctx2->big_endian = prs2->big_endian;
-            ctx2->sig_dont_stop = ctx->sig_dont_stop;
-            ctx2->sig_dont_pass = ctx->sig_dont_pass;
-            (ctx2->creator = ctx)->ref_count++;
-            (ctx2->parent = prs2)->ref_count++;
-            if (EXT(prs2)->detach_req) {
-                ctx2->exiting = 1;
-                EXT(ctx2)->detach_req = 1;
-            }
-            else if (prs2 != ctx->parent && (EXT(prs2)->attach_mode & CONTEXT_ATTACH_NO_STOP) == 0) {
-                ctx2->pending_intercept = 1;
-            }
-            list_add_last(&ctx2->cldl, &prs2->children);
-            link_context(ctx2);
-            trace(LOG_EVENTS, "event: new context 0x%x, id %s", ctx2, ctx2->id);
-            send_context_created_event(ctx2);
+            ctx2 = add_thread(prs2, ctx, msg);
         }
         break;
     case PTRACE_EVENT_EXEC:
