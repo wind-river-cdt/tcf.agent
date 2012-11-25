@@ -169,7 +169,7 @@ static void proc_get_children(pid_t pid, int * cnt, pid_t ** pids) {
     DIR * proc;
     static int max_threads_cnt = 0;
     int threads_cnt = 0;
-    static int * thread_pid = NULL;
+    static pid_t * thread_pid = NULL;
 
     *cnt = 0;
 
@@ -183,7 +183,7 @@ static void proc_get_children(pid_t pid, int * cnt, pid_t ** pids) {
             pid_t pid = atol(ent->d_name);
             if (threads_cnt >= max_threads_cnt) {
                 max_threads_cnt += 10;
-                thread_pid = loc_realloc(thread_pid, max_threads_cnt * sizeof(pid_t));
+                thread_pid = (pid_t *)loc_realloc(thread_pid, max_threads_cnt * sizeof(pid_t));
             }
             thread_pid[threads_cnt++] = pid;
         }
@@ -1083,7 +1083,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
     if (ctx == NULL) {
         Context * prs = find_pending_attach(pid);
         if (prs != NULL) {
-            unsigned n;
+            int n;
             int cnt = 0;
             int * pids = NULL;
             assert(prs->ref_count == 0);
@@ -1173,7 +1173,6 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
         }
         {
             Context * prs2 = NULL;
-            Context * ctx2 = NULL;
             /* Check the thread is not killed already by SIGKILL */
             if (msg == SIGKILL) {
                 unsigned long child_pid = get_child_pid(EXT(ctx->parent)->pid);
@@ -1212,7 +1211,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 link_context(prs2);
                 send_context_created_event(prs2);
             }
-            ctx2 = add_thread(prs2, ctx, msg);
+            add_thread(prs2, ctx, msg);
         }
         break;
     case PTRACE_EVENT_EXEC:
