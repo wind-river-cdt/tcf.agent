@@ -50,12 +50,41 @@ ssize_t (splice_block_stream)(OutputStream * out, int fd, size_t size, int64_t *
 }
 
 void write_string(OutputStream * out, const char * str) {
-    while (*str) write_stream(out, (*str++) & 0xff);
+    unsigned char * s = (unsigned char *)str;
+    unsigned char * d = out->cur;
+    unsigned char * e = out->end;
+    for (;;) {
+        unsigned char ch = *s++;
+        if (ch > ESC && d < e) {
+            *d++ = ch;
+        }
+        else {
+            out->cur = d;
+            if (ch == 0) break;
+            out->write(out, ch);
+            d = out->cur;
+            e = out->end;
+        }
+    }
 }
 
 void write_stringz(OutputStream * out, const char * str) {
-    while (*str) write_stream(out, (*str++) & 0xff);
-    write_stream(out, 0);
+    unsigned char * s = (unsigned char *)str;
+    unsigned char * d = out->cur;
+    unsigned char * e = out->end;
+    for (;;) {
+        unsigned char ch = *s++;
+        if (ch > ESC && d < e) {
+            *d++ = ch;
+        }
+        else {
+            out->cur = d;
+            out->write(out, ch);
+            if (ch == 0) break;
+            d = out->cur;
+            e = out->end;
+        }
+    }
 }
 
 static void write_byte_array_output_stream(OutputStream * out, int byte) {

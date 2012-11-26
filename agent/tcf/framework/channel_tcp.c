@@ -414,14 +414,23 @@ static void tcp_bin_block_start(ChannelTCP * c) {
 
 static void tcp_bin_block_end(ChannelTCP * c) {
     size_t len = c->chan.out.cur - c->out_bin_block;
+    if (len == 0) {
 #if BUF_SIZE > 0x4000
-    *(c->out_bin_block - 3) = (len & 0x7fu) | 0x80u;
-    *(c->out_bin_block - 2) = ((len >> 7) & 0x7fu) | 0x80u;
-    *(c->out_bin_block - 1) = (unsigned char)(len >> 14);
+        c->chan.out.cur -= 5;
 #else
-    *(c->out_bin_block - 2) = (len & 0x7fu) | 0x80u;
-    *(c->out_bin_block - 1) = (unsigned char)(len >> 7);
+        c->chan.out.cur -= 4;
 #endif
+    }
+    else {
+#if BUF_SIZE > 0x4000
+        *(c->out_bin_block - 3) = (len & 0x7fu) | 0x80u;
+        *(c->out_bin_block - 2) = ((len >> 7) & 0x7fu) | 0x80u;
+        *(c->out_bin_block - 1) = (unsigned char)(len >> 14);
+#else
+        *(c->out_bin_block - 2) = (len & 0x7fu) | 0x80u;
+        *(c->out_bin_block - 1) = (unsigned char)(len >> 7);
+#endif
+    }
     c->out_bin_block = NULL;
 }
 
@@ -454,8 +463,62 @@ static void tcp_write_stream(OutputStream * out, int byte) {
 }
 
 static void tcp_write_block_stream(OutputStream * out, const char * bytes, size_t size) {
-    size_t cnt = 0;
-    while (cnt < size) write_stream(out, (unsigned char)bytes[cnt++]);
+    unsigned char * src = (unsigned char *)bytes;
+    ChannelTCP * c = channel2tcp(out2channel(out));
+    while (size > 0) {
+        size_t n = out->end - out->cur;
+        if (n > size) n = size;
+        if (n == 0) {
+#if ENABLE_OutputQueue
+            if (out->supports_zero_copy && size >= BUF_SIZE / 2) {
+                /* Shortcut for large blocks: send data directly to output queue */
+                unsigned pos = 0;
+                unsigned char hdr[10];
+                if (c->out_bin_block != NULL) tcp_bin_block_end(c);
+                tcp_flush_with_flags(c, MSG_MORE);
+                n = size;
+                hdr[pos++] = ESC;
+                hdr[pos++] = 3;
+                for (;;) {
+                    unsigned m = n & 0x7f;
+                    n = n >> 7;
+                    if (n != 0) m |= 0x80;
+                    hdr[pos++] = m;
+                    if (n == 0) break;
+                }
+                output_queue_add(&c->out_queue, hdr, pos);
+                output_queue_add(&c->out_queue, src, size);
+                tcp_bin_block_start(c);
+                return;
+            }
+#endif
+            tcp_write_stream(out, *src++);
+            size--;
+        }
+        else if (c->out_bin_block) {
+            memcpy(out->cur, src, n);
+            out->cur += n;
+            size -= n;
+            src += n;
+        }
+        else if (*src > ESC) {
+            unsigned char * dst = out->cur;
+            unsigned char * end = dst + n;
+            do {
+                unsigned char ch = *src;
+                if (ch <= ESC) break;
+                *dst++ = ch;
+                src++;
+            }
+            while (dst < end);
+            size -= dst - out->cur;
+            out->cur = dst;
+        }
+        else {
+            tcp_write_stream(out, *src++);
+            size--;
+        }
+    }
 }
 
 static ssize_t tcp_splice_block_stream(OutputStream * out, int fd, size_t size, int64_t * offset) {
