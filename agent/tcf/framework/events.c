@@ -64,6 +64,10 @@ struct event_node {
 #  define trace if ((log_mode & LOG_EVENTCORE) && log_file) print_trace
 #endif
 
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC CLOCK_REALTIME
+#endif
+
 #if ENABLE_FastMemAlloc
 
 #define EVENT_BUF_SIZE 0x200
@@ -142,7 +146,7 @@ static void post_from_bg_thread(EventCallBack * handler, void * arg, unsigned lo
         return;
     }
     alloc_event_node_bg(ev);
-    if (clock_gettime(CLOCK_REALTIME, &ev->runtime)) check_error(errno);
+    if (clock_gettime(CLOCK_MONOTONIC, &ev->runtime)) check_error(errno);
     time_add_usec(&ev->runtime, delay);
     ev->handler = handler;
     ev->arg = arg;
@@ -174,7 +178,7 @@ void post_event_with_delay(EventCallBack * handler, void * arg, unsigned long de
         event_node * prev;
 
         alloc_event_node(ev);
-        if (clock_gettime(CLOCK_REALTIME, &ev->runtime)) check_error(errno);
+        if (clock_gettime(CLOCK_MONOTONIC, &ev->runtime)) check_error(errno);
         time_add_usec(&ev->runtime, delay);
         ev->handler = handler;
         ev->arg = arg;
@@ -340,7 +344,7 @@ void run_event_loop(void) {
             for (;;) {
                 if (timer_queue != NULL) {
                     struct timespec timenow;
-                    if (clock_gettime(CLOCK_REALTIME, &timenow)) {
+                    if (clock_gettime(CLOCK_MONOTONIC, &timenow)) {
                         check_error(errno);
                     }
                     if (time_cmp(&timer_queue->runtime, &timenow) <= 0) {
