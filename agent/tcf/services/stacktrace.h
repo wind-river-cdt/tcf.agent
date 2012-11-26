@@ -44,6 +44,11 @@ extern int is_top_frame(Context * ctx, int frame);
 extern int get_frame_info(Context * ctx, int frame, StackFrame ** info);
 
 /*
+ * Get frame number for 'info'.
+ */
+extern int get_info_frame(Context * ctx, StackFrame * info);
+
+/*
  * For given context and its registers in a stack frame,
  * compute stack frame location and next frame register values.
  * If frame info is not available, do nothing.

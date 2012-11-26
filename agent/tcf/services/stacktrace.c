@@ -518,6 +518,15 @@ int get_frame_info(Context * ctx, int frame, StackFrame ** info) {
     return 0;
 }
 
+int get_info_frame(Context * ctx, StackFrame * info) {
+    StackTrace * stack = EXT(ctx);
+    if (info == NULL) return STACK_NO_FRAME;
+    assert(stack->valid);
+    assert(info >= stack->frames);
+    assert(info < stack->frames + stack->frame_cnt);
+    return stack->frames - info;
+}
+
 int is_top_frame(Context * ctx, int frame) {
     StackTrace * stack;
 

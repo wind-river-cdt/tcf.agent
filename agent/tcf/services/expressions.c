@@ -706,15 +706,23 @@ static void reg2value(int mode, Context * ctx, int frame, RegisterDefinition * d
     v->type_class = def->fp_value ? TYPE_CLASS_REAL : TYPE_CLASS_CARDINAL;
     v->reg = def;
     v->loc = (LocationExpressionState *)loc_alloc_zero(sizeof(LocationExpressionState));
-    v->loc->ctx = expression_context;
+    v->loc->ctx = ctx;
     v->loc->pieces = (LocationPiece *)loc_alloc_zero(sizeof(LocationPiece));
     v->loc->pieces_cnt = v->loc->pieces_max = 1;
     v->loc->pieces->reg = def;
     v->loc->pieces->size = def->size;
-    if (mode == MODE_NORMAL) {
-        if (ctx->exited) exception(ERR_ALREADY_EXITED);
-        if (!ctx->stopped) str_exception(ERR_IS_RUNNING, "Cannot read CPU register");
-        if (frame == STACK_TOP_FRAME) {
+    if (def->size > 0 && mode == MODE_NORMAL) {
+        if (ctx->exited) {
+            exception(ERR_ALREADY_EXITED);
+        }
+        else if (def->memory_context != NULL) {
+            assert(strcmp(def->memory_context, ctx->id) == 0);
+            if (context_read_reg(ctx, def, 0, def->size, v->value) < 0) exception(errno);
+        }
+        else if (context_has_state(ctx) && !ctx->stopped) {
+            str_exception(ERR_IS_RUNNING, "Cannot read CPU register");
+        }
+        else if (frame == STACK_TOP_FRAME) {
             if (context_read_reg(ctx, def, 0, def->size, v->value) < 0) exception(errno);
         }
         else {
@@ -902,15 +910,22 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
             exception(ERR_INV_CONTEXT);
         }
         if (name[0] == '$') {
-            RegisterDefinition * def = get_reg_definitions(expression_context);
-            if (def != NULL) {
-                while (def->name != NULL) {
-                    if (strcmp(name + 1, def->name) == 0) {
-                        reg2value(mode, expression_context, expression_frame, def, v);
-                        return SYM_CLASS_REFERENCE;
+            Context * ctx = expression_context;
+            for (;;) {
+                RegisterDefinition * def = get_reg_definitions(ctx);
+                if (def != NULL) {
+                    while (def->name != NULL) {
+                        if (strcmp(name + 1, def->name) == 0) {
+                            int frame = STACK_NO_FRAME;
+                            if (ctx == expression_context) frame = expression_frame;
+                            reg2value(mode, ctx, frame, def, v);
+                            return SYM_CLASS_REFERENCE;
+                        }
+                        def++;
                     }
-                    def++;
                 }
+                ctx = ctx->parent;
+                if (ctx == NULL) break;
             }
         }
         if (strcmp(name, "$thread") == 0) {
@@ -1737,17 +1752,19 @@ static void op_field(int mode, Value * v) {
             reg2value(mode, ctx, frame, def, v);
         }
         else {
-            RegisterDefinition * def = get_reg_definitions(expression_context);
+            RegisterDefinition * def = get_reg_definitions(v->loc->ctx);
             if (def != NULL) {
                 while (def->name != NULL) {
                     if (def->parent == v->reg && strcmp(name, def->name) == 0) {
-                        reg2value(mode, expression_context, expression_frame, def, v);
+                        int frame = STACK_NO_FRAME;
+                        if (v->loc->ctx == expression_context) frame = expression_frame;
+                        reg2value(mode, v->loc->ctx, frame, def, v);
                         return;
                     }
                     def++;
                 }
             }
-            error(ERR_INV_EXPRESSION, "Unknown register; %s", name);
+            error(ERR_INV_EXPRESSION, "Unknown register: %s", name);
         }
     }
     else {
@@ -1819,8 +1836,7 @@ static void op_addr(int mode, Value * v) {
     if (v->function) {
         assert(v->type_class == TYPE_CLASS_POINTER);
     }
-    else {
-        if (!v->remote) error(ERR_INV_EXPRESSION, "Invalid '&': value has no address");
+    else if (v->remote) {
         set_ctx_word_value(v, v->address);
         v->type_class = TYPE_CLASS_POINTER;
         v->constant = 0;
@@ -1833,6 +1849,24 @@ static void op_addr(int mode, Value * v) {
 #else
         v->type = NULL;
 #endif
+    }
+    else if (v->reg != NULL && v->reg->memory_context != NULL) {
+        Context * ctx = id2ctx(v->reg->memory_context);
+        set_ctx_word_value(v, v->reg->memory_address);
+        v->type_class = TYPE_CLASS_POINTER;
+        v->constant = 1;
+        if (ctx != expression_context) {
+            /* The address is in another address space */
+            v->loc = (LocationExpressionState *)loc_alloc_zero(sizeof(LocationExpressionState));
+            v->loc->ctx = ctx;
+            v->loc->pieces = (LocationPiece *)loc_alloc_zero(sizeof(LocationPiece));
+            v->loc->pieces_cnt = v->loc->pieces_max = 1;
+            v->loc->pieces->value = v->value;
+            v->loc->pieces->size = (size_t)v->size;
+        }
+    }
+    else {
+        error(ERR_INV_EXPRESSION, "Invalid '&': the value has no address");
     }
 }
 
@@ -3420,7 +3454,6 @@ static void command_evaluate_cache_client(void * x) {
 
     memset(&value, 0, sizeof(value));
     if (expression_context_id(args->id, &ctx, &frame, &expr) < 0) err = errno;
-    if (!err && frame != STACK_NO_FRAME && !ctx->stopped) err = ERR_IS_RUNNING;
     if (!err && evaluate_expression(ctx, frame, 0, expr->script, 0, &value) < 0) err = errno;
     if (value.size >= 0x100000) err = ERR_BUFFER_OVERFLOW;
 
@@ -3488,10 +3521,11 @@ static void command_evaluate_cache_client(void * x) {
         }
 #endif
         if (value.reg != NULL) {
+            int reg_frame = value.loc->ctx == ctx ? frame : STACK_NO_FRAME;
             if (cnt > 0) write_stream(&c->out, ',');
             json_write_string(&c->out, "Register");
             write_stream(&c->out, ':');
-            json_write_string(&c->out, register2id(ctx, frame, value.reg));
+            json_write_string(&c->out, register2id(value.loc->ctx, reg_frame, value.reg));
             cnt++;
         }
 
@@ -3599,23 +3633,26 @@ static void command_assign_cache_client(void * x) {
         else if (value.loc != NULL && value.loc->pieces_cnt > 0) {
             Trap trap;
             if (set_trap(&trap)) {
-                unsigned i;
-                StackFrame * info = NULL;
-                for (i = 0; i < value.loc->pieces_cnt; i++) {
-                    LocationPiece * piece = value.loc->pieces + i;
-                    if (piece->reg) {
-                        if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
-                        break;
-                    }
-                }
-                write_location_pieces(ctx, info, value.loc->pieces, value.loc->pieces_cnt,
+                write_location_pieces(value.loc->ctx, value.loc->stack_frame,
+                    value.loc->pieces, value.loc->pieces_cnt,
                     value.loc->reg_id_scope.big_endian, args->value_buf, args->value_size);
-#if SERVICE_Registers
-                if (info != NULL) {
+#if SERVICE_Registers || SERVICE_Memory
+                {
+                    unsigned i;
                     for (i = 0; i < value.loc->pieces_cnt; i++) {
                         LocationPiece * piece = value.loc->pieces + i;
-                        if (piece->reg == NULL) continue;
-                        send_event_register_changed(register2id(ctx, frame, piece->reg));
+#if SERVICE_Registers
+                        if (piece->reg != NULL) {
+                            send_event_register_changed(register2id(value.loc->ctx,
+                                get_info_frame(value.loc->ctx, value.loc->stack_frame), piece->reg));
+                        }
+#endif
+#if SERVICE_Memory
+                        if (piece->reg == NULL && piece->value == NULL) {
+                            unsigned piece_size = piece->size ? piece->size : (piece->bit_offs + piece->bit_size + 7) / 8;
+                            send_event_memory_changed(value.loc->ctx, piece->addr, piece_size);
+                        }
+#endif
                     }
                 }
 #endif
