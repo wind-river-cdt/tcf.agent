@@ -29,8 +29,6 @@ typedef struct OutputBuffer OutputBuffer;
 struct OutputQueue {
     int error;
     LINK queue;
-    LINK pool;
-    int pool_size;
     void (*post_io_request)(OutputBuffer *);
 };
 

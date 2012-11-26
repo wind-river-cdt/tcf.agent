@@ -14,7 +14,7 @@
  *******************************************************************************/
 
 /*
- * Utility module that implements an abstarct output queue.
+ * Utility module that implements an abstract output queue.
  */
 
 #include <tcf/config.h>
@@ -25,11 +25,15 @@
 #include <tcf/framework/trace.h>
 #include <tcf/framework/errors.h>
 
+#define MAX_POOL_SIZE 32
+
 #define link2buf(A) ((OutputBuffer *)((char *)(A) - offsetof(OutputBuffer, link)))
+
+static LINK pool = TCF_LIST_INIT(pool);
+static int pool_size = 0;
 
 void output_queue_ini(OutputQueue * q) {
     list_init(&q->queue);
-    list_init(&q->pool);
 }
 
 void output_queue_add(OutputQueue * q, const void * buf, size_t size) {
@@ -52,15 +56,15 @@ void output_queue_add(OutputQueue * q, const void * buf, size_t size) {
     while (size > 0) {
         size_t len = size;
         OutputBuffer * bf;
-        if (list_is_empty(&q->pool)) {
+        if (list_is_empty(&pool)) {
             bf = (OutputBuffer *)loc_alloc_zero(sizeof(OutputBuffer));
-            bf->queue = q;
         }
         else {
-            bf = link2buf(q->pool.next);
+            bf = link2buf(pool.next);
             list_remove(&bf->link);
-            q->pool_size--;
+            pool_size--;
         }
+        bf->queue = q;
         if (len > sizeof(bf->buf)) len = sizeof(bf->buf);
         bf->buf_pos = 0;
         bf->buf_len = len;
@@ -88,10 +92,11 @@ void output_queue_done(OutputQueue * q, int error, int size) {
         if (bf->buf_pos < bf->buf_len) {
             /* Nothing */
         }
-        else if (q->pool_size < 8) {
+        else if (pool_size < MAX_POOL_SIZE) {
+            bf->queue = NULL;
             list_remove(&bf->link);
-            list_add_last(&bf->link, &q->pool);
-            q->pool_size++;
+            list_add_last(&bf->link, &pool);
+            pool_size++;
         }
         else {
             list_remove(&bf->link);
@@ -108,11 +113,13 @@ void output_queue_clear(OutputQueue * q) {
     while (!list_is_empty(&q->queue)) {
         OutputBuffer * bf = link2buf(q->queue.next);
         list_remove(&bf->link);
-        loc_free(bf);
-    }
-    while (!list_is_empty(&q->pool)) {
-        OutputBuffer * bf = link2buf(q->pool.next);
-        list_remove(&bf->link);
-        loc_free(bf);
+        if (pool_size < MAX_POOL_SIZE) {
+            bf->queue = NULL;
+            list_add_last(&bf->link, &pool);
+            pool_size++;
+        }
+        else {
+            loc_free(bf);
+        }
     }
 }
