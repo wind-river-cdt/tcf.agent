@@ -208,7 +208,7 @@ static unsigned read_esc_char(InputStream * inp, char * utf8) {
     case 'r': ch = '\r'; break;
     case 't': ch = '\t'; break;
     case 'u': ch = read_hex_char(inp); break;
-    default: exception(ERR_JSON_SYNTAX);
+    default: exception(ERR_JSON_SYNTAX); break;
     }
     /* 'ch' can be wide character - convert it to UTF-8 sequence */
     if (ch < 0x80) {
