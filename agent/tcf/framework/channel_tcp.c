@@ -483,7 +483,7 @@ static void tcp_write_block_stream(OutputStream * out, const char * bytes, size_
                     unsigned m = n & 0x7f;
                     n = n >> 7;
                     if (n != 0) m |= 0x80;
-                    hdr[pos++] = m;
+                    hdr[pos++] = (unsigned char)m;
                     if (n == 0) break;
                 }
                 output_queue_add(&c->out_queue, hdr, pos);

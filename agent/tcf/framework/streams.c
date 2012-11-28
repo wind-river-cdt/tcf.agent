@@ -50,39 +50,49 @@ ssize_t (splice_block_stream)(OutputStream * out, int fd, size_t size, int64_t *
 }
 
 void write_string(OutputStream * out, const char * str) {
-    unsigned char * s = (unsigned char *)str;
     unsigned char * d = out->cur;
-    unsigned char * e = out->end;
-    for (;;) {
-        unsigned char ch = *s++;
-        if (ch > ESC && d < e) {
-            *d++ = ch;
-        }
-        else {
-            out->cur = d;
-            if (ch == 0) break;
-            out->write(out, ch);
-            d = out->cur;
-            e = out->end;
+    if (d == NULL) {
+        out->write_block(out, str, strlen(str));
+    }
+    else {
+        unsigned char * e = out->end;
+        unsigned char * s = (unsigned char *)str;
+        for (;;) {
+            unsigned char ch = *s++;
+            if (ch > ESC && d < e) {
+                *d++ = ch;
+            }
+            else {
+                out->cur = d;
+                if (ch == 0) break;
+                out->write(out, ch);
+                d = out->cur;
+                e = out->end;
+            }
         }
     }
 }
 
 void write_stringz(OutputStream * out, const char * str) {
-    unsigned char * s = (unsigned char *)str;
     unsigned char * d = out->cur;
-    unsigned char * e = out->end;
-    for (;;) {
-        unsigned char ch = *s++;
-        if (ch > ESC && d < e) {
-            *d++ = ch;
-        }
-        else {
-            out->cur = d;
-            out->write(out, ch);
-            if (ch == 0) break;
-            d = out->cur;
-            e = out->end;
+    if (d == NULL) {
+        out->write_block(out, str, strlen(str) + 1);
+    }
+    else {
+        unsigned char * e = out->end;
+        unsigned char * s = (unsigned char *)str;
+        for (;;) {
+            unsigned char ch = *s++;
+            if (ch > ESC && d < e) {
+                *d++ = ch;
+            }
+            else {
+                out->cur = d;
+                out->write(out, ch);
+                if (ch == 0) break;
+                d = out->cur;
+                e = out->end;
+            }
         }
     }
 }
