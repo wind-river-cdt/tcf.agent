@@ -160,7 +160,10 @@ static void get_context_full_name(Context * ctx) {
         get_context_full_name(ctx->parent);
         buf_char('/');
         if (name != NULL) {
+            int quote = strchr(name, '/') == NULL ? 0 : 1;
+            if (quote) buf_char('"');
             while (*name) buf_char(*name++);
+            if (quote) buf_char('"');
         }
     }
 }
