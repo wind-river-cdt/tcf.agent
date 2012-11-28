@@ -1919,7 +1919,18 @@ static void event_context_created(Context * ctx, void * client_data) {
 }
 
 static void event_context_changed(Context * ctx, void * client_data) {
+    ContextExtensionRC * ext = EXT(ctx);
     send_event_context_changed(ctx);
+    if (run_ctrl_lock_cnt && !ctx->exiting && !ctx->stopped && context_has_state(ctx)) {
+        assert(!ext->safe_single_step || safe_event_list != NULL);
+        if (!ext->safe_single_step) {
+            context_stop(ctx);
+        }
+        if (!ext->pending_safe_event) {
+            ext->pending_safe_event = 1;
+            safe_event_pid_count++;
+        }
+    }
 }
 
 static void event_context_stopped(Context * ctx, void * client_data) {
@@ -1959,12 +1970,14 @@ static void event_context_started(Context * ctx, void * client_data) {
     ext->intercepted_by_bp = 0;
     if (run_ctrl_lock_cnt) {
         assert(!ext->safe_single_step || safe_event_list != NULL);
-        if (!ext->safe_single_step && !ctx->exiting) {
-            context_stop(ctx);
-        }
-        if (!ext->pending_safe_event) {
-            ext->pending_safe_event = 1;
-            safe_event_pid_count++;
+        if (!ctx->exiting) {
+            if (!ext->safe_single_step) {
+                context_stop(ctx);
+            }
+            if (!ext->pending_safe_event) {
+                ext->pending_safe_event = 1;
+                safe_event_pid_count++;
+            }
         }
     }
 }
