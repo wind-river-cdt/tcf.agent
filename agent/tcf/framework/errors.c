@@ -411,8 +411,14 @@ int set_fmt_errno(int no, const char * fmt, ...) {
         va_start(vaList, fmt);
         n = vsnprintf(buf, len, fmt, vaList);
         va_end(vaList);
-        if (n < (int)len) break;
-        len = n + 1;
+        if (n < 0) {
+            if (len > 0x1000) break;
+            len *= 2;
+        }
+        else {
+            if (n < (int)len) break;
+            len = n + 1;
+        }
     }
     err = n <= 0 ? no : set_errno(no, buf);
     loc_free(buf);
