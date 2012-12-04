@@ -119,6 +119,8 @@ static struct TypePseudoSymbol {
     { "int16_t",  2, 1 },
     { "int32_t",  4, 1 },
     { "int64_t",  8, 1 },
+    { "char16_t", 2, 0 },
+    { "char32_t", 4, 0 },
     { NULL },
 };
 
