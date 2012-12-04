@@ -115,6 +115,7 @@ static void elf_dispose(ELF_File * file) {
             loc_free(s->sym_addr_table);
             loc_free(s->sym_names_hash);
             loc_free(s->sym_names_next);
+            loc_free(s->reloc_zones_bondaries);
         }
         loc_free(file->sections);
     }

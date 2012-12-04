@@ -490,6 +490,10 @@ struct ELF_Section {
     unsigned sym_names_hash_size;
     unsigned * sym_names_hash;
     unsigned * sym_names_next;
+
+    /* Relocations blocks */
+    unsigned reloc_num_zones;
+    unsigned * reloc_zones_bondaries;
 };
 
 struct ELF_PHeader {
