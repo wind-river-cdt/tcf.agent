@@ -637,7 +637,6 @@ int check_breakpoints_on_memory_write(Context * ctx, ContextAddress address, voi
 }
 
 static void write_breakpoint_status(OutputStream * out, BreakpointInfo * bp) {
-    assert(*bp->id);
     write_stream(out, '{');
 
     if (bp->instruction_cnt) {
@@ -739,6 +738,7 @@ static void send_event_breakpoint_status(Channel * channel, BreakpointInfo * bp)
     OutputStream * out = channel ? &channel->out : &broadcast_group->out;
     unsigned i;
 
+    assert(*bp->id);
     write_stringz(out, "E");
     write_stringz(out, BREAKPOINTS);
     write_stringz(out, "status");
@@ -2131,6 +2131,7 @@ static void command_get_status(char * token, Channel * c) {
     bp = find_breakpoint(id);
     if (bp == NULL || list_is_empty(&bp->link_clients)) err = ERR_INV_CONTEXT;
 
+    assert(*bp->id);
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
     write_errno(&c->out, err);

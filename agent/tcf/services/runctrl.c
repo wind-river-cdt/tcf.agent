@@ -1595,8 +1595,9 @@ static void stop_all_timer(void * args) {
 }
 
 static void resume_error(Context * ctx, int error) {
+    ContextExtensionRC * ext = EXT(ctx);
     trace(LOG_ALWAYS, "Cannot resume context %s: %s", ctx->id, errno_to_str(error));
-    error = set_errno(error, "Cannot resume");
+    error = set_errno(error, ext->step_bp_info ? "Cannot continue stepping" : "Cannot resume");
     ctx->signal = 0;
     ctx->stopped = 1;
     ctx->stopped_by_bp = 0;
@@ -1606,6 +1607,45 @@ static void resume_error(Context * ctx, int error) {
     loc_free(ctx->exception_description);
     ctx->exception_description = loc_strdup(errno_to_str(error));
     send_context_changed_event(ctx);
+}
+
+static void check_step_breakpoint_instances(InputStream * inp, void * args);
+
+static void check_step_breakpoint_status(InputStream * inp, const char * name, void * args) {
+    if (strcmp(name, "Error") == 0) {
+        char * msg = json_read_alloc_string(inp);
+        if (msg != NULL) {
+            *(int *)args = set_errno(ERR_OTHER, msg);
+            loc_free(msg);
+        }
+    }
+    else if (strcmp(name, "Instances") == 0) {
+        json_read_array(inp, check_step_breakpoint_instances, args);
+    }
+    else {
+        json_skip_object(inp);
+    }
+}
+
+static void check_step_breakpoint_instances(InputStream * inp, void * args) {
+    json_read_struct(inp, check_step_breakpoint_status, args);
+}
+
+static int check_step_breakpoint(Context * ctx) {
+    /* Return error if step machine breakpoint cannot be planted */
+    int error = 0;
+    char * status = NULL;
+    ByteArrayInputStream buf;
+    InputStream * inp = NULL;
+    ContextExtensionRC * ext = EXT(ctx);
+    if (ext->step_bp_info == NULL) return 0;
+    status = get_breakpoint_status(ext->step_bp_info);
+    inp = create_byte_array_input_stream(&buf, status, strlen(status));
+    json_read_struct(inp, check_step_breakpoint_status, &error);
+    loc_free(status);
+    if (!error) return 0;
+    errno = error;
+    return -1;
 }
 
 static void sync_run_state(void * args) {
@@ -1699,7 +1739,11 @@ static void sync_run_state(void * args) {
             }
         }
         else if (ctx->stopped && !ctx->pending_intercept) {
-            if (ext->step_continue_mode != RM_RESUME) {
+            if (check_step_breakpoint(ctx) < 0) {
+                resume_error(ctx, errno);
+                err_cnt++;
+            }
+            else if (ext->step_continue_mode != RM_RESUME) {
                 list_add_last(&ext->link, &p);
             }
             else if (context_resume(ctx, EXT(grp)->reverse_run ? RM_REVERSE_RESUME : RM_RESUME, 0, 0) < 0) {
