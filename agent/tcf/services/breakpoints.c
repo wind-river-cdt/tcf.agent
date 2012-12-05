@@ -1909,6 +1909,7 @@ static void send_event_context_added(Channel * channel, BreakpointInfo * bp) {
     OutputStream * out = channel ? &channel->out : &broadcast_group->out;
     unsigned i;
 
+    assert(bp->id[0] != 0);
     write_stringz(out, "E");
     write_stringz(out, BREAKPOINTS);
     write_stringz(out, "contextAdded");
@@ -1931,6 +1932,7 @@ static void send_event_context_changed(BreakpointInfo * bp) {
     OutputStream * out = &broadcast_group->out;
     unsigned i;
 
+    assert(bp->id[0] != 0);
     write_stringz(out, "E");
     write_stringz(out, BREAKPOINTS);
     write_stringz(out, "contextChanged");
@@ -2393,7 +2395,7 @@ void change_breakpoint_attributes(BreakpointInfo * bp, BreakpointAttribute * att
     if (chng) {
         bp->attrs_changed = 1;
         replant_breakpoint(bp);
-        send_event_context_changed(bp);
+        if (bp->id[0] != 0) send_event_context_changed(bp);
     }
 }
 
@@ -2619,16 +2621,26 @@ int is_skipping_breakpoint(Context * ctx) {
     return ext->stepping_over_bp != NULL;
 }
 
-BreakpointInfo * create_eventpoint(const char * location, Context * ctx, EventPointCallBack * callback, void * callback_args) {
-    static const char * attr_list[] = { BREAKPOINT_ENABLED, BREAKPOINT_LOCATION };
+BreakpointInfo * create_eventpoint_ext(BreakpointAttribute * attrs, Context * ctx, EventPointCallBack * callback, void * callback_args) {
     BreakpointInfo * bp = (BreakpointInfo *)loc_alloc_zero(sizeof(BreakpointInfo));
-    BreakpointAttribute ** ref = &bp->attrs;
-    unsigned i;
 
     bp->client_cnt = 1;
-    bp->enabled = 1;
-    if (location != NULL) bp->location = loc_strdup(location);
     if (ctx != NULL) context_lock(bp->ctx = ctx);
+    bp->event_callback = callback;
+    bp->event_callback_args = callback_args;
+    list_init(&bp->link_clients);
+    list_init(&bp->link_hit_count);
+    list_add_last(&bp->link_all, &breakpoints);
+    set_breakpoint_attributes(bp, attrs);
+    replant_breakpoint(bp);
+    return bp;
+}
+
+BreakpointInfo * create_eventpoint(const char * location, Context * ctx, EventPointCallBack * callback, void * callback_args) {
+    static const char * attr_list[] = { BREAKPOINT_ENABLED, BREAKPOINT_LOCATION };
+    BreakpointAttribute * attrs = NULL;
+    BreakpointAttribute ** ref = &attrs;
+    unsigned i;
 
     /* Create attributes to allow get_breakpoint_attributes() and change_breakpoint_attributes() calls */
     for (i = 0; i < sizeof(attr_list) / sizeof(char *); i++) {
@@ -2638,10 +2650,10 @@ BreakpointInfo * create_eventpoint(const char * location, Context * ctx, EventPo
         attr->name = loc_strdup(attr_list[i]);
         switch (i) {
         case 0:
-            json_write_boolean(out, bp->enabled);
+            json_write_boolean(out, 1);
             break;
         case 1:
-            json_write_string(out, bp->location);
+            json_write_string(out, location);
             break;
         }
         write_stream(out, 0);
@@ -2649,14 +2661,7 @@ BreakpointInfo * create_eventpoint(const char * location, Context * ctx, EventPo
         *ref = attr; ref = &attr->next;
     }
 
-    bp->event_callback = callback;
-    bp->event_callback_args = callback_args;
-    list_init(&bp->link_clients);
-    list_init(&bp->link_hit_count);
-    assert(breakpoints.next != NULL);
-    list_add_last(&bp->link_all, &breakpoints);
-    replant_breakpoint(bp);
-    return bp;
+    return create_eventpoint_ext(attrs, ctx, callback, callback_args);
 }
 
 void destroy_eventpoint(BreakpointInfo * bp) {
