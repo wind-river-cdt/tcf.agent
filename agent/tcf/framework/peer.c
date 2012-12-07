@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -43,6 +43,7 @@ static int stale_timer_active = 0;
 static void notify_listeners(PeerServer * ps, int type) {
     int i;
 
+    assert(ps->listed);
     trace(LOG_DISCOVERY, "Peer server change, id=%s, type=%d", ps->id, type);
     for (i = 0; i < listeners_cnt; i++) {
         listeners[i].fnp(ps, type, listeners[i].arg);
@@ -85,6 +86,7 @@ static void clear_stale_peers(void * x) {
             /* Delete stale entry */
             *sp = s->next;
             notify_listeners(s, PS_EVENT_REMOVED);
+            s->listed = 0;
             peer_server_free(s);
         }
         else {
@@ -111,6 +113,7 @@ PeerServer * peer_server_alloc(void) {
 void peer_server_addprop(PeerServer * s, const char * name, const char * value) {
     unsigned i;
 
+    assert(!s->listed);
     if (strcmp(name, "ID") == 0) {
         loc_free(name);
         s->id = value;
@@ -145,6 +148,7 @@ const char * peer_server_getprop(PeerServer * s, const char * name, const char *
 }
 
 void peer_server_free(PeerServer * s) {
+    assert(!s->listed);
     while (s->ind > 0) {
         s->ind--;
         loc_free(s->list[s->ind].name);
@@ -160,6 +164,7 @@ PeerServer * peer_server_add(PeerServer * n, unsigned int stale_delta) {
     PeerServer * s;
     int type = PS_EVENT_ADDED;
 
+    assert(!n->listed);
     assert(is_dispatch_thread());
     while ((s = *sp) != NULL) {
         if (strcmp(s->id, n->id) == 0) {
@@ -172,12 +177,14 @@ PeerServer * peer_server_add(PeerServer * n, unsigned int stale_delta) {
                 return s;
             }
             *sp = s->next;
+            s->listed = 0;
             peer_server_free(s);
             type = PS_EVENT_CHANGED;
             break;
         }
         sp = &s->next;
     }
+    n->listed = 1;
     n->creation_time = time(NULL);
     n->expiration_time = n->creation_time + stale_delta;
     n->next = peers;
@@ -210,6 +217,7 @@ void peer_server_remove(const char *id) {
         if (strcmp(s->id, id) == 0) {
             *sp = s->next;
             notify_listeners(s, PS_EVENT_REMOVED);
+            s->listed = 0;
             peer_server_free(s);
             break;
         }

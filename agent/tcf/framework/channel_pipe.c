@@ -702,8 +702,7 @@ static void server_close(ChannelServer * serv) {
     int i;
 
     assert(is_dispatch_thread());
-    if (s->closed)
-        return;
+    if (s->closed) return;
     s->closed = 1;
     list_remove(&s->serv.servlink);
     if (list_is_empty(&channel_root) && list_is_empty(&channel_server_root))

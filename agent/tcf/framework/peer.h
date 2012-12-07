@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -40,6 +40,7 @@ struct PeerServer {
     time_t creation_time;
     time_t expiration_time;
     PeerServer * next;
+    int listed;
 };
 
 enum {
@@ -48,7 +49,7 @@ enum {
     PS_FLAG_DISCOVERABLE = PS_FLAG_PRIVATE * 2
 };
 
-/* Peer chane event types */
+/* Peer event types */
 enum {
     PS_EVENT_ADDED,
     PS_EVENT_CHANGED,
@@ -59,7 +60,9 @@ enum {
 /* Allocate peer server object */
 extern PeerServer * peer_server_alloc(void);
 
-/* Add properties to peer server object */
+/* Add properties to peer server object.
+ * This function should only be called for peer server objects
+ * that are not listed yet by peer_server_add() */
 extern void peer_server_addprop(PeerServer * ps, const char * name, const char * value);
 
 /* Add properties to peer server object */
