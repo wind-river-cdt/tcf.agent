@@ -31,8 +31,12 @@
 #  define ENABLE_FastMemAlloc 1
 #endif
 
+#if !defined(USE_libc_malloc)
+#  define USE_libc_malloc 1
+#endif
+
 #if ENABLE_FastMemAlloc
-#define POOL_SIZE (0x100000 * MEM_USAGE_FACTOR)
+#define POOL_SIZE (0xfff0 * MEM_USAGE_FACTOR)
 static char * tmp_pool = NULL;
 static size_t tmp_pool_pos = 0;
 static size_t tmp_pool_max = 0;
@@ -158,6 +162,8 @@ char * tmp_strdup2(const char * s1, const char * s2) {
     return rval;
 }
 
+#if USE_libc_malloc
+
 void * loc_alloc(size_t size) {
     void * p;
 
@@ -201,6 +207,8 @@ void loc_free(const void * p) {
     trace(LOG_ALLOC, "loc_free %#lx", p);
     free((void *)p);
 }
+
+#endif /* USE_libc_malloc */
 
 /* strdup() with end-of-memory checking. */
 char * loc_strdup(const char * s) {
