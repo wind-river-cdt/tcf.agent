@@ -54,6 +54,7 @@ typedef struct SymbolsCache {
     LINK link_find_in_scope[HASH_SIZE];
     LINK link_list[HASH_SIZE];
     LINK link_frame[HASH_SIZE];
+    LINK link_address[HASH_SIZE];
     LINK link_location[HASH_SIZE];
     int service_available;
 } SymbolsCache;
@@ -134,6 +135,22 @@ typedef struct StackFrameCache {
     int disposed;
 } StackFrameCache;
 
+typedef struct AddressInfoCache {
+    LINK link_syms;
+    AbstractCache cache;
+    ReplyHandlerInfo * pending;
+    ErrorReport * error;
+    Context * ctx;
+    ContextAddress addr;
+
+    const char * isa;
+    ContextAddress range_addr;
+    ContextAddress range_size;
+    ContextAddress plt;
+
+    int disposed;
+} AddressInfoCache;
+
 typedef struct LocationInfoCache {
     LINK link_syms;
     AbstractCache cache;
@@ -155,6 +172,7 @@ typedef struct LocationInfoCache {
 #define syms2find(A) ((FindSymCache *)((char *)(A) - offsetof(FindSymCache, link_syms)))
 #define sym2arr(A)   ((ArraySymCache *)((char *)(A) - offsetof(ArraySymCache, link_sym)))
 #define syms2frame(A)((StackFrameCache *)((char *)(A) - offsetof(StackFrameCache, link_syms)))
+#define syms2address(A)((AddressInfoCache *)((char *)(A) - offsetof(AddressInfoCache, link_syms)))
 #define syms2location(A)((LocationInfoCache *)((char *)(A) - offsetof(LocationInfoCache, link_syms)))
 
 struct Symbol {
@@ -200,6 +218,10 @@ static unsigned hash_frame(Context * ctx) {
     return ((uintptr_t)ctx >> 4) % HASH_SIZE;
 }
 
+static unsigned hash_address(Context * ctx) {
+    return ((uintptr_t)ctx >> 4) % HASH_SIZE;
+}
+
 static SymbolsCache * get_symbols_cache(void) {
     LINK * l = NULL;
     SymbolsCache * syms = NULL;
@@ -224,6 +246,7 @@ static SymbolsCache * get_symbols_cache(void) {
             list_init(syms->link_find_in_scope + i);
             list_init(syms->link_list + i);
             list_init(syms->link_frame + i);
+            list_init(syms->link_address + i);
             list_init(syms->link_location + i);
         }
         channel_lock(c);
@@ -328,6 +351,21 @@ static void free_stack_frame_cache(StackFrameCache * c) {
     }
 }
 
+static void free_address_info_cache(AddressInfoCache * c) {
+    assert(!c->disposed || c->pending == NULL);
+    if (!c->disposed) {
+        list_remove(&c->link_syms);
+        c->disposed = 1;
+    }
+    if (c->pending == NULL) {
+        cache_dispose(&c->cache);
+        release_error_report(c->error);
+        context_unlock(c->ctx);
+        loc_free(c->isa);
+        loc_free(c);
+    }
+}
+
 static void free_location_commands(LocationCommands * cmds) {
     unsigned i = 0;
     while (i < cmds->cnt) free_location_command_args(cmds->cmds + i++);
@@ -370,6 +408,12 @@ static void free_symbols_cache(SymbolsCache * syms) {
         }
         while (!list_is_empty(syms->link_frame + i)) {
             free_stack_frame_cache(syms2frame(syms->link_frame[i].next));
+        }
+        while (!list_is_empty(syms->link_address + i)) {
+            free_address_info_cache(syms2address(syms->link_address[i].next));
+        }
+        while (!list_is_empty(syms->link_location + i)) {
+            free_location_info_cache(syms2location(syms->link_location[i].next));
         }
     }
     channel_unlock(syms->channel);
@@ -1151,6 +1195,109 @@ int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol ** ptr) {
 
 /*************************************************************************************************/
 
+static void read_address_attrs(InputStream * inp, const char * name, void * x) {
+    AddressInfoCache * f = (AddressInfoCache *)x;
+    if (strcmp(name, "Addr") == 0) f->range_addr = (ContextAddress)json_read_uint64(inp);
+    else if (strcmp(name, "Size") == 0) f->range_size = (ContextAddress)json_read_uint64(inp);
+    else if (strcmp(name, "ISA") == 0) f->isa = json_read_alloc_string(inp);
+    else if (strcmp(name, "PLT") == 0) f->plt = (ContextAddress)json_read_uint64(inp);
+    else json_skip_object(inp);
+}
+
+static void validate_address_info(Channel * c, void * args, int error) {
+    Trap trap;
+    AddressInfoCache * f = (AddressInfoCache *)args;
+    assert(f->pending != NULL);
+    assert(f->error == NULL);
+    if (set_trap(&trap)) {
+        f->pending = NULL;
+        if (!error) {
+            error = read_errno(&c->inp);
+            json_read_struct(&c->inp, read_address_attrs, f);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
+        }
+        clear_trap(&trap);
+    }
+    else {
+        error = trap.error;
+    }
+    f->error = get_error_report(error);
+    cache_notify(&f->cache);
+    if (f->disposed) free_address_info_cache(f);
+}
+
+static int get_address_info(Context * ctx, ContextAddress addr, AddressInfoCache ** info) {
+    Trap trap;
+    unsigned h;
+    LINK * l;
+    SymbolsCache * syms = NULL;
+    AddressInfoCache * f = NULL;
+
+    if (!set_trap(&trap)) return -1;
+
+    h = hash_address(ctx);
+    syms = get_symbols_cache();
+    for (l = syms->link_address[h].next; l != syms->link_address + h; l = l->next) {
+        AddressInfoCache * c = syms2address(l);
+        if (c->ctx == ctx) {
+            if (c->pending != NULL) {
+                cache_wait(&c->cache);
+            }
+            else if (c->range_addr <= addr && c->range_addr + c->range_size > addr) {
+                f = c;
+                break;
+            }
+        }
+    }
+
+    assert(f == NULL || f->pending == NULL);
+
+    if (f == NULL) {
+        Channel * c = get_channel(syms);
+        f = (AddressInfoCache *)loc_alloc_zero(sizeof(AddressInfoCache));
+        list_add_first(&f->link_syms, syms->link_address + h);
+        context_lock(f->ctx = ctx);
+        f->addr = addr;
+        context_lock(f->ctx = ctx);
+        f->pending = protocol_send_command(c, SYMBOLS, "getAddressInfo", validate_address_info, f);
+        json_write_string(&c->out, ctx->id);
+        write_stream(&c->out, 0);
+        json_write_uint64(&c->out, addr);
+        write_stream(&c->out, 0);
+        write_stream(&c->out, MARKER_EOM);
+        cache_wait(&f->cache);
+    }
+    else if (f->error != NULL) {
+        exception(set_error_report_errno(f->error));
+    }
+    else {
+        *info = f;
+    }
+
+    clear_trap(&trap);
+    return 0;
+}
+
+ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
+    AddressInfoCache * i = NULL;
+    errno = 0;
+    if (get_address_info(ctx, addr, &i) < 0) return 0;
+    return i->plt;
+}
+
+int get_context_isa(Context * ctx, ContextAddress addr, const char ** isa,
+        ContextAddress * range_addr, ContextAddress * range_size) {
+    AddressInfoCache * i = NULL;
+    if (get_address_info(ctx, addr, &i) < 0) return -1;
+    *isa = i->isa;
+    *range_addr = i->range_addr;
+    *range_size = i->range_size;
+    return 0;
+}
+
+/*************************************************************************************************/
+
 static LocationCommands location_cmds = { NULL, 0, 0};
 
 static int trace_regs_cnt = 0;
@@ -1158,11 +1305,6 @@ static int trace_regs_max = 0;
 static StackFrameRegisterLocation ** trace_regs = NULL;
 
 static int id2register_error = 0;
-
-ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
-    /* TODO: is_plt_section() in symbols proxy */
-    return 0;
-}
 
 static LocationExpressionCommand * add_location_command(int op) {
     LocationExpressionCommand * cmd = NULL;
@@ -1578,6 +1720,12 @@ static void flush_syms(Context * ctx, int mode) {
                     StackFrameCache * c = syms2frame(l);
                     l = l->next;
                     if (context_get_group(c->ctx, CONTEXT_GROUP_SYMBOLS) == prs) free_stack_frame_cache(c);
+                }
+                l = syms->link_address[i].next;
+                while (l != syms->link_address + i) {
+                    AddressInfoCache * c = syms2address(l);
+                    l = l->next;
+                    if (context_get_group(c->ctx, CONTEXT_GROUP_SYMBOLS) == prs) free_address_info_cache(c);
                 }
                 l = syms->link_location[i].next;
                 while (l != syms->link_location + i) {

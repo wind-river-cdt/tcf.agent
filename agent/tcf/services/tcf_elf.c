@@ -1763,10 +1763,24 @@ int elf_get_plt_entry_size(ELF_File * file, unsigned * first_size, unsigned * en
 }
 
 void elf_invalidate(void) {
-    while (files != NULL) {
-        ELF_File * file = files;
-        files = file->next;
-        elf_dispose(file);
+    ELF_File * prev = NULL;
+    ELF_File * file = files;
+    while (file != NULL) {
+        ELF_File * next = file->next;
+        struct stat st;
+        if (file->fd < 0 ||
+                stat(file->name, &st) < 0 ||
+                file->size != st.st_size ||
+                file->mtime != st.st_mtime ||
+                (st.st_ino != 0 && st.st_ino != file->ino)) {
+            if (prev == NULL) files = next;
+            else prev->next = next;
+            elf_dispose(file);
+        }
+        else {
+            prev = file;
+        }
+        file = next;
     }
 }
 

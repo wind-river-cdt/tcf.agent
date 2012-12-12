@@ -43,6 +43,7 @@
 #include <tcf/services/dwarfecomp.h>
 #include <tcf/services/dwarfframe.h>
 #include <tcf/services/stacktrace.h>
+#include <tcf/services/memorymap.h>
 #include <tcf/services/funccall.h>
 #include <tcf/services/symbols.h>
 #include <tcf/services/elf-symbols.h>
@@ -1724,11 +1725,103 @@ int id2symbol(const char * id, Symbol ** res) {
 ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
     ELF_File * file = NULL;
     ELF_Section * sec = NULL;
-    ContextAddress res = elf_map_to_link_time_address(ctx, addr, &file, &sec);
+    ContextAddress res = 0;
+    errno = 0;
+    res = elf_map_to_link_time_address(ctx, addr, &file, &sec);
     if (res == 0 || sec == NULL) return 0;
     if (sec->name == NULL) return 0;
     if (strcmp(sec->name, ".plt") != 0) return 0;
     return (ContextAddress)sec->addr + (addr - res);
+}
+
+int get_context_isa(Context * ctx, ContextAddress ip, const char ** isa,
+        ContextAddress * range_addr, ContextAddress * range_size) {
+    ELF_File * file = NULL;
+    ELF_Section * sec = NULL;
+    ContextAddress lt_addr = elf_map_to_link_time_address(ctx, ip, &file, &sec);
+    *isa = NULL;
+    *range_addr = ip;
+    *range_size = 1;
+    if (sec != NULL && file->machine == EM_ARM) {
+        /* TODO: faster handling of ARM mapping symbols */
+        ELF_SymbolInfo sym_info;
+        elf_find_symbol_by_address(sec, lt_addr, &sym_info);
+        while (sym_info.sym_section != NULL) {
+            assert(sym_info.section == sec);
+            if (sym_info.name != NULL && *sym_info.name == '$') {
+                if (strcmp(sym_info.name, "$a") == 0) *isa = "ARM";
+                else if (strcmp(sym_info.name, "$t") == 0) *isa = "Thumb";
+                else if (strcmp(sym_info.name, "$t.x") == 0) *isa = "ThumbEE";
+                else if (strcmp(sym_info.name, "$d") == 0) *isa = "Data";
+                else if (strcmp(sym_info.name, "$d.realdata") == 0) *isa = "Data";
+                if (*isa) {
+                    *range_addr = (ContextAddress)sym_info.value;
+                    if (file->type == ET_REL) *range_addr += (ContextAddress)sec->addr;
+                    for (;;) {
+                        elf_next_symbol_by_address(&sym_info);
+                        if (sym_info.sym_section == NULL) {
+                            *range_size = (ContextAddress)(sec->addr + sec->size) - *range_addr;
+                            return 0;
+                        }
+                        if (sym_info.name != NULL && *sym_info.name == '$') {
+                            ContextAddress sym_addr = (ContextAddress)sym_info.value;
+                            if (file->type == ET_REL) sym_addr += (ContextAddress)sec->addr;
+                            *range_size = sym_addr - *range_addr;
+                            return 0;
+                        }
+                    }
+                }
+            }
+            elf_prev_symbol_by_address(&sym_info);
+        }
+    }
+    else if (file != NULL) {
+        switch (file->machine) {
+        case EM_M32        : *isa = "M32"; break;
+        case EM_SPARC      : *isa = "SPARC"; break;
+        case EM_386        : *isa = "386"; break;
+        case EM_68K        : *isa = "68K"; break;
+        case EM_88K        : *isa = "88K"; break;
+        case EM_860        : *isa = "860"; break;
+        case EM_MIPS       : *isa = "MIPS"; break;
+        case EM_PPC        : *isa = "PPC"; break;
+        case EM_PPC64      : *isa = "PPC64"; break;
+        case EM_SH         : *isa = "SH"; break;
+        case EM_SPARCV9    : *isa = "SPARCV9"; break;
+        case EM_IA_64      : *isa = "IA_64"; break;
+        case EM_MIPS_X     : *isa = "MIPS_X"; break;
+        case EM_COLDFIRE   : *isa = "COLDFIRE"; break;
+        case EM_X86_64     : *isa = "X86_64"; break;
+        }
+    }
+    {
+        unsigned i;
+        static MemoryMap map;
+        ContextAddress size = 1 << 16;
+        ContextAddress addr = ip & ~(size - 1);
+        if (elf_get_map(ctx, addr, addr + size - 1, &map) == 0) {
+            for (i = 0; i < map.region_cnt; i++) {
+                MemoryRegion * r = map.regions + i;
+                ContextAddress x = r->addr;
+                ContextAddress y = r->addr + r->size;
+                if (x > ip && x < addr + size) size = x - addr;
+                if (y > ip && y < addr + size) size = y - addr;
+                if (x <= ip && x > addr) {
+                    size = addr + size - x;
+                    addr = x;
+                }
+                if (y <= ip && y > addr) {
+                    size = addr + size - y;
+                    addr = y;
+                }
+            }
+            assert(addr <= ip);
+            assert(addr + size - 1 >= ip);
+            *range_addr = addr;
+            *range_size = size;
+        }
+    }
+    return 0;
 }
 
 int get_stack_tracing_info(Context * ctx, ContextAddress rt_addr, StackTracingInfo ** info) {
@@ -1780,7 +1873,24 @@ const char * get_symbol_file_name(Context * ctx, MemoryRegion * module) {
     return file->name;
 }
 
+#if SERVICE_MemoryMap
+static void event_map_changed(Context * ctx, void * args) {
+    /* Make sure there is no stale data in the ELF cache */
+    elf_invalidate();
+}
+
+static MemoryMapEventListener map_listener = {
+    event_map_changed,
+    NULL,
+    NULL,
+    event_map_changed,
+};
+#endif
+
 void ini_symbols_lib(void) {
+#if SERVICE_MemoryMap
+    add_memory_map_event_listener(&map_listener, NULL);
+#endif
 }
 
 /*************** Functions for retrieving symbol properties ***************************************/

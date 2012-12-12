@@ -1056,6 +1056,21 @@ int enumerate_symbols(Context * ctx, int frame, EnumerateSymbolsCallBack * call_
 }
 
 ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
+    errno = 0;
+    return 0;
+}
+
+int get_context_isa(Context * ctx, ContextAddress addr, const char ** isa,
+        ContextAddress * range_addr, ContextAddress * range_size) {
+#if defined(_M_IX86)
+    *isa = "386";
+#elif defined(_M_AMD64)
+    *isa = "X86_64";
+#else
+    *isa = NULL;
+#endif
+    *range_addr = addr;
+    *range_size = 1;
     return 0;
 }
 

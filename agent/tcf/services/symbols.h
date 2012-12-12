@@ -256,15 +256,33 @@ extern int get_array_symbol(const Symbol * sym, ContextAddress length, Symbol **
 /*************************************************************************************************/
 
 /*
- * Check if given address is inside a PLT section, then return address of the section.
- * If not a PLT address return 0;
+ * Check if given address is inside a PLT section, then return run-time address of the section.
+ * Return 0 and set errno in case of an error.
+ * If not a PLT address, return 0;
  */
 extern ContextAddress is_plt_section(Context * ctx, ContextAddress addr);
 
-/* Get object location information */
+/*
+ * Get instruction set architecture name for given address in a context memory.
+ * 'range_addr' and 'range_size' are assigned an address range of same ISA.
+ * Return -1 and set errno in case of an error.
+ * Return 0 on success.
+ */
+extern int get_context_isa(Context * ctx, ContextAddress addr, const char ** isa,
+        ContextAddress * range_addr, ContextAddress * range_size);
+
+/*
+ * Get object location information
+ * Return -1 and set errno in case of an error.
+ * Return 0 on success.
+ */
 extern int get_location_info(const Symbol * sym, LocationInfo ** info);
 
-/* Get information about function call injection */
+/*
+ * Get information about function call injection.
+ * Return -1 and set errno in case of an error.
+ * Return 0 on success.
+ */
 extern int get_funccall_info(const Symbol * func,
         const Symbol ** args, unsigned args_cnt, FunctionCallInfo ** info);
 

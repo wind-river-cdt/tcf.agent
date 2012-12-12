@@ -982,6 +982,76 @@ static void command_get_sym_file_info(char * token, Channel * c) {
     cache_enter(command_get_sym_file_info_cache_client, c, &args, sizeof(args));
 }
 
+typedef struct CommandAddressInfo {
+    char token[256];
+    char id[256];
+    ContextAddress addr;
+} CommandAddressInfo;
+
+static void command_get_address_info_cache_client(void * x) {
+    int err = 0;
+    Channel * c = cache_channel();
+    CommandAddressInfo * args = (CommandAddressInfo *)x;
+    Context * ctx = NULL;
+    const char * isa = NULL;
+    ContextAddress range_addr = 0;
+    ContextAddress range_size = 0;
+    ContextAddress plt = 0;
+
+    ctx = id2ctx(args->id);
+    if (ctx == NULL) err = ERR_INV_CONTEXT;
+    if (!err && get_context_isa(ctx, args->addr,
+        &isa, &range_addr, &range_size) < 0) err = errno;
+    if (!err) plt = is_plt_section(ctx, args->addr);
+
+    cache_exit();
+
+    write_stringz(&c->out, "R");
+    write_stringz(&c->out, args->token);
+    write_errno(&c->out, err);
+    if (!err) {
+        write_stream(&c->out, '{');
+        json_write_string(&c->out, "Addr");
+        write_stream(&c->out, ':');
+        json_write_uint64(&c->out, range_addr);
+        write_stream(&c->out, ',');
+        json_write_string(&c->out, "Size");
+        write_stream(&c->out, ':');
+        json_write_uint64(&c->out, range_size);
+        if (isa != NULL) {
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "ISA");
+            write_stream(&c->out, ':');
+            json_write_string(&c->out, isa);
+        }
+        if (plt != 0) {
+            write_stream(&c->out, ',');
+            json_write_string(&c->out, "PLT");
+            write_stream(&c->out, ':');
+            json_write_uint64(&c->out, plt);
+        }
+        write_stream(&c->out, '}');
+        write_stream(&c->out, 0);
+    }
+    else {
+        write_stringz(&c->out, "null");
+    }
+    write_stream(&c->out, MARKER_EOM);
+}
+
+static void command_get_address_info(char * token, Channel * c) {
+    CommandAddressInfo args;
+
+    json_read_string(&c->inp, args.id, sizeof(args.id));
+    json_test_char(&c->inp, MARKER_EOA);
+    args.addr = (ContextAddress)json_read_uint64(&c->inp);
+    json_test_char(&c->inp, MARKER_EOA);
+    json_test_char(&c->inp, MARKER_EOM);
+
+    strlcpy(args.token, token, sizeof(args.token));
+    cache_enter(command_get_address_info_cache_client, c, &args, sizeof(args));
+}
+
 void ini_symbols_service(Protocol * proto) {
     static int ini_done = 0;
     if (!ini_done) {
@@ -999,6 +1069,7 @@ void ini_symbols_service(Protocol * proto) {
     add_command_handler(proto, SYMBOLS, "getLocationInfo", command_get_location_info);
     add_command_handler(proto, SYMBOLS, "findFrameInfo", command_find_frame_info);
     add_command_handler(proto, SYMBOLS, "getSymFileInfo", command_get_sym_file_info);
+    add_command_handler(proto, SYMBOLS, "getAddressInfo", command_get_address_info);
 }
 
 #endif /* SERVICE_Symbols */
