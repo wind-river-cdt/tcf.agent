@@ -1459,6 +1459,9 @@ static int update_step_machine_state(Context * ctx) {
                     ext->step_range_end = addr + 1;
                     break;
                 }
+                else if (errno) {
+                    return -1;
+                }
 #endif
                 free_code_area(area);
                 ctx->pending_intercept = 1;
@@ -1684,35 +1687,32 @@ static void sync_run_state(void * args) {
         ContextExtensionRC * ext = EXT(ctx);
         l = l->next;
         if (ctx->exited) continue;
-        if (!ctx->stopped) continue;
-        grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
-        if (ext->intercepted) {
+        if (ctx->pending_intercept || ext->intercepted) {
+            grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
             EXT(grp)->intercept_group = 1;
             continue;
         }
+        if (!ctx->stopped) continue;
         if (ext->step_mode == RM_RESUME || ext->step_mode == RM_REVERSE_RESUME ||
-                ext->step_mode == RM_TERMINATE || ext->step_mode == RM_DETACH) {
-            ext->step_continue_mode = ext->step_mode;
+            ext->step_mode == RM_TERMINATE || ext->step_mode == RM_DETACH) {
+                ext->step_continue_mode = ext->step_mode;
+        }
+        else if (ext->step_channel == NULL) {
+            if (update_step_machine_state(ctx) < 0) {
+                ext->step_error = get_error_report(errno);
+                cancel_step_mode(ctx);
+                ctx->pending_intercept = 1;
+                grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
+                EXT(grp)->intercept_group = 1;
+            }
+        }
+        else if (is_channel_closed(ext->step_channel)) {
+            cancel_step_mode(ctx);
         }
         else {
-            if (ext->step_channel == NULL) {
-                if (update_step_machine_state(ctx) < 0) {
-                    ext->step_error = get_error_report(errno);
-                    cancel_step_mode(ctx);
-                    ctx->pending_intercept = 1;
-                }
-            }
-            else if (is_channel_closed(ext->step_channel)) {
-                cancel_step_mode(ctx);
-            }
-            else {
-                run_ctrl_lock();
-                context_lock(ctx);
-                cache_enter(step_machine_cache_client, ext->step_channel, &ctx, sizeof(ctx));
-            }
-        }
-        if (ctx->pending_intercept) {
-            EXT(grp)->intercept_group = 1;
+            run_ctrl_lock();
+            context_lock(ctx);
+            cache_enter(step_machine_cache_client, ext->step_channel, &ctx, sizeof(ctx));
         }
     }
 
