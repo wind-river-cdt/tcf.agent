@@ -70,7 +70,7 @@ void tmp_gc(void) {
         tmp_pool_max /= 2;
         tmp_pool = (char *)loc_realloc(tmp_pool, tmp_pool_max);
     }
-    tmp_pool_pos = 0;
+    tmp_pool_pos = sizeof(LINK);
 #endif
     while (!list_is_empty(&tmp_alloc_list)) {
         LINK * l = tmp_alloc_list.next;
@@ -82,33 +82,36 @@ void tmp_gc(void) {
 
 void * tmp_alloc(size_t size) {
     void * p;
+    LINK * l;
     assert(is_dispatch_thread());
     if (!tmp_gc_posted) {
         post_event(gc_event, NULL);
         tmp_gc_posted = 1;
     }
 #if ENABLE_FastMemAlloc
-    if (tmp_pool_max == 0) {
-        assert(tmp_pool_pos == 0);
-        tmp_pool_max = POOL_SIZE / 0x10;
+    if (tmp_pool_pos + size + ALIGNMENT + sizeof(size_t *) > tmp_pool_max) {
+        if (tmp_pool != NULL) {
+            l = (LINK *)tmp_pool;
+            list_add_last(l, &tmp_alloc_list);
+            tmp_alloc_size += tmp_pool_pos;
+        }
+        tmp_pool_max = POOL_SIZE / 0x10 + size;
         tmp_pool = (char *)loc_alloc(tmp_pool_max);
+        tmp_pool_pos = sizeof(LINK);
     }
-    if (tmp_pool_pos + size + ALIGNMENT + sizeof(size_t *) <= tmp_pool_max) {
-        tmp_pool_pos += sizeof(size_t *);
-        tmp_pool_pos = (tmp_pool_pos + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
-        p = tmp_pool + tmp_pool_pos;
-        *((size_t *)p - 1) = size;
-        tmp_pool_pos += size;
-        return p;
-    }
-#endif
-    {
-        LINK * l = (LINK *)loc_alloc(sizeof(LINK) + size);
-        list_add_last(l, &tmp_alloc_list);
-        tmp_alloc_size += size + ALIGNMENT + sizeof(size_t *);
-        p = l + 1;
-    }
+    tmp_pool_pos += sizeof(size_t *);
+    tmp_pool_pos = (tmp_pool_pos + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
+    p = tmp_pool + tmp_pool_pos;
+    *((size_t *)p - 1) = size;
+    tmp_pool_pos += size;
     return p;
+#else
+    l = (LINK *)loc_alloc(sizeof(LINK) + size);
+    list_add_last(l, &tmp_alloc_list);
+    tmp_alloc_size += size + ALIGNMENT + sizeof(size_t *);
+    p = l + 1;
+    return p;
+#endif
 }
 
 void * tmp_alloc_zero(size_t size) {
@@ -120,31 +123,31 @@ void * tmp_realloc(void * ptr, size_t size) {
     assert(is_dispatch_thread());
     assert(tmp_gc_posted);
 #if ENABLE_FastMemAlloc
-    if ((char *)ptr >= tmp_pool && (char *)ptr <= tmp_pool + tmp_pool_max) {
+    {
+        void * p;
         size_t m = *((size_t *)ptr - 1);
-        if (m < size) {
+        if (m >= size) return ptr;
+        if ((char *)ptr >= tmp_pool && (char *)ptr <= tmp_pool + tmp_pool_max) {
             size_t pos = tmp_pool_pos - m;
             if (ptr == tmp_pool + pos && pos + size <= tmp_pool_max) {
                 tmp_pool_pos = pos + size;
                 *((size_t *)ptr - 1) = size;
-            }
-            else {
-                void * p = tmp_alloc(size);
-                if (m > size) m = size;
-                ptr = memcpy(p, ptr, m);
+                return ptr;
             }
         }
-        return ptr;
+        p = tmp_alloc(size);
+        if (m > size) m = size;
+        return memcpy(p, ptr, m);
     }
-#endif
+#else
     {
         LINK * l = (LINK *)ptr - 1;
         list_remove(l);
         l = (LINK *)loc_realloc(l, sizeof(LINK) + size);
         list_add_last(l, &tmp_alloc_list);
-        ptr = l + 1;
+        return l + 1;
     }
-    return ptr;
+#endif
 }
 
 char * tmp_strdup(const char * s) {
