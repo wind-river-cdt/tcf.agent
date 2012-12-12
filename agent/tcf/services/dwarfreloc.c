@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2010, 2012 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -195,7 +195,7 @@ void drl_relocate(ELF_Section * s, U8_T offset, void * buf, size_t size, ELF_Sec
         if (r->info == s->index) {
             uint8_t * p;
             uint8_t * q;
-            int ix;
+            unsigned ix;
             relocs = r;
             symbols = s->file->sections + r->link;
             if (elf_load(relocs) < 0) exception(errno);
@@ -203,11 +203,11 @@ void drl_relocate(ELF_Section * s, U8_T offset, void * buf, size_t size, ELF_Sec
             if (r->entsize == 0 || r->size % r->entsize != 0) str_exception(ERR_INV_FORMAT, "Invalid sh_entsize");
 
             if (r->reloc_num_zones == 0) {
+                U8_T prev_offs = 0;
                 unsigned max_bondaries = 2; /* default is two bondaries ... */
                 r->reloc_num_zones = 1; /* ... for one zone */
-                r->reloc_zones_bondaries = loc_alloc_zero(sizeof (unsigned) * max_bondaries);
+                r->reloc_zones_bondaries = (unsigned *)loc_alloc_zero(sizeof (unsigned) * max_bondaries);
                 r->reloc_zones_bondaries[0] = 0;  /* first zone starting index */
-                U8_T prev_offs = 0;
                 for (ix = 0; ix < r->size / r->entsize; ix++) {
                     U8_T offs;
                     uint8_t * x = (uint8_t *)r->data + ix * r->entsize;
@@ -227,7 +227,9 @@ void drl_relocate(ELF_Section * s, U8_T offset, void * buf, size_t size, ELF_Sec
                          */
                         if ((r->reloc_num_zones + 1) == max_bondaries) {
                             max_bondaries += 5;
-                            r->reloc_zones_bondaries = loc_realloc(r->reloc_zones_bondaries, sizeof (unsigned) * max_bondaries);
+                            r->reloc_zones_bondaries =
+                                (unsigned *)loc_realloc(r->reloc_zones_bondaries,
+                                sizeof (unsigned) * max_bondaries);
                         }
                         r->reloc_zones_bondaries[r->reloc_num_zones++] = ix;
                     }
