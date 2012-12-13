@@ -1661,6 +1661,7 @@ static void sync_run_state(void * args) {
     stop_all_timer_cnt = 0;
 
     /* Clear intercept group flags */
+    safe_event_pid_count = 0;
     l = context_root.next;
     while (l != &context_root) {
         Context * ctx = ctxl2ctxp(l);
@@ -1784,8 +1785,6 @@ static void run_safe_events(void * arg) {
     run_safe_events_posted--;
     if (run_safe_events_posted > 0) return;
 
-    safe_event_pid_count = 0;
-
     if (run_ctrl_lock_cnt == 0) {
         post_event(sync_run_state, NULL);
         return;
@@ -1794,6 +1793,8 @@ static void run_safe_events(void * arg) {
     if (safe_event_list == NULL) return;
     grp = safe_event_list->grp;
     context_lock(grp);
+
+    safe_event_pid_count = 0;
 
     l = context_root.next;
     while (l != &context_root) {
