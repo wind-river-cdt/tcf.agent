@@ -964,8 +964,8 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
     int err = 0;
     int i;
 
-    size = sizeof(SYSTEM_HANDLE_INFORMATION) * 16;
-    hi = (SYSTEM_HANDLE_INFORMATION *)tmp_alloc(size);
+    size = sizeof(SYSTEM_HANDLE_INFORMATION) + sizeof(struct HANDLE_INFORMATION) * 256;
+    hi = (SYSTEM_HANDLE_INFORMATION *)tmp_alloc_zero(size);
     for (;;) {
         status = QuerySystemInformationProc(SystemHandleInformation, hi, size, &size);
         if (status != STATUS_INFO_LENGTH_MISMATCH) break;
@@ -1084,9 +1084,9 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         }
         if (env_path != NULL) putenv(env_path);
     }
-    if (close(fpipes[0][0]) < 0 && !err) err = errno;
-    if (close(fpipes[1][1]) < 0 && !err) err = errno;
-    if (close(fpipes[2][1]) < 0 && !err) err = errno;
+    if (fpipes[0][0] >= 0 && close(fpipes[0][0]) < 0 && !err) err = errno;
+    if (fpipes[1][1] >= 0 && close(fpipes[1][1]) < 0 && !err) err = errno;
+    if (fpipes[2][1] >= 0 && close(fpipes[2][1]) < 0 && !err) err = errno;
     if (!err) {
         *prs = (ChildProcess *)loc_alloc_zero(sizeof(ChildProcess));
         (*prs)->pid = pid;
@@ -1099,9 +1099,9 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
         list_add_first(&(*prs)->link, &prs_list);
     }
     else {
-        close(fpipes[0][1]);
-        close(fpipes[1][0]);
-        close(fpipes[2][0]);
+        if (fpipes[0][1] >= 0) close(fpipes[0][1]);
+        if (fpipes[1][0] >= 0) close(fpipes[1][0]);
+        if (fpipes[2][0] >= 0) close(fpipes[2][0]);
     }
     if (!err) return 0;
     trace(LOG_ALWAYS, "Can't start process '%s': %s", exe, errno_to_str(err));
