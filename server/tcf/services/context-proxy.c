@@ -42,6 +42,7 @@ typedef struct MemoryCache MemoryCache;
 typedef struct StackFrameCache StackFrameCache;
 typedef struct PeerCache PeerCache;
 typedef struct RegisterProps RegisterProps;
+typedef struct RegisterCache RegisterCache;
 
 #define CTX_ID_HASH_SIZE 101
 
@@ -102,6 +103,16 @@ struct RegisterProps {
     char * id;
 };
 
+struct RegisterData {
+    uint8_t * data;
+    uint8_t * mask;
+};
+
+struct RegisterCache {
+    ErrorReport * error;
+    int valid;
+};
+
 struct MemoryCache {
     LINK link_ctx;
     ContextCache * ctx;
@@ -123,9 +134,12 @@ struct StackFrameCache {
     ContextAddress ip;
     ContextAddress rp;
     StackFrame info;
+    RegisterCache * reg_cache;
     RegisterData reg_data;
     RegisterDefinition ** reg_defs;
+    unsigned reg_pending;
     unsigned reg_cnt;
+    int reg_valid;
     ReplyHandlerInfo * pending;
     int disposed;
 };
@@ -255,6 +269,14 @@ static void free_stack_frame_cache(StackFrameCache * s) {
     if (s->pending == NULL) {
         release_error_report(s->error);
         cache_dispose(&s->cache);
+        if (s->reg_cache != NULL) {
+            unsigned i;
+            assert(s->info.is_top_frame);
+            for (i = 0; i < s->ctx->reg_max; i++) {
+                release_error_report(s->reg_cache[i].error);
+            }
+            loc_free(s->reg_cache);
+        }
         loc_free(s->reg_data.data);
         loc_free(s->reg_data.mask);
         loc_free(s->reg_defs);
@@ -921,11 +943,6 @@ static void validate_memory_cache(Channel * c, void * args, int error) {
     context_unlock(ctx);
 }
 
-int context_write_mem(Context * ctx, ContextAddress address, void * buf, size_t size) {
-    errno = EINVAL;
-    return -1;
-}
-
 int context_read_mem(Context * ctx, ContextAddress address, void * buf, size_t size) {
     ContextCache * cache = *EXT(ctx);
     MemoryCache * m = NULL;
@@ -971,12 +988,214 @@ int context_read_mem(Context * ctx, ContextAddress address, void * buf, size_t s
     return -1;
 }
 
+int context_write_mem(Context * ctx, ContextAddress address, void * buf, size_t size) {
+    assert(0);
+    errno = EINVAL;
+    return -1;
+}
+
+RegisterDefinition * get_reg_by_id(Context * ctx, unsigned id, RegisterIdScope * scope) {
+    RegisterDefinition * defs = get_reg_definitions(ctx);
+    while (defs != NULL && defs->name != NULL) {
+        switch (scope->id_type) {
+        case REGNUM_DWARF:
+            if (defs->dwarf_id == (int)id) return defs;
+            break;
+        case REGNUM_EH_FRAME:
+            if (defs->eh_frame_id == (int)id) return defs;
+            break;
+        }
+        defs++;
+    }
+    set_errno(ERR_OTHER, "Invalid register ID");
+    return NULL;
+}
+
+static void validate_top_frame_reg_values_cache(Channel * c, void * args, int error) {
+    StackFrameCache * fc = (StackFrameCache *)args;
+    RegisterDefinition * def = fc->ctx->reg_defs + fc->reg_pending;
+    RegisterCache * rc = fc->reg_cache + fc->reg_pending;
+    Context * ctx = fc->ctx->ctx;
+    Trap trap;
+
+    assert(fc->pending != NULL);
+    assert(rc->error == NULL);
+    assert(rc->valid == 0);
+    if (set_trap(&trap)) {
+        fc->pending = NULL;
+        if (!error) {
+            size_t pos = 0;
+            JsonReadBinaryState state;
+            error = read_errno(&c->inp);
+            json_read_binary_start(&state, &c->inp);
+            for (;;) {
+                int rd = json_read_binary_data(&state, fc->reg_data.data + def->offset + pos, def->size - pos);
+                if (rd == 0) break;
+                pos += rd;
+            }
+            json_read_binary_end(&state);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
+            memset(fc->reg_data.mask + def->offset, 0xff, pos);
+        }
+        clear_trap(&trap);
+    }
+    else {
+        error = trap.error;
+    }
+    rc->valid = 1;
+    rc->error = get_error_report(error);
+    cache_notify(&fc->cache);
+    if (fc->disposed) free_stack_frame_cache(fc);
+    context_unlock(ctx);
+}
+
+static void validate_mid_frame_reg_values_cache(Channel * c, void * args, int error) {
+    StackFrameCache * fc = (StackFrameCache *)args;
+    Context * ctx = fc->ctx->ctx;
+    Trap trap;
+
+    assert(fc->pending != NULL);
+    assert(fc->error == NULL);
+    assert(!fc->info.is_top_frame);
+    if (set_trap(&trap)) {
+        fc->pending = NULL;
+        if (!error) {
+            int r = 0;
+            int n = fc->reg_cnt;
+            JsonReadBinaryState state;
+            error = read_errno(&c->inp);
+            json_read_binary_start(&state, &c->inp);
+            for (r = 0; r < n; r++) {
+                RegisterDefinition * reg = fc->reg_defs[r];
+                if (reg->size > 0 && reg->dwarf_id >= 0) {
+                    size_t pos = 0;
+                    uint8_t * data = fc->reg_data.data + reg->offset;
+                    uint8_t * mask = fc->reg_data.mask + reg->offset;
+                    assert(reg->offset + reg->size <= fc->ctx->reg_size);
+                    while (pos < reg->size) {
+                        size_t rd = json_read_binary_data(&state, data + pos, reg->size - pos);
+                        assert(pos + rd <= reg->size);
+                        memset(mask + pos, ~0, rd);
+                        if (rd == 0) break;
+                        pos += rd;
+                    }
+                }
+            }
+            json_read_binary_end(&state);
+            json_test_char(&c->inp, MARKER_EOA);
+            json_test_char(&c->inp, MARKER_EOM);
+        }
+        clear_trap(&trap);
+    }
+    else {
+        error = trap.error;
+    }
+    fc->reg_valid = 1;
+    fc->error = get_error_report(error);
+    cache_notify(&fc->cache);
+    if (fc->disposed) free_stack_frame_cache(fc);
+    context_unlock(ctx);
+}
+
+int read_reg_bytes(StackFrame * frame, RegisterDefinition * reg_def, unsigned offs, unsigned size, uint8_t * buf) {
+    if (reg_def == NULL || frame == NULL) {
+        errno = ERR_INV_CONTEXT;
+        return -1;
+    }
+    else {
+        StackFrameCache * fc = (StackFrameCache *)((char *)frame - offsetof(StackFrameCache, info));
+        if (frame->is_top_frame) {
+            unsigned rn = reg_def - fc->ctx->reg_defs;
+            if (fc->reg_cache == NULL) fc->reg_cache =
+                (RegisterCache *)loc_alloc_zero(sizeof(RegisterCache) * fc->ctx->reg_max);
+            assert(rn < fc->ctx->reg_max);
+            if (!fc->reg_cache[rn].valid) {
+                Trap trap;
+                Channel * c = fc->ctx->peer->target;
+                if (!set_trap(&trap)) return -1;
+                if (fc->pending != NULL) cache_wait(&fc->cache);
+                fc->reg_pending = rn;
+                fc->pending = protocol_send_command(c, "Registers", "get", validate_top_frame_reg_values_cache, fc);
+                json_write_string(&c->out, fc->ctx->reg_props[rn].id);
+                write_stream(&c->out, 0);
+                write_stream(&c->out, MARKER_EOM);
+                context_lock(fc->ctx->ctx);
+                cache_wait(&fc->cache);
+                return -1;
+            }
+            if (fc->reg_cache[rn].error != NULL) {
+                set_error_report_errno(fc->reg_cache[rn].error);
+                return -1;
+            }
+        }
+        else if (!fc->reg_valid) {
+            Trap trap;
+            unsigned n;
+            Channel * c = fc->ctx->peer->target;
+            if (!set_trap(&trap)) return -1;
+            if (fc->pending != NULL) cache_wait(&fc->cache);
+            fc->pending = protocol_send_command(c, "Registers", "getm", validate_mid_frame_reg_values_cache, fc);
+            write_stream(&c->out, '[');
+            for (n = 0; n < fc->reg_cnt; n++) {
+                RegisterDefinition * reg = fc->reg_defs[n];
+                if (reg->size > 0 && reg->dwarf_id >= 0) {
+                    char * id = str_buf + ids_buf[n];
+                    if (n > 0) write_stream(&c->out, ',');
+                    write_stream(&c->out, '[');
+                    json_write_string(&c->out, id);
+                    write_stream(&c->out, ',');
+                    json_write_long(&c->out, 0);
+                    write_stream(&c->out, ',');
+                    json_write_long(&c->out, reg->size);
+                    write_stream(&c->out, ']');
+                }
+            }
+            write_stream(&c->out, ']');
+            write_stream(&c->out, 0);
+            write_stream(&c->out, MARKER_EOM);
+            context_lock(fc->ctx->ctx);
+            cache_wait(&fc->cache);
+            return -1;
+        }
+        else if (fc->error != NULL) {
+            set_error_report_errno(fc->error);
+            return -1;
+        }
+        {
+            size_t i;
+            uint8_t * r_addr = frame->regs->data + reg_def->offset;
+            uint8_t * m_addr = frame->regs->mask + reg_def->offset;
+            for (i = 0; i < size; i++) {
+                if (m_addr[offs + i] != 0xff) {
+                    errno = ERR_INV_CONTEXT;
+                    return -1;
+                }
+            }
+            if (offs + size > reg_def->size) {
+                errno = ERR_INV_DATA_SIZE;
+                return -1;
+            }
+            memcpy(buf, r_addr + offs, size);
+        }
+    }
+    return 0;
+}
+
+int write_reg_bytes(StackFrame * frame, RegisterDefinition * reg_def, unsigned offs, unsigned size, uint8_t * buf) {
+    assert(0);
+    errno = ERR_INV_CONTEXT;
+    return -1;
+}
+
 int context_write_reg(Context * ctx, RegisterDefinition * def, unsigned offs, unsigned size, void * buf) {
+    assert(0);
     errno = EINVAL;
     return -1;
 }
 
 int context_read_reg(Context * ctx, RegisterDefinition * def, unsigned offs, unsigned size, void * buf) {
+    assert(0);
     errno = EINVAL;
     return -1;
 }
@@ -1273,52 +1492,6 @@ RegisterDefinition * get_PC_definition(Context * ctx) {
     return cache->pc_def;
 }
 
-static void validate_reg_values_cache(Channel * c, void * args, int error) {
-    StackFrameCache * s = (StackFrameCache *)args;
-    Context * ctx = s->ctx->ctx;
-    Trap trap;
-
-    assert(s->pending != NULL);
-    assert(s->error == NULL);
-    if (set_trap(&trap)) {
-        s->pending = NULL;
-        if (!error) {
-            int r = 0;
-            int n = s->info.is_top_frame ? s->ctx->reg_max : s->reg_cnt;
-            JsonReadBinaryState state;
-            error = read_errno(&c->inp);
-            json_read_binary_start(&state, &c->inp);
-            for (r = 0; r < n; r++) {
-                RegisterDefinition * reg = s->info.is_top_frame ? s->ctx->reg_defs + r : s->reg_defs[r];
-                if (reg->size > 0 && reg->dwarf_id >= 0) {
-                    size_t pos = 0;
-                    uint8_t * data = s->reg_data.data + reg->offset;
-                    uint8_t * mask = s->reg_data.mask + reg->offset;
-                    assert(reg->offset + reg->size <= s->ctx->reg_size);
-                    while (pos < reg->size) {
-                        size_t rd = json_read_binary_data(&state, data + pos, reg->size - pos);
-                        assert(pos + rd <= reg->size);
-                        memset(mask + pos, ~0, rd);
-                        if (rd == 0) break;
-                        pos += rd;
-                    }
-                }
-            }
-            json_read_binary_end(&state);
-            json_test_char(&c->inp, MARKER_EOA);
-            json_test_char(&c->inp, MARKER_EOM);
-        }
-        clear_trap(&trap);
-    }
-    else {
-        error = trap.error;
-    }
-    s->error = get_error_report(error);
-    cache_notify(&s->cache);
-    if (s->disposed) free_stack_frame_cache(s);
-    context_unlock(ctx);
-}
-
 static void validate_reg_children_cache(Channel * c, void * args, int error) {
     StackFrameCache * s = (StackFrameCache *)args;
     Context * ctx = s->ctx->ctx;
@@ -1343,29 +1516,6 @@ static void validate_reg_children_cache(Channel * c, void * args, int error) {
                     char * id = str_buf + ids_buf[n];
                     unsigned r = get_reg_index(s->ctx, id);
                     s->reg_defs[n] = s->ctx->reg_defs + r;
-                }
-                if (!error) {
-                    s->pending = protocol_send_command(c, "Registers", "getm", validate_reg_values_cache, s);
-                    write_stream(&c->out, '[');
-                    for (n = 0; n < s->reg_cnt; n++) {
-                        RegisterDefinition * reg = s->reg_defs[n];
-                        if (reg->size > 0 && reg->dwarf_id >= 0) {
-                            char * id = str_buf + ids_buf[n];
-                            if (n > 0) write_stream(&c->out, ',');
-                            write_stream(&c->out, '[');
-                            json_write_string(&c->out, id);
-                            write_stream(&c->out, ',');
-                            json_write_long(&c->out, 0);
-                            write_stream(&c->out, ',');
-                            json_write_long(&c->out, reg->size);
-                            write_stream(&c->out, ']');
-                        }
-                    }
-                    write_stream(&c->out, ']');
-                    write_stream(&c->out, 0);
-                    write_stream(&c->out, MARKER_EOM);
-                    clear_trap(&trap);
-                    return;
                 }
             }
         }
@@ -1407,32 +1557,9 @@ static void validate_stack_frame_cache(Channel * c, void * args, int error) {
             json_test_char(&c->inp, MARKER_EOA);
             error = read_errno(&c->inp);
             json_test_char(&c->inp, MARKER_EOM);
-            if (!error && !s->disposed) {
-                if (s->info.is_top_frame) {
-                    unsigned cnt = 0;
-                    RegisterDefinition * reg = s->ctx->reg_defs;
-                    s->pending = protocol_send_command(c, "Registers", "getm", validate_reg_values_cache, s);
-                    write_stream(&c->out, '[');
-                    while (reg->name) {
-                        if (reg->size > 0 && reg->dwarf_id >= 0) {
-                            if (cnt > 0) write_stream(&c->out, ',');
-                            write_stream(&c->out, '[');
-                            json_write_string(&c->out, register2id(s->ctx->ctx, s->frame, reg));
-                            write_stream(&c->out, ',');
-                            json_write_long(&c->out, 0);
-                            write_stream(&c->out, ',');
-                            json_write_long(&c->out, reg->size);
-                            write_stream(&c->out, ']');
-                            cnt++;
-                        }
-                        reg++;
-                    }
-                    write_stream(&c->out, ']');
-                }
-                else {
-                    s->pending = protocol_send_command(c, "Registers", "getChildren", validate_reg_children_cache, s);
-                    json_write_string(&c->out, frame2id(s->ctx->ctx, s->frame));
-                }
+            if (!error && !s->disposed && !s->info.is_top_frame) {
+                s->pending = protocol_send_command(c, "Registers", "getChildren", validate_reg_children_cache, s);
+                json_write_string(&c->out, frame2id(s->ctx->ctx, s->frame));
                 write_stream(&c->out, 0);
                 write_stream(&c->out, MARKER_EOM);
                 clear_trap(&trap);
@@ -1508,7 +1635,7 @@ int get_frame_info(Context * ctx, int frame, StackFrame ** info) {
     return -1;
 }
 
-/* TODO: need a cahce for StackTrace.getChildren */
+/* TODO: need a cache for StackTrace.getChildren */
 int get_top_frame(Context * ctx) {
     set_errno(ERR_UNSUPPORTED, "get_top_frame()");
     return STACK_TOP_FRAME;
