@@ -1644,8 +1644,11 @@ static void op_deref(int mode, Value * v) {
     if (v->type_class != TYPE_CLASS_ARRAY && v->type_class != TYPE_CLASS_POINTER) {
         error(ERR_INV_EXPRESSION, "Array or pointer type expected");
     }
-    if (get_symbol_base_type(v->type, &type) < 0) {
+    if (v->type != NULL && get_symbol_base_type(v->type, &type) < 0) {
         error(errno, "Cannot retrieve symbol type");
+    }
+    if (type == NULL) {
+        error(ERR_OTHER, "Array or pointer base type is unknown");
     }
     if (v->type_class == TYPE_CLASS_POINTER) {
         if (v->sym != NULL && v->size == 0 && get_symbol_size(v->sym, &v->size) < 0) {
