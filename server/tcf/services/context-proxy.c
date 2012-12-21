@@ -51,7 +51,9 @@ struct ContextCache {
     char parent_id[256];
     char process_id[256];
     char creator_id[256];
+    char symbols_id[256];
     char * file;
+    char * name;
     Context * ctx;
     PeerCache * peer;
     LINK id_hash_link;
@@ -208,7 +210,9 @@ static ContextCache * find_context_cache(PeerCache * p, const char * id) {
 
 static void set_context_links(ContextCache * c) {
     assert(c->peer->rc_done);
-    if (c->parent_id[0]) {
+    loc_free(c->ctx->name);
+    c->ctx->name = c->name ? loc_strdup(c->name) : NULL;
+    if (c->parent_id[0] && c->ctx->parent == NULL) {
         ContextCache * h = find_context_cache(c->peer, c->parent_id);
         if (h != NULL) {
             (c->ctx->parent = h->ctx)->ref_count++;
@@ -222,12 +226,17 @@ static void set_context_links(ContextCache * c) {
         ContextCache * h = find_context_cache(c->peer, c->process_id);
         if (h != NULL) {
             c->ctx->mem = h->ctx;
+            c->ctx->mem_access = c == h ? MEM_ACCESS_INSTRUCTION | MEM_ACCESS_DATA : 0;
         }
         else {
             trace(LOG_ALWAYS, "Invalid process ID: %s", c->process_id);
         }
     }
-    if (c->creator_id[0]) {
+    else {
+        c->ctx->mem_access = 0;
+        c->ctx->mem = NULL;
+    }
+    if (c->creator_id[0] && c->ctx->creator == NULL) {
         ContextCache * h = find_context_cache(c->peer, c->creator_id);
         if (h != NULL) {
             (c->ctx->creator = h->ctx)->ref_count++;
@@ -292,6 +301,7 @@ static void free_context_cache(ContextCache * c) {
     release_error_report(c->mmap_error);
     release_error_report(c->reg_error);
     loc_free(c->file);
+    loc_free(c->name);
     context_clear_memory_map(&c->mmap);
     loc_free(c->mmap.regions);
     loc_free(c->reg_defs);
@@ -360,7 +370,9 @@ static void read_run_control_context_property(InputStream * inp, const char * na
     else if (strcmp(name, "ParentID") == 0) json_read_string(inp, ctx->parent_id, sizeof(ctx->parent_id));
     else if (strcmp(name, "ProcessID") == 0) json_read_string(inp, ctx->process_id, sizeof(ctx->process_id));
     else if (strcmp(name, "CreatorID") == 0) json_read_string(inp, ctx->creator_id, sizeof(ctx->creator_id));
+    else if (strcmp(name, "SymbolsGroup") == 0) json_read_string(inp, ctx->symbols_id, sizeof(ctx->symbols_id));
     else if (strcmp(name, "File") == 0) ctx->file = json_read_alloc_string(inp);
+    else if (strcmp(name, "Name") == 0) ctx->name = json_read_alloc_string(inp);
     else if (strcmp(name, "HasState") == 0) ctx->has_state = json_read_boolean(inp);
     else if (strcmp(name, "IsContainer") == 0) ctx->is_container = json_read_boolean(inp);
     else if (strcmp(name, "WordSize") == 0) ctx->word_size = json_read_long(inp);
@@ -421,23 +433,31 @@ static void read_context_added_item(InputStream * inp, void * args) {
 static void read_context_changed_item(InputStream * inp, void * args) {
     PeerCache * p = (PeerCache *)args;
     ContextCache * c = NULL;
-    ContextCache buf;
-    memset(&buf, 0, sizeof(buf));
-    json_read_struct(inp, read_run_control_context_property, &buf);
-    c = find_context_cache(p, buf.id);
+    ContextCache * b = (ContextCache *)loc_alloc_zero(sizeof(ContextCache));
+    json_read_struct(inp, read_run_control_context_property, b);
+    c = find_context_cache(p, b->id);
     if (c != NULL) {
-        strcpy(c->parent_id, buf.parent_id);
-        c->has_state = buf.has_state;
-        c->is_container = buf.is_container;
-        c->can_suspend = buf.can_suspend;
-        c->can_resume = buf.can_resume;
-        c->can_count = buf.can_count;
-        c->can_terminate = buf.can_terminate;
+        strcpy(c->parent_id, b->parent_id);
+        strcpy(c->process_id, b->process_id);
+        loc_free(c->file);
+        c->file = b->file;
+        b->file = NULL;
+        loc_free(c->name);
+        c->name = b->name;
+        b->name = NULL;
+        c->has_state = b->has_state;
+        c->is_container = b->is_container;
+        c->can_suspend = b->can_suspend;
+        c->can_resume = b->can_resume;
+        c->can_count = b->can_count;
+        c->can_terminate = b->can_terminate;
+        if (p->rc_done) set_context_links(c);
         send_context_changed_event(c->ctx);
     }
     else if (p->rc_done) {
-        trace(LOG_ALWAYS, "Invalid ID in 'context changed' event: %s", buf.id);
+        trace(LOG_ALWAYS, "Invalid ID in 'context changed' event: %s", b->id);
     }
+    free_context_cache(b);
 }
 
 static void read_context_removed_item(InputStream * inp, void * args) {
@@ -901,9 +921,14 @@ int context_has_state(Context * ctx) {
 }
 
 Context * context_get_group(Context * ctx, int group) {
+    ContextCache * c = *EXT(ctx);
     switch (group) {
-    case CONTEXT_GROUP_INTERCEPT:
-        return ctx;
+    case CONTEXT_GROUP_SYMBOLS:
+        if (c->symbols_id[0]) {
+            ContextCache * h = find_context_cache(c->peer, c->symbols_id);
+            if (h != NULL) return h->ctx;
+        }
+        break;
     }
     return ctx->mem;
 }
@@ -1517,6 +1542,7 @@ static void validate_reg_children_cache(Channel * c, void * args, int error) {
                     unsigned r = get_reg_index(s->ctx, id);
                     s->reg_defs[n] = s->ctx->reg_defs + r;
                 }
+                s->info.has_reg_data = s->reg_cnt > 0;
             }
         }
         clear_trap(&trap);
