@@ -113,6 +113,10 @@ typedef struct DebugState {
     int                 detach;
     /* NtContinue() changes Dr6 and Dr7, so HW breakpoints should be disabled until NtContinue() is done */
     int                 ok_to_use_hw_bp;
+    /* Array of threads pending attachment */
+    DWORD *             pending_thrs;
+    unsigned            max_pending_thrs_cnt;
+    unsigned            pending_thrs_cnt;
 } DebugState;
 
 #define DEBUG_STATE_INIT            0
@@ -582,6 +586,45 @@ static int win32_terminate(Context * ctx) {
     return 0;
 }
 
+static void add_pending_thread(DebugState * state, DWORD thread) {
+    if (state->pending_thrs_cnt >= state->max_pending_thrs_cnt) {
+        state->max_pending_thrs_cnt += 10;
+        state->pending_thrs = (DWORD *)
+        loc_realloc(state->pending_thrs, state->max_pending_thrs_cnt * sizeof(DWORD));
+    }
+    state->pending_thrs[state->pending_thrs_cnt++] = thread;
+}
+
+static void remove_pending_thread(DebugState * state, DWORD thread) {
+    unsigned i;
+    for (i = 0; i < state->pending_thrs_cnt; i++) {
+        if (state->pending_thrs[i] == thread) {
+            state->pending_thrs_cnt--;
+            for (; i < state->pending_thrs_cnt; i++) {
+                state->pending_thrs[i] = state->pending_thrs[i+1];
+            }
+            break;
+        }
+    }
+}
+
+static Context * add_thread(Context * prs, pid_t pid, DWORD thread, DebugState * state) {
+    Context * ctx;
+    ContextExtensionWin32 * ext = NULL;
+    ext = EXT(ctx = create_context(pid2id(thread, pid)));
+    ext->regs = (REG_SET *)loc_alloc_zero(sizeof(REG_SET));
+    ext->pid = thread;
+    ext->handle = OpenThread(THREAD_ALL_ACCESS, FALSE, thread);
+    ext->debug_state = state;
+    ctx->mem = prs;
+    ctx->big_endian = prs->big_endian;
+    (ctx->parent = prs)->ref_count++;
+    list_add_last(&ctx->cldl, &prs->children);
+    link_context(ctx);
+    send_context_created_event(ctx);
+    return ctx;
+}
+
 static void debug_event_handler(DebugEvent * debug_event) {
     DebugState * debug_state = debug_event->debug_state;
     DEBUG_EVENT * win32_event = &debug_event->win32_event;
@@ -636,19 +679,14 @@ static void debug_event_handler(DebugEvent * debug_event) {
     case CREATE_THREAD_DEBUG_EVENT:
         assert(prs != NULL);
         assert(ctx == NULL);
-        if (debug_state->state < DEBUG_STATE_PRS_ATTACHED) break;
+        if (debug_state->state < DEBUG_STATE_PRS_ATTACHED) {
+            if (debug_state->break_thread_id != win32_event->dwThreadId) {
+                add_pending_thread(debug_state ,win32_event->dwThreadId);
+            }
+            break;
+        }
         if (debug_state->break_thread_id == win32_event->dwThreadId) break;
-        ext = EXT(ctx = create_context(pid2id(win32_event->dwThreadId, win32_event->dwProcessId)));
-        ext->regs = (REG_SET *)loc_alloc_zero(sizeof(REG_SET));
-        ext->pid = win32_event->dwThreadId;
-        ext->handle = OpenThread(THREAD_ALL_ACCESS, FALSE, win32_event->dwThreadId);
-        ext->debug_state = debug_state;
-        ctx->mem = prs;
-        ctx->big_endian = prs->big_endian;
-        (ctx->parent = prs)->ref_count++;
-        list_add_last(&ctx->cldl, &prs->children);
-        link_context(ctx);
-        send_context_created_event(ctx);
+        ext = EXT(ctx = add_thread(prs, win32_event->dwProcessId, win32_event->dwThreadId, debug_state));
         debug_event->continue_status = event_win32_context_stopped(ctx);
         ext->debug_event = *win32_event;
         break;
@@ -677,6 +715,18 @@ static void debug_event_handler(DebugEvent * debug_event) {
             }
             debug_event->continue_status = event_win32_context_stopped(ctx);
             ext->debug_event = *win32_event;
+
+            if (debug_state->pending_thrs_cnt != 0) {
+                unsigned i;
+                for (i = 0; i < debug_state->pending_thrs_cnt; i++) {
+                    Context * thread;
+                    thread = add_thread(prs, win32_event->dwProcessId, debug_state->pending_thrs[i], debug_state);
+                    thread->pending_intercept = ctx->pending_intercept;
+                    event_win32_context_stopped(thread);
+                    EXT(thread)->debug_event = *win32_event;
+                }
+                debug_state->pending_thrs_cnt = 0;
+            }
         }
         else if (ctx == NULL || ctx->exiting) {
             debug_event->continue_status = DBG_EXCEPTION_NOT_HANDLED;
@@ -707,6 +757,7 @@ static void debug_event_handler(DebugEvent * debug_event) {
         break;
     case EXIT_THREAD_DEBUG_EVENT:
         assert(prs != NULL);
+        if (debug_state->pending_thrs_cnt) remove_pending_thread(debug_state, win32_event->dwThreadId);
         if (ctx && !ctx->exited) event_win32_context_exited(ctx, 0);
         if (debug_state->ini_thread_id == win32_event->dwThreadId) {
             debug_state->ini_thread_id = 0;
@@ -869,6 +920,7 @@ static void debugger_exit_handler(void * x) {
 
     if (prs != NULL && !prs->exited) event_win32_context_exited(prs, 0);
 
+    loc_free(debug_state->pending_thrs);
     loc_free(debug_state);
 }
 
