@@ -432,6 +432,8 @@ int mdep_set_other_regs(pid_t pid, REG_SET * data,
 
 #endif
 
+#if !ENABLE_ExternalStackcrawl
+
 #ifndef _WRS_KERNEL
 #define JMPD08      0xeb
 #define JMPD32      0xe9
@@ -719,6 +721,8 @@ int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
 
     return 0;
 }
+
+#endif  /* !ENABLE_ExternalStackcrawl */
 
 RegisterDefinition * get_PC_definition(Context * ctx) {
     static RegisterDefinition * reg_def = NULL;

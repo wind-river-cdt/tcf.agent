@@ -135,5 +135,6 @@
 #define ENABLE_ExtendedMemoryErrorReports       0
 #define ENABLE_ContextBreakpointCapabilities    0
 #define ENABLE_ExtendedBreakpointStatus         0
+#define ENABLE_ExternalStackcrawl               0
 
 #endif /* D_config */

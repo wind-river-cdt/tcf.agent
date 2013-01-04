@@ -262,4 +262,8 @@
 #  define ENABLE_ExtendedMemoryErrorReports 1
 #endif
 
+#if !defined(ENABLE_ExternalStackcrawl)
+#  define ENABLE_ExternalStackcrawl 0
+#endif
+
 #endif /* D_config */
