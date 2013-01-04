@@ -91,7 +91,7 @@ static size_t context_extension_offset = 0;
 #define link2ctx(lnk) ((Context *)((char *)(lnk) - offsetof(ContextExtensionRC, link) - context_extension_offset))
 
 typedef struct SafeEvent {
-    Context * grp;
+    Context * ctx;
     EventCallBack * done;
     void * arg;
     struct SafeEvent * next;
@@ -1791,7 +1791,7 @@ static void run_safe_events(void * arg) {
     }
 
     if (safe_event_list == NULL) return;
-    grp = safe_event_list->grp;
+    grp = context_get_group(safe_event_list->ctx, CONTEXT_GROUP_STOP);
     context_lock(grp);
 
     safe_event_pid_count = 0;
@@ -1828,7 +1828,7 @@ static void run_safe_events(void * arg) {
     while (safe_event_list) {
         Trap trap;
         SafeEvent * i = safe_event_list;
-        if (i->grp != grp) {
+        if (context_get_group(i->ctx, CONTEXT_GROUP_STOP) != grp) {
             assert(run_ctrl_lock_cnt > 0);
             if (run_safe_events_posted == 0) {
                 run_safe_events_posted++;
@@ -1843,7 +1843,8 @@ static void run_safe_events(void * arg) {
             }
             break;
         }
-        assert(is_all_stopped(i->grp));
+        assert(context_get_group(i->ctx, CONTEXT_GROUP_STOP) == grp);
+        assert(is_all_stopped(i->ctx));
         safe_event_list = i->next;
         safe_event_active = 1;
         if (set_trap(&trap)) {
@@ -1856,7 +1857,7 @@ static void run_safe_events(void * arg) {
         }
         safe_event_active = 0;
         run_ctrl_unlock();
-        context_unlock(i->grp);
+        context_unlock(i->ctx);
         loc_free(i);
     }
     context_unlock(grp);
@@ -1877,14 +1878,15 @@ static void check_safe_events(Context * ctx) {
 
 void post_safe_event(Context * ctx, EventCallBack * done, void * arg) {
     SafeEvent * i = (SafeEvent *)loc_alloc_zero(sizeof(SafeEvent));
-    Context * grp = context_get_group(ctx, CONTEXT_GROUP_STOP);
     run_ctrl_lock();
-    context_lock(grp);
+    context_lock(ctx);
     if (safe_event_list == NULL) {
         run_safe_events_posted++;
         post_event(run_safe_events, NULL);
     }
-    i->grp = grp;
+    /* Note: context stop group can change
+     * while the event is waiting in the queue */
+    i->ctx = ctx;
     i->done = done;
     i->arg = arg;
     if (safe_event_list == NULL) safe_event_list = i;
@@ -1957,17 +1959,10 @@ void rem_run_control_event_listener(RunControlEventListener * listener) {
     }
 }
 
-static void event_context_created(Context * ctx, void * client_data) {
-    assert(!ctx->exited);
-    assert(!ctx->stopped);
-    send_event_context_added(ctx);
-}
-
-static void event_context_changed(Context * ctx, void * client_data) {
+static void stop_if_safe_events(Context * ctx) {
     ContextExtensionRC * ext = EXT(ctx);
-    send_event_context_changed(ctx);
+    assert(run_ctrl_lock_cnt == 0 || !ext->safe_single_step || safe_event_list != NULL);
     if (run_ctrl_lock_cnt && !ctx->exiting && !ctx->stopped && context_has_state(ctx)) {
-        assert(!ext->safe_single_step || safe_event_list != NULL);
         if (!ext->safe_single_step) {
             context_stop(ctx);
         }
@@ -1978,7 +1973,20 @@ static void event_context_changed(Context * ctx, void * client_data) {
     }
 }
 
-static void event_context_stopped(Context * ctx, void * client_data) {
+static void event_context_created(Context * ctx, void * args) {
+    assert(!ctx->exited);
+    assert(!ctx->stopped);
+    send_event_context_added(ctx);
+    stop_if_safe_events(ctx);
+}
+
+static void event_context_changed(Context * ctx, void * args) {
+    assert(!ctx->exited);
+    send_event_context_changed(ctx);
+    stop_if_safe_events(ctx);
+}
+
+static void event_context_stopped(Context * ctx, void * args) {
     ContextExtensionRC * ext = EXT(ctx);
     assert(ctx->stopped);
     assert(!ctx->exited);
@@ -2007,27 +2015,16 @@ static void event_context_stopped(Context * ctx, void * client_data) {
     }
 }
 
-static void event_context_started(Context * ctx, void * client_data) {
+static void event_context_started(Context * ctx, void * args) {
     ContextExtensionRC * ext = EXT(ctx);
     assert(!ctx->stopped);
     assert(run_ctrl_lock_cnt == 0 || ext->safe_single_step || ctx->exiting);
     if (ext->intercepted) resume_context_tree(ctx);
     ext->intercepted_by_bp = 0;
-    if (run_ctrl_lock_cnt) {
-        assert(!ext->safe_single_step || safe_event_list != NULL);
-        if (!ctx->exiting) {
-            if (!ext->safe_single_step) {
-                context_stop(ctx);
-            }
-            if (!ext->pending_safe_event) {
-                ext->pending_safe_event = 1;
-                safe_event_pid_count++;
-            }
-        }
-    }
+    stop_if_safe_events(ctx);
 }
 
-static void event_context_exited(Context * ctx, void * client_data) {
+static void event_context_exited(Context * ctx, void * args) {
     ContextExtensionRC * ext = EXT(ctx);
     ext->safe_single_step = 0;
     cancel_step_mode(ctx);
@@ -2035,7 +2032,7 @@ static void event_context_exited(Context * ctx, void * client_data) {
     if (ext->pending_safe_event) check_safe_events(ctx);
 }
 
-static void event_context_disposed(Context * ctx, void * client_data) {
+static void event_context_disposed(Context * ctx, void * args) {
     cancel_step_mode(ctx);
 }
 
