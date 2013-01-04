@@ -2553,7 +2553,10 @@ static void safe_skip_breakpoint(void * arg) {
     ContextExtensionBP * ext = EXT(ctx);
     BreakInstruction * bi = ext->stepping_over_bp;
     int error = 0;
-
+#ifndef NDEBUG    
+    Context * mem = NULL;
+    ContextAddress mem_addr = 0;
+#endif    
     assert(bi != NULL);
     assert(bi->stepping_over_bp > 0);
     assert(find_instruction(bi->cb.ctx, 0, bi->cb.address, bi->cb.access_types, bi->cb.length) == bi);
@@ -2564,7 +2567,8 @@ static void safe_skip_breakpoint(void * arg) {
 
     assert(ctx->stopped);
     assert(!is_intercepted(ctx));
-    assert(bi->cb.address == get_regs_PC(ctx));
+    assert(context_get_canonical_addr(ctx, get_regs_PC(ctx), &mem, &mem_addr, NULL, NULL) == 0);    
+    assert(bi->cb.address == mem_addr);
 
     if (bi->planted) remove_instruction(bi);
     if (bi->planting_error) error = set_error_report_errno(bi->planting_error);
