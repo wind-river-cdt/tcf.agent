@@ -939,9 +939,7 @@ static ProcessOutput * read_process_output(ChildProcess * prs, int fd) {
 
 static int start_process_imp(Channel * c, char ** envp, const char * dir, const char * exe, char ** args,
                   ProcessStartParams * params, int * selfattach, ChildProcess ** prs) {
-    typedef struct _SYSTEM_HANDLE_INFORMATION {
-        ULONG Count;
-        struct HANDLE_INFORMATION {
+    typedef struct _HANDLE_INFORMATION {
             USHORT ProcessId;
             USHORT CreatorBackTraceIndex;
             UCHAR ObjectTypeNumber;
@@ -949,7 +947,10 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
             USHORT Handle;
             PVOID Object;
             ACCESS_MASK GrantedAccess;
-        } Handles[1];
+    } HANDLE_INFORMATION;
+    typedef struct _SYSTEM_HANDLE_INFORMATION {
+        ULONG Count;
+        HANDLE_INFORMATION Handles[1];
     } SYSTEM_HANDLE_INFORMATION;
     typedef NTSTATUS (FAR WINAPI * QuerySystemInformationTypedef)(int, PVOID, ULONG, PULONG);
     QuerySystemInformationTypedef QuerySystemInformationProc = (QuerySystemInformationTypedef)GetProcAddress(
@@ -964,7 +965,7 @@ static int start_process_imp(Channel * c, char ** envp, const char * dir, const 
     int err = 0;
     int i;
 
-    size = sizeof(SYSTEM_HANDLE_INFORMATION) + sizeof(struct HANDLE_INFORMATION) * 256;
+    size = sizeof(SYSTEM_HANDLE_INFORMATION) + sizeof(HANDLE_INFORMATION) * 256;
     hi = (SYSTEM_HANDLE_INFORMATION *)tmp_alloc_zero(size);
     for (;;) {
         status = QuerySystemInformationProc(SystemHandleInformation, hi, size, &size);
