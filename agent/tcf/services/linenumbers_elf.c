@@ -41,6 +41,10 @@
 #include <tcf/services/dwarfcache.h>
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/pathmap.h>
+#if ENABLE_LineNumbersMux
+#define LINENUMBERS_READER_PREFIX elf_reader_
+#include <tcf/services/linenumbers_mux.h>
+#endif
 
 static int is_absolute_path(const char * fnm) {
     if (fnm[0] == '/') return 1;
@@ -374,6 +378,9 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
 }
 
 void ini_line_numbers_lib(void) {
+#if ENABLE_LineNumbersMux
+    add_line_numbers_reader(&line_numbers_reader);
+#endif
 }
 
 #endif /* SERVICE_LineNumbers && !ENABLE_LineNumbersProxy && ENABLE_ELF */

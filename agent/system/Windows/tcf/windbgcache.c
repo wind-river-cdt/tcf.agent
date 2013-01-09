@@ -20,15 +20,13 @@
 
 #include <tcf/config.h>
 
-#if defined(_WIN32) && !ENABLE_ELF
-#  define ENABLE_PE_Symbols ((SERVICE_LineNumbers && !ENABLE_LineNumbersProxy) || (SERVICE_Symbols && !ENABLE_SymbolsProxy))
+#if ENABLE_PE
 #  define ENABLE_EnumerateModules (SERVICE_MemoryMap && !ENABLE_ContextProxy)
 #else
-#  define ENABLE_PE_Symbols 0
 #  define ENABLE_EnumerateModules 0
 #endif
 
-#if ENABLE_PE_Symbols || ENABLE_EnumerateModules
+#if ENABLE_PE
 
 #include <assert.h>
 #include <stdio.h>
@@ -56,7 +54,7 @@ static wchar_t * pathes[] = {
     NULL
 };
 
-#if ENABLE_PE_Symbols
+#if ENABLE_PE
 
 static void event_context_created(Context * ctx, void * client_data) {
     HANDLE handle = NULL;
@@ -219,7 +217,7 @@ static FARPROC GetProc(char * name) {
             return NULL;
         }
         CheckDLLVersion();
-#if ENABLE_PE_Symbols
+#if ENABLE_PE
         add_context_event_listener(&ctx_listener, NULL);
         add_memory_map_event_listener(&map_listener, NULL);
 #endif
@@ -229,7 +227,7 @@ static FARPROC GetProc(char * name) {
 
 #endif
 
-#if ENABLE_PE_Symbols
+#if ENABLE_PE
 
 BOOL SymInitializeW(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeProcess) {
     typedef BOOL (FAR WINAPI * ProcType)(HANDLE, PCWSTR, BOOL);

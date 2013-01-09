@@ -776,6 +776,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\linenumbers_mux.c"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\linenumbers_proxy.c"
 				>
 			</File>
@@ -861,6 +865,10 @@
 			</File>
 			<File
 				RelativePath=".\tcf\services\symbols_elf.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\symbols_mux.c"
 				>
 			</File>
 			<File

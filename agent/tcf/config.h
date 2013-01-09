@@ -188,6 +188,18 @@
 #  define ENABLE_ELF            (TARGET_UNIX && (SERVICE_Symbols || SERVICE_LineNumbers))
 #endif
 
+#if !defined(ENABLE_PE)
+#  define ENABLE_PE             (TARGET_MSVC && (SERVICE_Symbols || SERVICE_LineNumbers))
+#endif
+
+#if !defined(ENABLE_SymbolsMux)
+#define ENABLE_SymbolsMux   0
+#endif
+
+#if !defined(ENABLE_LineNumbersMux)
+#define ENABLE_LineNumbersMux   0
+#endif
+
 #if !defined(ENABLE_SSL)
 #  if defined(PATH_OpenSSL)
 #    define ENABLE_SSL          1

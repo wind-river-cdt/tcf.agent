@@ -21,7 +21,7 @@
 
 #include <tcf/config.h>
 
-#if SERVICE_LineNumbers && !ENABLE_LineNumbersProxy && defined(_WIN32) && !ENABLE_ELF
+#if SERVICE_LineNumbers && !ENABLE_LineNumbersProxy && ENABLE_PE
 
 #include <errno.h>
 #include <assert.h>
@@ -35,6 +35,10 @@
 #include <tcf/services/linenumbers.h>
 #include <system/Windows/tcf/windbgcache.h>
 #include <system/Windows/tcf/context-win32.h>
+#if ENABLE_LineNumbersMux
+#define LINENUMBERS_READER_PREFIX win32_reader_
+#include <tcf/services/linenumbers_mux.h>
+#endif
 
 static int compare_path(Channel * chnl, Context * ctx, const char * file, const char * name) {
     int i, j;
@@ -238,6 +242,9 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
 
 void ini_line_numbers_lib(void) {
     SymSetOptions(SymGetOptions() | SYMOPT_LOAD_LINES | SYMOPT_DEFERRED_LOADS);
+#if ENABLE_LineNumbersMux
+    add_line_numbers_reader(&line_numbers_reader);
+#endif
 }
 
 #endif /* SERVICE_LineNumbers && !ENABLE_LineNumbersProxy && defined(_MSC_VER) && !ENABLE_ELF */

@@ -297,6 +297,12 @@
     <ClCompile Include="machine\i686\tcf\cpudefs-mdep.c">
       <Filter>machine\i686</Filter>
     </ClCompile>
+    <ClCompile Include="tcf\services\linenumbers_mux.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\symbols_mux.c">
+      <Filter>services</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="tcf\framework\asyncreq.h">

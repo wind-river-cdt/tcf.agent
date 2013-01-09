@@ -286,6 +286,7 @@
     <ClCompile Include="tcf\services\funccall.c" />
     <ClCompile Include="tcf\services\linenumbers.c" />
     <ClCompile Include="tcf\services\linenumbers_elf.c" />
+    <ClCompile Include="tcf\services\linenumbers_mux.c" />
     <ClCompile Include="tcf\services\linenumbers_proxy.c" />
     <ClCompile Include="tcf\services\linenumbers_win32.c" />
     <ClCompile Include="tcf\services\memorymap.c" />
@@ -299,6 +300,7 @@
     <ClCompile Include="tcf\services\symbols.c" />
     <ClCompile Include="tcf\services\symbols_common.c" />
     <ClCompile Include="tcf\services\symbols_elf.c" />
+    <ClCompile Include="tcf\services\symbols_mux.c" />
     <ClCompile Include="tcf\services\symbols_proxy.c" />
     <ClCompile Include="tcf\services\symbols_win32.c" />
     <ClCompile Include="tcf\services\sysmon.c" />

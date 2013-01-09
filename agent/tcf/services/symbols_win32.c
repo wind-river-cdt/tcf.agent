@@ -19,7 +19,7 @@
 
 #include <tcf/config.h>
 
-#if SERVICE_Symbols && !ENABLE_SymbolsProxy && defined(_WIN32) && !ENABLE_ELF
+#if SERVICE_Symbols && !ENABLE_SymbolsProxy && ENABLE_PE
 
 #include <errno.h>
 #include <assert.h>
@@ -38,6 +38,10 @@
 #include <system/Windows/tcf/context-win32.h>
 #if ENABLE_RCBP_TEST
 #  include <tcf/main/test.h>
+#endif
+#if ENABLE_SymbolsMux
+#define SYM_READER_PREFIX win32_reader_
+#include <tcf/services/symbols_mux.h>
 #endif
 
 #ifndef MAX_SYM_NAME
@@ -87,6 +91,9 @@ static const TypeInfo basic_type_info[] = {
 #define BST_UNSIGNED 11
 
 struct Symbol {
+#if ENABLE_SymbolsMux
+    SymbolReader * reader;
+#endif
     unsigned magic;
     Context * ctx;
     unsigned frame;
@@ -128,6 +135,9 @@ static LocationCommands * location_cmds = NULL;
 
 static Symbol * alloc_symbol(void) {
     Symbol * s = (Symbol *)tmp_alloc_zero(sizeof(Symbol));
+#if ENABLE_SymbolsMux
+    s->reader = &symbol_reader;
+#endif
     s->magic = SYMBOL_MAGIC;
     return s;
 }
@@ -1315,6 +1325,21 @@ static void event_module_unloaded(Context * ctx, void * client_data) {
     }
 }
 
+#if ENABLE_SymbolsMux
+static int reader_is_valid(Context * ctx, ContextAddress addr) {
+    IMAGEHLP_MODULE64 info;
+    HANDLE process = get_context_handle(context_get_group(ctx, CONTEXT_GROUP_PROCESS));
+    memset(&info, 0, sizeof(info));
+    info.SizeOfStruct = sizeof(info);
+    if (!SymGetModuleInfo64(process, addr, &info)) {
+        return 0;
+    }
+    errno = 0;
+    if (info.LoadedImageName[0] == 0) return 0;
+    return 1;
+}
+#endif
+
 void ini_symbols_lib(void) {
     static ContextEventListener ctx_listener = {
         NULL,
@@ -1329,6 +1354,9 @@ void ini_symbols_lib(void) {
     add_memory_map_event_listener(&map_listener, NULL);
     SymSetOptions(SymGetOptions() | SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
     context_extension_offset = context_extension(sizeof(ContextExtensionWinSym));
+#if ENABLE_SymbolsMux
+    add_symbols_reader(&symbol_reader);
+#endif
 }
 
 

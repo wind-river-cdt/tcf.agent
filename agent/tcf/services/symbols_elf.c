@@ -51,8 +51,15 @@
 #if ENABLE_RCBP_TEST
 #  include <tcf/main/test.h>
 #endif
+#if ENABLE_SymbolsMux
+#define SYM_READER_PREFIX elf_reader_
+#include <tcf/services/symbols_mux.h>
+#endif
 
 struct Symbol {
+#if ENABLE_SymbolsMux
+    SymbolReader * reader;
+#endif
     unsigned magic;
     ObjectInfo * obj;
     ObjectInfo * var; /* 'this' object if the symbol represents implicit 'this' reference */
@@ -166,6 +173,9 @@ ObjectInfo * get_symbol_object(Symbol * sym) {
 
 static Symbol * alloc_symbol(void) {
     Symbol * s = (Symbol *)tmp_alloc_zero(sizeof(Symbol));
+#if ENABLE_SymbolsMux
+    s->reader = &symbol_reader;
+#endif
     s->magic = SYMBOL_MAGIC;
     return s;
 }
@@ -1891,7 +1901,20 @@ void ini_symbols_lib(void) {
 #if SERVICE_MemoryMap
     add_memory_map_event_listener(&map_listener, NULL);
 #endif
+#if ENABLE_SymbolsMux
+    add_symbols_reader(&symbol_reader);
+#endif
 }
+
+#if ENABLE_SymbolsMux
+static int reader_is_valid(Context * ctx, ContextAddress addr) {
+    ELF_File * file = NULL;
+    ELF_Section * sec = NULL;
+    elf_map_to_link_time_address(ctx, addr, &file, &sec);
+    if (file != NULL) return 1;
+    return 0;
+}
+#endif
 
 /*************** Functions for retrieving symbol properties ***************************************/
 
