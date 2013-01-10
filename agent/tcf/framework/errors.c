@@ -306,30 +306,45 @@ static const char * format_error_report_message(const char * fmt, char ** params
     return msg_buf;
 }
 
+static const char * posix_strerror(int err) {
+    int n = errno;
+    const char * msg = NULL;
+    static char buf[32];
+    errno = 0;
+    msg = strerror(err);
+    if (errno != 0 || msg == NULL || msg[0] == 0) {
+        snprintf(buf, sizeof(buf), "Error 0x%08x", err);
+        msg = buf;
+    }
+    errno = n;
+    return buf;
+}
+
 const char * errno_to_str(int err) {
     switch (err) {
-    case ERR_ALREADY_STOPPED:   return "Already stopped";
-    case ERR_ALREADY_EXITED:    return "Already exited";
-    case ERR_ALREADY_RUNNING:   return "Already running";
+    case ERR_OTHER:             return "Unspecified failure";
     case ERR_JSON_SYNTAX:       return "JSON syntax error";
     case ERR_PROTOCOL:          return "Protocol format error";
-    case ERR_INV_CONTEXT:       return "Invalid context";
-    case ERR_INV_ADDRESS:       return "Invalid address";
-    case ERR_EOF:               return "End of file";
-    case ERR_BASE64:            return "Invalid BASE64 string";
-    case ERR_INV_EXPRESSION:    return "Invalid expression";
-    case ERR_SYM_NOT_FOUND:     return "Symbol not found";
-    case ERR_ALREADY_ATTACHED:  return "Already attached";
     case ERR_BUFFER_OVERFLOW:   return "Buffer overflow";
-    case ERR_INV_FORMAT:        return "Format is not supported";
-    case ERR_INV_NUMBER:        return "Invalid number";
-    case ERR_IS_RUNNING:        return "Execution context is running";
-    case ERR_INV_DWARF:         return "Error reading DWARF data";
-    case ERR_UNSUPPORTED:       return "Unsupported command";
     case ERR_CHANNEL_CLOSED:    return "Channel closed";
     case ERR_COMMAND_CANCELLED: return "Command canceled";
     case ERR_UNKNOWN_PEER:      return "Unknown peer";
+    case ERR_BASE64:            return "Invalid BASE64 string";
+    case ERR_EOF:               return "End of file";
+    case ERR_ALREADY_STOPPED:   return "Already stopped";
+    case ERR_ALREADY_EXITED:    return "Already exited";
+    case ERR_ALREADY_RUNNING:   return "Already running";
+    case ERR_ALREADY_ATTACHED:  return "Already attached";
+    case ERR_IS_RUNNING:        return "Execution context is running";
     case ERR_INV_DATA_SIZE:     return "Invalid data size";
+    case ERR_INV_CONTEXT:       return "Invalid context";
+    case ERR_INV_ADDRESS:       return "Invalid address";
+    case ERR_INV_EXPRESSION:    return "Invalid expression";
+    case ERR_INV_FORMAT:        return "Format is not supported";
+    case ERR_INV_NUMBER:        return "Invalid number";
+    case ERR_INV_DWARF:         return "Error reading DWARF data";
+    case ERR_SYM_NOT_FOUND:     return "Symbol not found";
+    case ERR_UNSUPPORTED:       return "Unsupported command";
     case ERR_INV_DATA_TYPE:     return "Invalid data type";
     case ERR_INV_COMMAND:       return "Command is not recognized";
     case ERR_INV_TRANSPORT:     return "Invalid transport name";
@@ -367,12 +382,11 @@ const char * errno_to_str(int err) {
         }
 #endif
 #ifdef __SYMBIAN32__
-        if (err < 0) {
-            return system_strerror(err);
-        }
+        if (err < 0) return system_strerror(err);
 #endif
-        return strerror(err);
+        break;
     }
+    return posix_strerror(err);
 }
 
 int set_errno(int no, const char * msg) {

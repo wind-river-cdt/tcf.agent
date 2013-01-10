@@ -912,7 +912,7 @@ static ChannelTCP * create_channel(int sock, int en_ssl, int server, int unix_do
     if (pipe(c->pipefd) == -1) {
         int err = errno;
         loc_free(c);
-        trace(LOG_ALWAYS, "Cannot create channel pipe : %s", strerror(err));
+        trace(LOG_ALWAYS, "Cannot create channel pipe : %s", errno_to_str(err));
         errno = err;
         return NULL;
     }

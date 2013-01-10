@@ -292,7 +292,7 @@ void ibuf_read_done(InputBuf * ibuf, size_t len) {
 #if ENABLE_InputQueue
     if (!ibuf->eof && ibuf_free_size(ibuf) == 0 && ibuf->buf_size < 0x1000000) {
         /* Not running on a target - increase size of input buffer
-           to accommodate very larges messages, up to 16MB */
+           to accommodate very large messages, up to 16MB */
         unsigned char * tmp = (unsigned char *)loc_alloc(ibuf->buf_size * 2);
         size_t size = ibuf->buf + ibuf->buf_size - ibuf->stream->cur;
         size_t scnt = ibuf->stream->end - ibuf->stream->cur;
