@@ -91,6 +91,10 @@
 #  define ENABLE_ELF            1
 #endif
 
+#if !defined(ENABLE_PE)
+#  define ENABLE_PE             0
+#endif
+
 #if !defined(ENABLE_SSL)
 #  if defined(__linux__)
 #    define ENABLE_SSL          1
