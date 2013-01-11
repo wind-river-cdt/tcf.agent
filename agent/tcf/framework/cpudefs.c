@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -491,7 +491,12 @@ void read_location_pieces(Context * ctx, StackFrame * frame,
             else {
                 rbf = pbf = (uint8_t *)tmp_alloc(piece->reg->size);
             }
-            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            if (frame == NULL) {
+                if (context_read_reg(ctx, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            }
+            else {
+                if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            }
             if (!piece->reg->big_endian != !big_endian) swap_bytes(rbf, piece->reg->size);
         }
         else if (piece->value) {
@@ -540,7 +545,12 @@ void write_location_pieces(Context * ctx, StackFrame * frame,
             else {
                 rbf = pbf = (uint8_t *)tmp_alloc(piece->reg->size);
             }
-            if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            if (frame == NULL) {
+                if (context_read_reg(ctx, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            }
+            else {
+                if (read_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            }
             if (!piece->reg->big_endian != !big_endian) swap_bytes(rbf, piece->reg->size);
         }
         else if (piece->value) {
@@ -564,7 +574,12 @@ void write_location_pieces(Context * ctx, StackFrame * frame,
         }
         if (piece->reg) {
             if (!piece->reg->big_endian != !big_endian) swap_bytes(rbf, piece->reg->size);
-            if (write_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            if (frame == NULL) {
+                if (context_write_reg(ctx, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            }
+            else {
+                if (write_reg_bytes(frame, piece->reg, 0, piece->reg->size, rbf) < 0) exception(errno);
+            }
         }
         else if (piece->value) {
             assert(0);

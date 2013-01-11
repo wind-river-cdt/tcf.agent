@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -742,12 +742,47 @@ static void reg2value(int mode, Context * ctx, int frame, RegisterDefinition * d
     set_value(v, NULL, def->size, def->big_endian);
     v->type_class = def->fp_value ? TYPE_CLASS_REAL : TYPE_CLASS_CARDINAL;
     v->reg = def;
-    v->loc = (LocationExpressionState *)loc_alloc_zero(sizeof(LocationExpressionState));
+    v->loc = (LocationExpressionState *)tmp_alloc_zero(sizeof(LocationExpressionState));
     v->loc->ctx = ctx;
-    v->loc->pieces = (LocationPiece *)loc_alloc_zero(sizeof(LocationPiece));
-    v->loc->pieces_cnt = v->loc->pieces_max = 1;
-    v->loc->pieces->reg = def;
-    v->loc->pieces->size = def->size;
+    if (def->size == 0 && def->bits != NULL) {
+        unsigned bit_cnt = 0;
+        int * bits = def->bits;
+        while (bits[bit_cnt] >= 0) bit_cnt++;
+        for (;;) {
+            unsigned i = 0;
+            def = def->parent;
+            if (def->bits != NULL) {
+                /* The parent is also a bitfield */
+                int * pbits = (int *)tmp_alloc_zero(sizeof(int) * (bit_cnt + 1));
+                while (i < bit_cnt) {
+                    pbits[i] = def->bits[bits[i]];
+                    i++;
+                }
+                pbits[i] = -1;
+                bits = pbits;
+            }
+            else {
+                v->loc->pieces = (LocationPiece *)tmp_alloc_zero(sizeof(LocationPiece) * bit_cnt);
+                v->loc->pieces_cnt = v->loc->pieces_max = bit_cnt;
+                while (i < bit_cnt) {
+                    v->loc->pieces[i].reg = def;
+                    v->loc->pieces[i].bit_offs = bits[i];
+                    v->loc->pieces[i].bit_size = 1;
+                    i++;
+                }
+                v->size = def->size;
+                v->value = tmp_alloc(v->size);
+                break;
+            }
+        }
+    }
+    else {
+        v->loc->pieces = (LocationPiece *)tmp_alloc_zero(sizeof(LocationPiece));
+        v->loc->pieces_cnt = v->loc->pieces_max = 1;
+        v->loc->pieces->reg = def;
+        v->loc->pieces->size = def->size;
+    }
+    assert(v->size == def->size);
     if (def->size > 0 && mode == MODE_NORMAL) {
         if (ctx->exited) {
             exception(ERR_ALREADY_EXITED);
@@ -767,6 +802,21 @@ static void reg2value(int mode, Context * ctx, int frame, RegisterDefinition * d
             if (get_frame_info(ctx, frame, &info) < 0) exception(errno);
             if (read_reg_bytes(info, def, 0, def->size, (uint8_t *)v->value) < 0) exception(errno);
             v->loc->stack_frame = info;
+        }
+        if (def != v->reg) {
+            unsigned i;
+            uint8_t * value = (uint8_t *)v->value;
+            v->size = (v->loc->pieces_cnt + 7) / 8;
+            v->value = tmp_alloc_zero(v->size);
+            for (i = 0; i < v->loc->pieces_cnt; i++) {
+                LocationPiece * p = v->loc->pieces + i;
+                unsigned bit = p->bit_offs;
+                assert(p->reg == def);
+                assert(p->bit_size == 1);
+                assert(p->bit_offs / 8 < def->size);
+                if ((value[bit / 8] & (1 << (bit % 8))) == 0) continue;
+                ((uint8_t *)v->value)[i / 8] |= (1 << (i % 8));
+            }
         }
     }
 }
@@ -1922,9 +1972,9 @@ static void op_addr(int mode, Value * v) {
         v->constant = 1;
         if (ctx != expression_context) {
             /* The address is in another address space */
-            v->loc = (LocationExpressionState *)loc_alloc_zero(sizeof(LocationExpressionState));
+            v->loc = (LocationExpressionState *)tmp_alloc_zero(sizeof(LocationExpressionState));
             v->loc->ctx = ctx;
-            v->loc->pieces = (LocationPiece *)loc_alloc_zero(sizeof(LocationPiece));
+            v->loc->pieces = (LocationPiece *)tmp_alloc_zero(sizeof(LocationPiece));
             v->loc->pieces_cnt = v->loc->pieces_max = 1;
             v->loc->pieces->value = v->value;
             v->loc->pieces->size = (size_t)v->size;
