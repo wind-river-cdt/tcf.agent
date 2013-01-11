@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -38,7 +38,7 @@
 
 #define REG_OFFSET(name) offsetof(REG_SET, name)
 
-RegisterDefinition regs_def[] = {
+static RegisterDefinition regs_def[] = {
 #if defined(_WIN32) && defined(__i386__)
 #   define REG_SP Esp
 #   define REG_BP Ebp
@@ -394,6 +394,8 @@ RegisterDefinition regs_def[] = {
 };
 
 RegisterDefinition * regs_index = NULL;
+static unsigned regs_cnt = 0;
+static unsigned regs_max = 0;
 
 unsigned char BREAK_INST[] = { 0xcc };
 
@@ -742,66 +744,102 @@ RegisterDefinition * get_PC_definition(Context * ctx) {
     return reg_def;
 }
 
+static void ini_main_regs(void) {
+    RegisterDefinition * def = regs_def;
+    while (def->name != NULL) {
+        RegisterDefinition * reg = regs_index + regs_cnt++;
+        assert(regs_cnt < regs_max);
+        *reg = *def; /* keep references to regs_def array (name, role), as it is a static array */
+        if (def->parent != NULL) reg->parent = regs_index + (def->parent - regs_def);
+        def++;
+    }
+}
+
 static void ini_xmm_regs(void) {
     static int sub_xmm_sizes[] = {8, 16, 32, 64, -1};
     char sub_xmm_name[256];
-    int ix = 0, max_sub_xmm = 0, xmm_ix = 0, sub_xmm_sizes_ix = 0;
-    RegisterDefinition * cur_reg_def = NULL;
+    int ix = 0, xmm_ix = 0, sub_xmm_sizes_ix = 0;
 
     /* seek xmm0 definition */
-    regs_index = regs_def;
     while (regs_index[xmm_ix].name != NULL && (strcmp(regs_index[xmm_ix].name, "xmm0") != 0)) xmm_ix++;
     if (regs_index[xmm_ix].name == NULL) return;
 
-    /* allocate a new register definition array */
-    for (ix = 0; sub_xmm_sizes[ix] != -1; ix++) max_sub_xmm += XMM_SIZE / sub_xmm_sizes[ix] + 1;
-    regs_index = (RegisterDefinition *)loc_alloc_zero(sizeof(regs_def) + max_sub_xmm * XMM_REGS * sizeof(RegisterDefinition));
-
-    for (ix = 0; regs_def[ix].name != NULL; ix++) {
-        regs_index[ix] = regs_def[ix]; /* keep references to regs_def array (name, role), as it is a static array */
-        if (regs_def[ix].parent != NULL) regs_index[ix].parent = regs_index + (regs_def[ix].parent - regs_def);
-    }
-
     /* add the xmm sub-registers combinations */
-    cur_reg_def = regs_index + ix;
     for (ix = 0; ix < XMM_REGS; ix++) {
         for (sub_xmm_sizes_ix = 0; sub_xmm_sizes[sub_xmm_sizes_ix] != -1; sub_xmm_sizes_ix++) {
             int sub_xmm_ix = 0;
             int nb_sub_xmm = XMM_SIZE / sub_xmm_sizes[sub_xmm_sizes_ix];
+            RegisterDefinition * def = regs_index + regs_cnt++;
             sprintf(sub_xmm_name, "w%d", sub_xmm_sizes[sub_xmm_sizes_ix]);
-            cur_reg_def->name = loc_strdup(sub_xmm_name);
-            cur_reg_def->dwarf_id = -1;
-            cur_reg_def->eh_frame_id = -1;
-            cur_reg_def->no_read = 1;
-            cur_reg_def->no_write = 1;
-            cur_reg_def->parent = regs_index + xmm_ix;
-            cur_reg_def++;
+            assert(regs_cnt < regs_max);
+            def->name = loc_strdup(sub_xmm_name);
+            def->dwarf_id = -1;
+            def->eh_frame_id = -1;
+            def->no_read = 1;
+            def->no_write = 1;
+            def->parent = regs_index + xmm_ix;
             for (sub_xmm_ix = 0; sub_xmm_ix < nb_sub_xmm; sub_xmm_ix++) {
+                def = regs_index + regs_cnt++;
                 sprintf(sub_xmm_name, "f%d", sub_xmm_ix);
-                cur_reg_def->name = loc_strdup(sub_xmm_name);
-                cur_reg_def->size = sub_xmm_sizes[sub_xmm_sizes_ix] / 8;
-                cur_reg_def->offset = regs_index[xmm_ix].offset + sub_xmm_ix * cur_reg_def->size;
-                cur_reg_def->dwarf_id = -1;
-                cur_reg_def->eh_frame_id = -1;
-                cur_reg_def->big_endian = regs_index[xmm_ix].big_endian;
-                cur_reg_def->fp_value = regs_index[xmm_ix].fp_value;
-                cur_reg_def->no_read = regs_index[xmm_ix].no_read;
-                cur_reg_def->no_write = regs_index[xmm_ix].no_write;
-                cur_reg_def->read_once = regs_index[xmm_ix].read_once;
-                cur_reg_def->write_once = regs_index[xmm_ix].write_once;
-                cur_reg_def->side_effects = regs_index[xmm_ix].side_effects;
-                cur_reg_def->volatile_value = regs_index[xmm_ix].volatile_value;
-                cur_reg_def->left_to_right = regs_index[xmm_ix].left_to_right;
-                cur_reg_def->first_bit = regs_index[xmm_ix].first_bit;
-                cur_reg_def->parent = cur_reg_def - sub_xmm_ix - 1;
-                cur_reg_def++;
+                assert(regs_cnt < regs_max);
+                def->name = loc_strdup(sub_xmm_name);
+                def->size = sub_xmm_sizes[sub_xmm_sizes_ix] / 8;
+                def->offset = regs_index[xmm_ix].offset + sub_xmm_ix * def->size;
+                def->dwarf_id = -1;
+                def->eh_frame_id = -1;
+                def->big_endian = regs_index[xmm_ix].big_endian;
+                def->fp_value = regs_index[xmm_ix].fp_value;
+                def->no_read = regs_index[xmm_ix].no_read;
+                def->no_write = regs_index[xmm_ix].no_write;
+                def->read_once = regs_index[xmm_ix].read_once;
+                def->write_once = regs_index[xmm_ix].write_once;
+                def->side_effects = regs_index[xmm_ix].side_effects;
+                def->volatile_value = regs_index[xmm_ix].volatile_value;
+                def->left_to_right = regs_index[xmm_ix].left_to_right;
+                def->first_bit = regs_index[xmm_ix].first_bit;
+                def->parent = def - sub_xmm_ix - 1;
             }
         }
         xmm_ix++;
     }
-    assert((unsigned)((char *)cur_reg_def - (char *)regs_index) ==
-        sizeof(regs_def) + (max_sub_xmm * XMM_REGS - 1) * sizeof(RegisterDefinition));
-    assert(cur_reg_def->name == NULL);
+}
+
+static void add_bit_field(RegisterDefinition * parent,
+        unsigned pos, unsigned len, const char * name, const char * desc) {
+    unsigned i = 0;
+    RegisterDefinition * def = regs_index + regs_cnt++;
+    assert(regs_cnt < regs_max);
+    def->name = name;
+    def->dwarf_id = -1;
+    def->eh_frame_id = -1;
+    def->bits = (int *)loc_alloc_zero(sizeof(int) * (len + 1));
+    def->parent = parent;
+    def->description = desc;
+    while (i < len) def->bits[i++] = pos++;
+    def->bits[i++] = -1;
+}
+
+static void ini_eflags_bits(void) {
+    RegisterDefinition * eflags = regs_index;
+    while (eflags->name != NULL && strcmp(eflags->name, "eflags") != 0) eflags++;
+    if (eflags->name == NULL) return;
+    add_bit_field(eflags,  0, 1, "cf", "Carry Flag");
+    add_bit_field(eflags,  2, 1, "pf", "Parity Flag");
+    add_bit_field(eflags,  4, 1, "af", "Auxilary Carry Flag");
+    add_bit_field(eflags,  6, 1, "zf", "Zero Flag");
+    add_bit_field(eflags,  7, 1, "sf", "Sign Flag");
+    add_bit_field(eflags,  8, 1, "tf", "Trap Flag");
+    add_bit_field(eflags,  9, 1, "if", "Interrupt Enable Flag");
+    add_bit_field(eflags, 10, 1, "df", "Direction Flag");
+    add_bit_field(eflags, 11, 1, "of", "Overflow Flag");
+    add_bit_field(eflags, 12, 2, "iopl", "I/O Privilege Level");
+    add_bit_field(eflags, 14, 1, "nt", "Nested Task");
+    add_bit_field(eflags, 16, 1, "rf", "Resume Flag");
+    add_bit_field(eflags, 17, 1, "vm", "Virtual 8086 Mode");
+    add_bit_field(eflags, 18, 1, "ac", "Alignment Check");
+    add_bit_field(eflags, 19, 1, "vif", "Virtual Interrupt Flag");
+    add_bit_field(eflags, 20, 1, "vip", "Virtual Interrupt Pending");
+    add_bit_field(eflags, 21, 1, "id", "ID Flag");
 }
 
 #if ENABLE_HardwareBreakpoints
@@ -1078,7 +1116,12 @@ int cpu_bp_on_suspend(Context * ctx, int * triggered) {
 #endif /* ENABLE_HardwareBreakpoints */
 
 void ini_cpudefs_mdep(void) {
-    ini_xmm_regs ();
+    regs_cnt = 0;
+    regs_max = 800;
+    regs_index = (RegisterDefinition *)loc_alloc_zero(sizeof(RegisterDefinition) * regs_max);
+    ini_main_regs();
+    ini_eflags_bits();
+    ini_xmm_regs();
 #if ENABLE_HardwareBreakpoints
     context_extension_offset = context_extension(sizeof(ContextExtensionX86));
 #endif
