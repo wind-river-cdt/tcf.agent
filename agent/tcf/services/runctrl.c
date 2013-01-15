@@ -1706,6 +1706,10 @@ static void sync_run_state(void * args) {
                 grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
                 EXT(grp)->intercept_group = 1;
             }
+            else if (ctx->pending_intercept) {
+                grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
+                EXT(grp)->intercept_group = 1;
+            }
         }
         else if (is_channel_closed(ext->step_channel)) {
             cancel_step_mode(ctx);
