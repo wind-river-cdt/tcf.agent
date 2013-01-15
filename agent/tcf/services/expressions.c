@@ -47,6 +47,7 @@
 #include <tcf/services/memoryservice.h>
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/registers.h>
+#include <tcf/services/dprintf.h>
 #include <tcf/services/expressions.h>
 #include <tcf/main/test.h>
 
@@ -737,6 +738,11 @@ static void next_sy(void) {
     }
 }
 
+static void expression(int mode, Value * v);
+#if SERVICE_DPrintf
+static void printf_expression(int mode, Value * v);
+#endif
+
 static void reg2value(int mode, Context * ctx, int frame, RegisterDefinition * def, Value * v) {
     memset(v, 0, sizeof(Value));
     set_value(v, NULL, def->size, def->big_endian);
@@ -996,6 +1002,12 @@ static int identifier(int mode, Value * scope, char * name, SYM_FLAGS flags, Val
         if (expression_context == NULL) {
             exception(ERR_INV_CONTEXT);
         }
+#if SERVICE_DPrintf
+        if (strcmp(name, "$printf") == 0) {
+            printf_expression(mode, v);
+            return SYM_CLASS_VALUE;
+        }
+#endif
         if (name[0] == '$') {
             Context * ctx = expression_context;
             for (;;) {
@@ -1534,8 +1546,6 @@ static double to_double(int mode, Value * v) {
 static int to_boolean(int mode, Value * v) {
     return to_int(mode, v) != 0;
 }
-
-static void expression(int mode, Value * v);
 
 static void qualified_name_expression(int mode, Value * scope, Value * v) {
     if (qualified_name(mode, scope, 0, v) != SYM_CLASS_TYPE) return;
@@ -3045,6 +3055,42 @@ static void expression(int mode, Value * v) {
     /* TODO: assignments in expressions */
     conditional_expression(mode, v);
 }
+
+#if SERVICE_DPrintf
+static void printf_expression(int mode, Value * v) {
+    Value * args = NULL;
+    unsigned args_cnt = 0;
+    unsigned args_max = 0;
+
+    if (text_sy != '(') error(ERR_INV_EXPRESSION, "'(' expected");
+    next_sy();
+    if (text_sy != ')') {
+        for (;;) {
+            if (args_cnt == args_max) {
+                args_max += 32;
+                args = (Value *)tmp_realloc(args, sizeof(Value) * args_max);
+            }
+            expression(mode, args + args_cnt++);
+            if (text_sy != ',') break;
+            next_sy();
+        }
+    }
+    if (text_sy != ')') error(ERR_INV_EXPRESSION, "')' expected");
+    next_sy();
+    if (args_cnt == 0) {
+        error(ERR_INV_EXPRESSION, "$printf mush have at least one argument");
+    }
+    if (args[0].type_class != TYPE_CLASS_ARRAY) {
+        error(ERR_INV_EXPRESSION, "$printf first argument must be a string");
+    }
+    if (mode == MODE_NORMAL) {
+        unsigned i;
+        for (i = 0; i < args_cnt; i++) load_value(args + i);
+        dprintf_expression((char *)args[0].value, args + 1, args_cnt - 1);
+    }
+    set_value(v, NULL, 0, big_endian);
+}
+#endif
 
 static int evaluate_script(int mode, char * s, int load, Value * v) {
     Trap trap;

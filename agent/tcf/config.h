@@ -112,6 +112,9 @@
 #if !defined(SERVICE_Terminals)
 #define SERVICE_Terminals       (TARGET_UNIX || TARGET_WINDOWS)
 #endif
+#if !defined(SERVICE_DPrintf)
+#define SERVICE_DPrintf         (SERVICE_Expressions && SERVICE_Streams)
+#endif
 
 #if !defined(ENABLE_Plugins)
 #  if TARGET_UNIX && defined(PATH_Plugins)

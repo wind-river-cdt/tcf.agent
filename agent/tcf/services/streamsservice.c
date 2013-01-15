@@ -572,7 +572,7 @@ void virtual_stream_delete(VirtualStream * stream) {
     post_event(delete_stream, stream);
 }
 
-int virtual_stream_subscribe (Channel * c, const char * type) {
+int virtual_stream_subscribe(Channel * c, const char * type) {
     LINK * l;
     int err = 0;
 
@@ -612,7 +612,7 @@ static void command_subscribe(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-int virtual_stream_unsubscribe (Channel * c, const char * type) {
+int virtual_stream_unsubscribe(Channel * c, const char * type) {
     LINK * l;
     int err = 0;
     Subscription * s = NULL;
@@ -648,7 +648,7 @@ static void command_unsubscribe(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-int virtual_stream_read (Channel * c, char * token, char * id, size_t size) {
+int virtual_stream_read(Channel * c, char * token, char * id, size_t size) {
     int err = 0;
     StreamClient * client= find_client(id, c);
 
@@ -688,7 +688,7 @@ static void command_read(char * token, Channel * c) {
     json_test_char(&c->inp, MARKER_EOA);
     json_test_char(&c->inp, MARKER_EOM);
 
-    if (virtual_stream_read (c, token, id, size) < 0) err = errno;
+    if (virtual_stream_read(c, token, id, size) < 0) err = errno;
 
     if (err != 0) {
         /*
@@ -708,7 +708,7 @@ static void command_read(char * token, Channel * c) {
     }
 }
 
-int virtual_stream_write (Channel * c, char * token, char * id, size_t size, InputStream * inp) {
+int virtual_stream_write(Channel * c, char * token, char * id, size_t size, InputStream * inp) {
     char * data = NULL;
     int err = 0;
     long offs = 0;
@@ -798,7 +798,7 @@ static void command_write(char * token, Channel * c) {
     }
 }
 
-int virtual_stream_eos (Channel * c, char * token, char * id) {
+int virtual_stream_eos(Channel * c, char * token, char * id) {
     size_t done = 0;
     WriteRequest * r = NULL;
     int err = 0;
@@ -850,7 +850,7 @@ static void command_eos(char * token, Channel * c) {
     }
 }
 
-int virtual_stream_connect (Channel * c, char * token, char * id) {
+int virtual_stream_connect(Channel * c, char * token, char * id) {
     int err = 0;
 
     if (find_client(id, c) == NULL) {
@@ -870,7 +870,7 @@ static void command_connect(char * token, Channel * c) {
     json_test_char(&c->inp, MARKER_EOA);
     json_test_char(&c->inp, MARKER_EOM);
 
-    if (virtual_stream_connect (c, token, id) < 0) err = errno;
+    if (virtual_stream_connect(c, token, id) < 0) err = errno;
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);
@@ -878,7 +878,7 @@ static void command_connect(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
-int virtual_stream_disconnect (Channel * c, char * token, char * id) {
+int virtual_stream_disconnect(Channel * c, char * token, char * id) {
     int err = 0;
     StreamClient * client = find_client(id, c);
 
@@ -896,7 +896,7 @@ static void command_disconnect(char * token, Channel * c) {
     json_test_char(&c->inp, MARKER_EOA);
     json_test_char(&c->inp, MARKER_EOM);
 
-    if (virtual_stream_disconnect (c, token, id) < 0) err = errno;
+    if (virtual_stream_disconnect(c, token, id) < 0) err = errno;
 
     write_stringz(&c->out, "R");
     write_stringz(&c->out, token);

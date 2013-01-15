@@ -40,6 +40,7 @@
 #include <tcf/services/pathmap.h>
 #include <tcf/services/tcf_elf.h>
 #include <tcf/services/terminals.h>
+#include <tcf/services/dprintf.h>
 #include <tcf/main/services.h>
 
 #include <tcf/main/services-ext.h>
@@ -99,6 +100,9 @@ void ini_services(Protocol * proto, TCFBroadcastGroup * bcg) {
 #endif
 #if SERVICE_Terminals
     ini_terminals_service(proto);
+#endif
+#if SERVICE_DPrintf
+    ini_dprintf_service(proto);
 #endif
 #if ENABLE_DebugContext
     ini_contexts();

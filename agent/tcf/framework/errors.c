@@ -415,16 +415,16 @@ int set_errno(int no, const char * msg) {
 }
 
 int set_fmt_errno(int no, const char * fmt, ...) {
-    va_list vaList;
+    va_list ap;
     char * buf = NULL;
     size_t len = 100;
     int err, n;
 
     while (1) {
         buf = (char *)loc_realloc(buf, len);
-        va_start(vaList, fmt);
-        n = vsnprintf(buf, len, fmt, vaList);
-        va_end(vaList);
+        va_start(ap, fmt);
+        n = vsnprintf(buf, len, fmt, ap);
+        va_end(ap);
         if (n < 0) {
             if (len > 0x1000) break;
             len *= 2;

@@ -43,13 +43,13 @@ extern int virtual_stream_add_data(VirtualStream * stream, char * buf, size_t bu
 extern int virtual_stream_get_data(VirtualStream * stream, char * buf, size_t buf_size, size_t * data_size, int * eos);
 extern int virtual_stream_is_empty(VirtualStream * stream);
 
-extern int virtual_stream_eos (Channel * c, char * token, char * id);
-extern int virtual_stream_write (Channel * c, char * token, char * id, size_t size, InputStream * inp);
-extern int virtual_stream_read (Channel * c, char * token, char * id, size_t size);
-extern int virtual_stream_unsubscribe (Channel * c, const char * type);
-extern int virtual_stream_subscribe (Channel * c, const char * type);
-extern int virtual_stream_connect (Channel * c, char * token, char * id);
-extern int virtual_stream_disconnect (Channel * c, char * token, char * id);
+extern int virtual_stream_eos(Channel * c, char * token, char * id);
+extern int virtual_stream_write(Channel * c, char * token, char * id, size_t size, InputStream * inp);
+extern int virtual_stream_read(Channel * c, char * token, char * id, size_t size);
+extern int virtual_stream_unsubscribe(Channel * c, const char * type);
+extern int virtual_stream_subscribe(Channel * c, const char * type);
+extern int virtual_stream_connect(Channel * c, char * token, char * id);
+extern int virtual_stream_disconnect(Channel * c, char * token, char * id);
 
 /*
  * Initialize streams service.

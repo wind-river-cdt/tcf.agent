@@ -47,6 +47,7 @@
 #define SERVICE_Registers       0
 #define SERVICE_SysMonitor      0
 #define SERVICE_Expressions     0
+#define SERVICE_DPrintf         0
 #if !defined(SERVICE_Streams)
 #define SERVICE_Streams         0
 #endif

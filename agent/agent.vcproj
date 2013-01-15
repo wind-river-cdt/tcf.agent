@@ -668,6 +668,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\dprintf.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\dprintf.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\dwarf.h"
 				>
 			</File>
