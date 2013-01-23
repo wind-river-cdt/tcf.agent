@@ -353,7 +353,8 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
         if (fnm[k] == 0) {
             /* perfect match */
             buf = tmp_strdup(r->dst);
-        } else {
+        }
+        else {
             const size_t dst_len = strlen(r->dst);
             const char last_dest_char = dst_len == 0 ? 0 : r->dst[dst_len - 1];
             if (!is_separator(fnm[k])) {
@@ -365,10 +366,11 @@ static char * map_file_name(Context * ctx, PathMap * m, char * fnm, int mode) {
                 }
                 /* re-add initial path separator */
                 --k;
-            } else if (is_separator(last_dest_char))
+            }
+            else if (is_separator(last_dest_char)) {
                 /* strip extra path separator */
                 ++k;
-
+            }
             buf = tmp_strdup2(r->dst, fnm + k);
         }
 
@@ -486,39 +488,64 @@ static void read_rule_attrs(InputStream * inp, const char * name, void * args) {
     *list = &attr->next;
 }
 
+typedef struct {
+    Channel * channel;
+    PathMap * map;
+    unsigned cnt;
+    int diff;
+} ReadRuleState;
+
 static void read_rule(InputStream * inp, void * args) {
-    PathMap * m = (PathMap *)args;
+    ReadRuleState * s = (ReadRuleState *)args;
+    PathMap * m = s->map;
     PathMapRule * r;
     PathMapRuleAttribute * attrs = NULL;
     PathMapRuleAttribute ** attr_list = &attrs;
 
+    if (m == NULL) {
+        m = s->map = (PathMap *)loc_alloc_zero(sizeof(PathMap));
+        m->channel = s->channel;
+        list_add_first(&m->maps, &maps);
+    }
 
-    if (m->rules_cnt >= m->rules_max) {
+    if (s->cnt >= m->rules_max) {
         m->rules_max = m->rules_max ? m->rules_max * 2 : 8;
         m->rules = (PathMapRule *)loc_realloc(m->rules, m->rules_max * sizeof(*m->rules));
     }
 
-    r = m->rules + m->rules_cnt;
-    memset(r, 0, sizeof(*r));
-    if (json_read_struct(inp, read_rule_attrs, &attr_list)) m->rules_cnt++;
-    update_rule(r, attrs);
+    r = m->rules + s->cnt++;
+    if (s->cnt > m->rules_cnt) {
+        memset(r, 0, sizeof(*r));
+        m->rules_cnt++;
+        s->diff = 1;
+    }
+    assert(s->cnt <= m->rules_cnt);
+    assert(s->cnt <= m->rules_max);
+    json_read_struct(inp, read_rule_attrs, &attr_list);
+    if (update_rule(r, attrs)) s->diff = 1;
 }
 
 void set_path_map(Channel * c, InputStream * inp) {
-    PathMap * m = find_map(c);
+    ReadRuleState s;
 
-    if (m == NULL) {
-        m = (PathMap *)loc_alloc_zero(sizeof(PathMap));
-        m->channel = c;
-        list_add_first(&m->maps, &maps);
-    }
-    else {
+    memset(&s, 0, sizeof(s));
+    s.channel = c;
+    s.map = find_map(c);
+
+    json_read_array(inp, read_rule, &s);
+    if (s.map != NULL && s.map->rules_cnt > s.cnt) {
         unsigned i;
-        for (i = 0; i < m->rules_cnt; i++) free_rule(m->rules + i);
-        m->rules_cnt = 0;
+        for (i = s.cnt; i < s.map->rules_cnt; i++) free_rule(s.map->rules + i);
+        s.map->rules_cnt = s.cnt;
+        if (s.cnt == 0) {
+            list_remove(&s.map->maps);
+            loc_free(s.map->rules);
+            loc_free(s.map);
+            s.map = NULL;
+        }
+        s.diff = 1;
     }
-    json_read_array(inp, read_rule, m);
-    path_map_event_mapping_changed(c);
+    if (s.diff) path_map_event_mapping_changed(c);
 }
 
 static void command_get(char * token, Channel * c) {
