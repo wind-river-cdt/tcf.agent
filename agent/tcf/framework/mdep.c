@@ -579,6 +579,9 @@ const char * get_os_name(void) {
         case 1:
             if (info.wProductType == VER_NT_WORKSTATION) return "Windows 7";
             return "Windows Server 2008 R2";
+        case 2:
+            if (info.wProductType == VER_NT_WORKSTATION) return "Windows 8";
+            return "Windows Server 2012";
         }
     }
     snprintf(str, sizeof(str), "Windows %d.%d", (int)info.dwMajorVersion, (int)info.dwMinorVersion);
