@@ -41,13 +41,17 @@
 #include <tcf/services/dwarfcache.h>
 #include <tcf/services/pathmap.h>
 
-#if defined(_WRS_KERNEL)
+#if defined(USE_MMAP)
+#elif defined(_WRS_KERNEL)
+#  define USE_MMAP 0
 #elif defined(_MSC_VER)
-#  define USE_MMAP
+/* Memoy mapped files appear broken on Windows 8 */
+#  define USE_MMAP 0
 #elif defined(_WIN32)
+#  define USE_MMAP 0
 #else
 #  include <sys/mman.h>
-#  define USE_MMAP
+#  define USE_MMAP 1
 #endif
 
 #define MIN_FILE_AGE 3
@@ -103,7 +107,7 @@ static void elf_dispose(ELF_File * file) {
     if (file->sections != NULL) {
         for (n = 0; n < file->section_cnt; n++) {
             ELF_Section * s = file->sections + n;
-#if !defined(USE_MMAP)
+#if !USE_MMAP
             loc_free(s->data);
 #elif defined(_WIN32)
             if (s->mmap_addr == NULL) loc_free(s->data);
@@ -201,8 +205,7 @@ static void elf_cleanup_event(void * arg) {
         file = files;
         while (file != NULL) {
             struct stat st;
-            if (file->fd >= 0 && !file->mtime_changed &&
-                    fstat(file->fd, &st) == 0 && file->mtime != st.st_mtime) {
+            if (!file->mtime_changed && stat(file->name, &st) == 0 && file->mtime != st.st_mtime) {
                 file->mtime_changed = 1;
             }
             file = file->next;
@@ -236,6 +239,9 @@ static void elf_cleanup_event(void * arg) {
             else files = file;
         }
         else {
+#if !USE_MMAP
+            if (file->fd >= 0 && close(file->fd) >= 0) file->fd = -1;
+#endif
             prev = file;
             file = file->next;
         }
@@ -305,7 +311,7 @@ static ELF_File * find_open_file_by_name(const char * name) {
     ELF_File * prev = NULL;
     ELF_File * file = files;
     while (file != NULL) {
-        if (file_name_equ(file, name)) {
+        if (!file->mtime_changed && file_name_equ(file, name)) {
             if (prev != NULL) {
                 prev->next = file->next;
                 file->next = files;
@@ -455,6 +461,16 @@ static int is_debug_info_file(ELF_File * file) {
 
 static void create_symbol_names_hash(ELF_Section * tbl);
 
+static void reopen_file(ELF_File * file) {
+    if (file->fd >= 0) return;
+    if (file->error != NULL) return;
+    if ((file->fd = open(file->name, O_RDONLY | O_BINARY, 0)) < 0) {
+        int error = errno;
+        trace(LOG_ELF, "Error re-opening ELF file: %d %s", error, errno_to_str(error));
+        file->error = get_error_report(error);
+    }
+}
+
 static ELF_File * create_elf_cache(const char * file_name) {
     struct stat st;
     int error = 0;
@@ -463,7 +479,10 @@ static ELF_File * create_elf_cache(const char * file_name) {
     char * real_name = NULL;
 
     file = find_open_file_by_name(file_name);
-    if (file != NULL) return file;
+    if (file != NULL) {
+        reopen_file(file);
+        return file;
+    }
 
     if (stat(file_name, &st) < 0) {
         error = errno;
@@ -477,6 +496,7 @@ static ELF_File * create_elf_cache(const char * file_name) {
         file = find_open_file_by_inode(st.st_dev, st.st_ino, st.st_mtime);
         if (file != NULL) {
             add_file_name(file, file_name);
+            reopen_file(file);
             return file;
         }
     }
@@ -841,7 +861,7 @@ int elf_load(ELF_Section * s) {
         }
     }
 
-#ifdef USE_MMAP
+#if USE_MMAP
 #ifdef _WIN32
     if (s->size >= 0x100000) {
         ELF_File * file = s->file;
@@ -1769,7 +1789,7 @@ void elf_invalidate(void) {
     while (file != NULL) {
         ELF_File * next = file->next;
         struct stat st;
-        if (file->fd < 0 ||
+        if (file->mtime_changed ||
                 stat(file->name, &st) < 0 ||
                 file->size != st.st_size ||
                 file->mtime != st.st_mtime ||
