@@ -1438,7 +1438,8 @@ static void evaluate_condition(void * x) {
             if (bp->condition != NULL) {
                 Value v;
                 int b = 0;
-                if (evaluate_expression(ctx, STACK_TOP_FRAME, 0, bp->condition, 1, &v) < 0 || value_to_boolean(&v, &b) < 0) {
+                if (evaluate_expression(ctx, STACK_TOP_FRAME, 0, bp->condition, 1, &v) < 0 ||
+                        (v.size > 0 && value_to_boolean(&v, &b) < 0)) {
                     switch (get_error_code(errno)) {
                     case ERR_CACHE_MISS:
                     case ERR_CHANNEL_CLOSED:
