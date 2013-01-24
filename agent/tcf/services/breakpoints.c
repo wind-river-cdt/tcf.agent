@@ -126,8 +126,9 @@ struct BreakInstruction {
     int ref_cnt;
     uint8_t no_addr;
     uint8_t virtual_addr;
-    uint8_t valid;
+    uint8_t valid;       /* 1 if 'refs' array is valid */
     uint8_t planted;
+    uint8_t dirty;       /* the instruction is planted, but planting data is obsolete */
     uint8_t unsupported; /* context_plant_breakpoint() returned ERR_UNSUPPORTED */
     BreakInstruction * ph_addr_bi;
 };
@@ -265,6 +266,7 @@ static void plant_instruction(BreakInstruction * bi) {
 
     assert(!bi->stepping_over_bp);
     assert(!bi->planted);
+    assert(!bi->dirty);
     assert(!bi->cb.ctx->exited);
     assert(!bi->cb.ctx->exiting);
     assert(bi->valid || bi->virtual_addr);
@@ -310,24 +312,26 @@ static void plant_instruction(BreakInstruction * bi) {
     bi->planted = bi->planting_error == NULL;
 }
 
-static void remove_instruction(BreakInstruction * bi) {
+static int remove_instruction(BreakInstruction * bi) {
     assert(bi->planted);
     assert(bi->planting_error == NULL);
     assert(bi->address_error == NULL);
     assert(is_all_stopped(bi->cb.ctx));
     if (bi->saved_size) {
         if (!bi->cb.ctx->exited) {
+            int r = 0;
             planting_instruction = 1;
-            if (context_write_mem(bi->cb.ctx, bi->cb.address, bi->saved_code, bi->saved_size) < 0) {
-                bi->planting_error = get_error_report(errno);
-            }
+            r = context_write_mem(bi->cb.ctx, bi->cb.address, bi->saved_code, bi->saved_size);
             planting_instruction = 0;
+            if (r < 0) return -1;
         }
     }
-    else if (context_unplant_breakpoint(&bi->cb) < 0) {
-        bi->planting_error = get_error_report(errno);
+    else {
+        if (context_unplant_breakpoint(&bi->cb) < 0) return -1;
     }
     bi->planted = 0;
+    bi->dirty = 0;
+    return 0;
 }
 
 #ifndef NDEBUG
@@ -411,7 +415,6 @@ static void flush_instructions(void) {
     LINK * l = instructions.next;
     while (l != &instructions) {
         int i = 0;
-        int replant = 0;
         BreakInstruction * bi = link_all2bi(l);
         l = l->next;
         if (bi->valid) continue;
@@ -423,20 +426,22 @@ static void flush_instructions(void) {
                 EXT(ref->ctx)->instruction_cnt--;
                 context_unlock(ref->ctx);
                 memmove(ref, ref + 1, sizeof(InstructionRef) * (bi->ref_cnt - i - 1));
+                if (bi->planted) bi->dirty = 1;
                 bi->ref_cnt--;
-                replant = 1;
             }
             else {
-                if (ref->bp->attrs_changed) replant = 1;
+                if (ref->bp->attrs_changed && bi->planted) bi->dirty = 1;
                 i++;
             }
         }
         bi->valid = 1;
         if (!bi->stepping_over_bp) {
             if (bi->ref_cnt == 0) {
-                if (bi->planted) {
-                    remove_instruction(bi);
-                    if (bi->saved_size == 0 && bi->virtual_addr) {
+                int hw = bi->planted && bi->saved_size == 0 && bi->virtual_addr;
+                if (bi->planted) remove_instruction(bi);
+                if (!bi->planted) {
+                    assert(!bi->dirty);
+                    if (hw) {
                         /* If hardware breakpoint is removed, it can free hardware resources.
                          * We have to try to replant other breakpoints in the context.
                          * Note: bi->cb.ctx cannot be used to replant non-virtual breakpoint,
@@ -447,14 +452,13 @@ static void flush_instructions(void) {
                         req->location = 1;
                         post_evaluation_request(req);
                     }
+                    free_instruction(bi);
                 }
-                free_instruction(bi);
             }
             else if (!bi->planted) {
                 plant_instruction(bi);
             }
-            else if (replant) {
-                remove_instruction(bi);
+            else if (bi->dirty && remove_instruction(bi) == 0) {
                 plant_instruction(bi);
             }
         }
@@ -539,14 +543,18 @@ void clone_breakpoints_on_process_fork(Context * parent, Context * child) {
     }
 }
 
-void unplant_breakpoints(Context * ctx) {
+int unplant_breakpoints(Context * ctx) {
+    int error = 0;
     LINK * l = instructions.next;
     while (l != &instructions) {
         int i;
         BreakInstruction * bi = link_all2bi(l);
         l = l->next;
         if (bi->cb.ctx != ctx) continue;
-        if (bi->planted) remove_instruction(bi);
+        if (bi->planted && remove_instruction(bi) < 0) {
+            error = errno;
+            continue;
+        }
         for (i = 0; i < bi->ref_cnt; i++) {
             BreakpointInfo * bp = bi->refs[i].bp;
             Context * bx = bi->refs[i].ctx;
@@ -559,6 +567,11 @@ void unplant_breakpoints(Context * ctx) {
         bi->ref_cnt = 0;
         free_instruction(bi);
     }
+    if (error) {
+        errno = error;
+        return -1;
+    }
+    return 0;
 }
 
 int check_breakpoints_on_memory_read(Context * ctx, ContextAddress address, void * p, size_t size) {
@@ -2571,8 +2584,7 @@ static void safe_skip_breakpoint(void * arg) {
     assert(context_get_canonical_addr(ctx, get_regs_PC(ctx), &mem, &mem_addr, NULL, NULL) == 0);
     assert(bi->cb.address == mem_addr);
 
-    if (bi->planted) remove_instruction(bi);
-    if (bi->planting_error) error = set_error_report_errno(bi->planting_error);
+    if (bi->planted && remove_instruction(bi) < 0) error = errno;
     if (error == 0 && safe_context_single_step(ctx) < 0) error = errno;
     if (error) {
         error = set_errno(error, "Cannot step over breakpoint");

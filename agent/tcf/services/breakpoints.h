@@ -175,8 +175,12 @@ extern int is_breakpoint_address(Context * ctx, ContextAddress address);
 /* Clone all planted breakpoints when a process forks */
 extern void clone_breakpoints_on_process_fork(Context * parent, Context * child);
 
-/* Unplant all breakpoints in a process (e.g. before detaching) */
-extern void unplant_breakpoints(Context * ctx);
+/*
+ * Unplant all breakpoints in a process (e.g. before detaching).
+ * Return -1 and set errno if cannot remove some of the breakpoints.
+ * Return 0 on success.
+ */
+extern int unplant_breakpoints(Context * ctx);
 
 /*
  * Check if memory data buffer contains planted break instructions and remove them.
