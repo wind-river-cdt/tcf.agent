@@ -1718,6 +1718,10 @@ static void sync_run_state(void * args) {
             run_ctrl_lock();
             context_lock(ctx);
             cache_enter(step_machine_cache_client, ext->step_channel, &ctx, sizeof(ctx));
+            if (ctx->pending_intercept) {
+                grp = context_get_group(ctx, CONTEXT_GROUP_INTERCEPT);
+                EXT(grp)->intercept_group = 1;
+            }
         }
     }
 
