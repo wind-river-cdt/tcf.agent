@@ -777,7 +777,7 @@ static void reg2value(int mode, Context * ctx, int frame, RegisterDefinition * d
                     i++;
                 }
                 v->size = def->size;
-                v->value = tmp_alloc(v->size);
+                v->value = tmp_alloc((size_t)v->size);
                 break;
             }
         }
@@ -813,7 +813,7 @@ static void reg2value(int mode, Context * ctx, int frame, RegisterDefinition * d
             unsigned i;
             uint8_t * value = (uint8_t *)v->value;
             v->size = (v->loc->pieces_cnt + 7) / 8;
-            v->value = tmp_alloc_zero(v->size);
+            v->value = tmp_alloc_zero((size_t)v->size);
             for (i = 0; i < v->loc->pieces_cnt; i++) {
                 LocationPiece * p = v->loc->pieces + i;
                 unsigned bit = p->bit_offs;
