@@ -953,6 +953,7 @@ ELF_File * elf_open_memory_region_file(MemoryRegion * r, int * error) {
     if (file->error == NULL) {
         if (r->dev != 0 && file->dev != r->dev) return NULL;
         if (r->ino != 0 && file->ino != r->ino) return NULL;
+        reopen_file(file);
         return file;
     }
     if (error != NULL && *error == 0) {

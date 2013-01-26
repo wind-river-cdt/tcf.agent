@@ -109,9 +109,13 @@ static Context * expression_context = NULL;
 static int expression_frame = STACK_NO_FRAME;
 static ContextAddress expression_addr = 0;
 static int expression_has_func_call = 0;
+static int expression_has_dprintf = 0;
 
 #ifndef ENABLE_FuncCallInjection
 #  define ENABLE_FuncCallInjection (ENABLE_Symbols && SERVICE_RunControl && SERVICE_Breakpoints && ENABLE_DebugContext)
+#endif
+#ifndef ENABLE_ExpressionSerialization
+#  define ENABLE_ExpressionSerialization ENABLE_SymbolsProxy
 #endif
 
 #if ENABLE_FuncCallInjection
@@ -3062,6 +3066,7 @@ static void printf_expression(int mode, Value * v) {
     unsigned args_cnt = 0;
     unsigned args_max = 0;
 
+    expression_has_dprintf = 1;
     if (text_sy != '(') error(ERR_INV_EXPRESSION, "'(' expected");
     next_sy();
     if (text_sy != ')') {
@@ -3096,6 +3101,7 @@ static int evaluate_script(int mode, char * s, int load, Value * v) {
     Trap trap;
 
     expression_has_func_call = 0;
+    expression_has_dprintf = 0;
     if (set_trap(&trap)) {
         if (s == NULL || *s == 0) str_exception(ERR_INV_EXPRESSION, "Empty expression");
         text = s;
@@ -3218,6 +3224,7 @@ typedef struct Expression {
     char * script;
     int can_assign;
     int has_func_call;
+    int has_dprintf;
     ContextAddress size;
     int type_class;
     char type[256];
@@ -3231,12 +3238,65 @@ typedef struct Expression {
 static LINK expressions = TCF_LIST_INIT(expressions);
 static LINK id2exp[ID2EXP_HASH_SIZE];
 
-#define MAX_SYM_NAME 1024
-
 static const char * EXPRESSIONS = "Expressions";
 static unsigned expr_id_cnt = 0;
 
 #define expression_hash(id) ((unsigned)atoi(id + 4) % ID2EXP_HASH_SIZE)
+
+#if ENABLE_ExpressionSerialization
+
+typedef struct PendingCommand {
+    LINK link;
+    CacheClient * client;
+    Channel * channel;
+    char args[sizeof(CommandAssignArgs)];
+    size_t args_size;
+} PendingCommand;
+
+#define link_cmds2cmd(A) ((PendingCommand *)((char *)(A) - offsetof(PendingCommand, link)))
+
+static PendingCommand * pending_cmd = NULL;
+static LINK cmd_queue;
+
+static void command_start(CacheClient * client, Channel * channel, void * args, size_t args_size) {
+    PendingCommand * cmd = (PendingCommand *)loc_alloc_zero(sizeof(PendingCommand));
+    assert(args_size <= sizeof(cmd->args));
+    channel_lock(cmd->channel = channel);
+    memcpy(cmd->args, args, args_size);
+    cmd->args_size = args_size;
+    cmd->client = client;
+    list_add_last(&cmd->link, &cmd_queue);
+    if (cmd_queue.next == &cmd->link) {
+        assert(pending_cmd == NULL);
+        pending_cmd = cmd;
+        cache_enter(cmd->client, cmd->channel, cmd->args, cmd->args_size);
+    }
+}
+
+static void command_start_next(void * args) {
+    PendingCommand * cmd = (PendingCommand *)args;
+    pending_cmd = cmd = link_cmds2cmd(cmd_queue.next);
+    cache_enter(cmd->client, cmd->channel, cmd->args, cmd->args_size);
+}
+
+static void command_done(void) {
+    PendingCommand * cmd = pending_cmd;
+    pending_cmd = NULL;
+    assert(cmd != NULL);
+    assert(&cmd->link == cmd_queue.next);
+    channel_unlock(cmd->channel);
+    list_remove(cmd_queue.next);
+    loc_free(cmd);
+    if (list_is_empty(&cmd_queue)) return;
+    post_event(command_start_next, cmd);
+}
+
+#else
+
+#define command_start(client, channel, args, args_size) cache_enter(client, channel, args, args_size)
+#define command_done() 0
+
+#endif
 
 static Expression * find_expression(char * id) {
     if (id[0] == 'E' && id[1] == 'X' && id[2] == 'P' && id[3] == 'R') {
@@ -3559,6 +3619,7 @@ static void command_create_cache_client(void * x) {
         if (!err) {
             e->can_assign = value.remote || (value.loc != NULL && value.loc->pieces_cnt > 0);
             e->has_func_call = expression_has_func_call;
+            e->has_dprintf = expression_has_dprintf;
             e->type_class = value.type_class;
             e->size = value.size;
 #if ENABLE_Symbols
@@ -3604,7 +3665,7 @@ static void command_create(char * token, Channel * c) {
 }
 
 static void command_evaluate_cache_client(void * x) {
-    CommandCreateArgs * args = (CommandCreateArgs *)x;
+    CommandArgs * args = (CommandArgs *)x;
     Channel * c = cache_channel();
     Context * ctx = NULL;
     int frame = STACK_NO_FRAME;
@@ -3758,6 +3819,7 @@ static void command_evaluate_cache_client(void * x) {
         write_stream(&c->out, 0);
     }
     write_stream(&c->out, MARKER_EOM);
+    command_done();
 }
 
 static void command_evaluate(char * token, Channel * c) {
@@ -3768,7 +3830,7 @@ static void command_evaluate(char * token, Channel * c) {
     json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
-    cache_enter(command_evaluate_cache_client, c, &args, sizeof(args));
+    command_start(command_evaluate_cache_client, c, &args, sizeof(args));
 }
 
 static void command_assign_cache_client(void * x) {
@@ -3835,6 +3897,7 @@ static void command_assign_cache_client(void * x) {
     write_errno(&c->out, err);
     write_stream(&c->out, MARKER_EOM);
     loc_free(args->value_buf);
+    command_done();
 }
 
 static void command_assign(char * token, Channel * c) {
@@ -3847,7 +3910,7 @@ static void command_assign(char * token, Channel * c) {
     json_test_char(&c->inp, MARKER_EOM);
 
     strlcpy(args.token, token, sizeof(args.token));
-    cache_enter(command_assign_cache_client, c, &args, sizeof(args));
+    command_start(command_assign_cache_client, c, &args, sizeof(args));
 }
 
 static void command_dispose(char * token, Channel * c) {
@@ -3918,6 +3981,9 @@ void ini_expressions_service(Protocol * proto) {
 #if ENABLE_FuncCallInjection
     static RunControlEventListener rc_listener = { context_intercepted, NULL };
     add_run_control_event_listener(&rc_listener, NULL);
+#endif
+#if ENABLE_ExpressionSerialization
+    list_init(&cmd_queue);
 #endif
     for (i = 0; i < ID2EXP_HASH_SIZE; i++) list_init(id2exp + i);
     add_channel_close_listener(on_channel_close);
