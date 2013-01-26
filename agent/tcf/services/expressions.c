@@ -3294,7 +3294,7 @@ static void command_done(void) {
 #else
 
 #define command_start(client, channel, args, args_size) cache_enter(client, channel, args, args_size)
-#define command_done() 0
+#define command_done()
 
 #endif
 
