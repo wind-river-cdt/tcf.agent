@@ -281,17 +281,23 @@ static void plant_instruction(BreakInstruction * bi) {
 
     if (bi->unsupported && is_software_break_instruction(bi)) {
         uint8_t * break_inst = get_break_instruction(bi->cb.ctx, &bi->saved_size);
-        assert(sizeof(bi->saved_code) >= bi->saved_size);
-        assert(!bi->virtual_addr);
-        error = 0;
-        planting_instruction = 1;
-        if (context_read_mem(bi->cb.ctx, bi->cb.address, bi->saved_code, bi->saved_size) < 0) {
-            error = errno;
+        if (break_inst == NULL) {
+            error = set_errno(ERR_OTHER, "The context does not support software breakpoints");
         }
-        else if (context_write_mem(bi->cb.ctx, bi->cb.address, break_inst, bi->saved_size) < 0) {
-            error = errno;
+        else {
+            assert(bi->saved_size > 0);
+            assert(sizeof(bi->saved_code) >= bi->saved_size);
+            assert(!bi->virtual_addr);
+            error = 0;
+            planting_instruction = 1;
+            if (context_read_mem(bi->cb.ctx, bi->cb.address, bi->saved_code, bi->saved_size) < 0) {
+                error = errno;
+            }
+            else if (context_write_mem(bi->cb.ctx, bi->cb.address, break_inst, bi->saved_size) < 0) {
+                error = errno;
+            }
+            planting_instruction = 0;
         }
-        planting_instruction = 0;
     }
     else if (error == ERR_UNSUPPORTED) {
         error = set_errno(ERR_OTHER, "Unsupported set of breakpoint attributes");
