@@ -1047,10 +1047,10 @@ static void set_peer_addr(ChannelTCP * c, struct sockaddr * addr, int addr_len) 
     else
 #endif
     {
-        char * fmt = (char *)(c->ssl != NULL ? "SSL:%s:%d" : "TCP:%s:%d");
         char nbuf[128];
         assert(addr->sa_family == AF_INET);
-        snprintf(name, sizeof(name), fmt,
+        snprintf(name, sizeof(name), "%s:%s:%d",
+                c->ssl != NULL ? "SSL" : "TCP",
                 inet_ntop(addr->sa_family, &((struct sockaddr_in *)addr)->sin_addr, nbuf, sizeof(nbuf)),
                 ntohs(((struct sockaddr_in *)addr)->sin_port));
     }
