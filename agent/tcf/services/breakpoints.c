@@ -868,6 +868,7 @@ static void plant_breakpoint(Context * ctx, BreakpointInfo * bp, ContextAddress 
 
     if (context_get_supported_bp_access_types(ctx) & CTX_BP_ACCESS_VIRTUAL) {
         v_bi = link_breakpoint_instruction(bp, ctx, addr, size, ctx, 1, addr, NULL);
+        if (v_bi->planted && bp->attrs_changed) remove_instruction(v_bi);
         if (!v_bi->planted) plant_instruction(v_bi);
         if (v_bi->planted) return;
         if (v_bi->unsupported == 0) return;
