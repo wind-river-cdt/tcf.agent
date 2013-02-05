@@ -515,6 +515,20 @@ static void command_get(char * token, Channel * c) {
     if (args != NULL) post_safe_event(args->ctx, safe_memory_get, args);
 }
 
+typedef struct {
+    char * buf;
+    unsigned pos;
+    unsigned max;
+} MemoryFillBuffer;
+
+static void read_memory_fill_array_cb(InputStream * inp, void * args) {
+    MemoryFillBuffer * buf = (MemoryFillBuffer *)args;
+    if (buf->pos >= buf->max) {
+        buf->buf = (char *)tmp_realloc(buf->buf, buf->max *= 2);
+    }
+    buf->buf[buf->pos++] = (char)json_read_ulong(inp);
+}
+
 static void safe_memory_fill(void * parm) {
     MemoryCommandArgs * args = (MemoryCommandArgs *)parm;
     Channel * c = args->c;
@@ -530,52 +544,37 @@ static void safe_memory_fill(void * parm) {
             ContextAddress addr = args->addr;
             unsigned long size = args->size;
             MemoryErrorInfo err_info;
-            char buf[0x1000];
-            int buf_pos = 0;
+            MemoryFillBuffer buf;
             int err = 0;
 
             memset(&err_info, 0, sizeof(err_info));
             if (ctx->exiting || ctx->exited) err = ERR_ALREADY_EXITED;
 
-            if (read_stream(inp) != '[') exception(ERR_JSON_SYNTAX);
-            if (peek_stream(inp) == ']') {
-                read_stream(inp);
-            }
-            else {
-                for (;;) {
-                    int ch;
-                    if (err == 0) {
-                        if (buf_pos >= (int)sizeof(buf)) err = ERR_BUFFER_OVERFLOW;
-                        else buf[buf_pos++] = (char)json_read_ulong(inp);
-                    }
-                    else {
-                        json_read_ulong(inp);
-                    }
-                    ch = read_stream(inp);
-                    if (ch == ',') continue;
-                    if (ch == ']') break;
-                    exception(ERR_JSON_SYNTAX);
-                }
-            }
+            memset(&buf, 0, sizeof(buf));
+            buf.buf = (char *)tmp_alloc(buf.max = BUF_SIZE);
+
+            if (err) json_skip_object(inp);
+            else json_read_array(inp, read_memory_fill_array_cb, &buf);
             json_test_char(inp, MARKER_EOA);
             json_test_char(inp, MARKER_EOM);
 
-            while (err == 0 && buf_pos < (int)size && buf_pos <= (int)(sizeof(buf) / 2)) {
-                if (buf_pos == 0) {
-                    buf[buf_pos++] = 0;
+            while (err == 0 && buf.pos < size && buf.pos <= buf.max / 2) {
+                if (buf.pos == 0) {
+                    buf.buf[buf.pos++] = 0;
                 }
                 else {
-                    memcpy(buf + buf_pos, buf, buf_pos);
-                    buf_pos *= 2;
+                    memcpy(buf.buf + buf.pos, buf.buf, buf.pos);
+                    buf.pos *= 2;
                 }
             }
 
             while (err == 0 && addr < addr0 + size) {
-                char tmp[sizeof(buf)];
-                int wr = (int)(addr0 + size - addr);
-                if (wr > buf_pos) wr = buf_pos;
+                /* Note: context_write_mem() modifies buffer contents */
+                char tmp[BUF_SIZE];
+                unsigned wr = (unsigned)(addr0 + size - addr);
+                if (wr > buf.pos) wr = buf.pos;
                 /* TODO: word size, mode */
-                memcpy(tmp, buf, wr);
+                memcpy(tmp, buf.buf, wr);
                 if (context_write_mem(ctx, addr, tmp, wr) < 0) {
                     err = errno;
 #if ENABLE_ExtendedMemoryErrorReports
