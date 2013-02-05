@@ -1197,6 +1197,38 @@ static int is_within_function_epilogue(Context * ctx, ContextAddress ip) {
 #if EN_STEP_OVER
 static void step_machine_breakpoint(Context * ctx, void * args) {
 }
+
+static BreakpointInfo * create_step_machine_breakpoint(ContextAddress addr, Context * ctx) {
+    static const char * attr_list[] = { BREAKPOINT_ENABLED, BREAKPOINT_LOCATION, BREAKPOINT_SERVICE };
+    BreakpointAttribute * attrs = NULL;
+    BreakpointAttribute ** ref = &attrs;
+    char str[32];
+    unsigned i;
+
+    for (i = 0; i < sizeof(attr_list) / sizeof(char *); i++) {
+        ByteArrayOutputStream buf;
+        BreakpointAttribute * attr = (BreakpointAttribute *)loc_alloc_zero(sizeof(BreakpointAttribute));
+        OutputStream * out = create_byte_array_output_stream(&buf);
+        attr->name = loc_strdup(attr_list[i]);
+        switch (i) {
+        case 0:
+            json_write_boolean(out, 1);
+            break;
+        case 1:
+            snprintf(str, sizeof(str), "0x%" PRIX64, (uint64_t)addr);
+            json_write_string(out, str);
+            break;
+        case 2:
+            json_write_string(out, RUN_CONTROL);
+            break;
+        }
+        write_stream(out, 0);
+        get_byte_array_output_stream_data(&buf, &attr->value, NULL);
+        *ref = attr;
+        ref = &attr->next;
+    }
+    return create_eventpoint_ext(attrs, ctx, step_machine_breakpoint, NULL);
+}
 #endif
 
 static int update_step_machine_state(Context * ctx) {
@@ -1369,10 +1401,8 @@ static int update_step_machine_state(Context * ctx) {
                 return -1;
             }
             if (ext->step_bp_info == NULL || ext->step_bp_addr != step_bp_addr) {
-                char bf[64];
-                snprintf(bf, sizeof(bf), "0x%" PRIX64, (uint64_t)step_bp_addr);
                 if (ext->step_bp_info != NULL) destroy_eventpoint(ext->step_bp_info);
-                ext->step_bp_info = create_eventpoint(bf, ctx, step_machine_breakpoint, NULL);
+                ext->step_bp_info = create_step_machine_breakpoint(step_bp_addr, ctx);
                 ext->step_bp_addr = step_bp_addr;
             }
             return 0;

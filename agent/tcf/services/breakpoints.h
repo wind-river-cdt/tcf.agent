@@ -66,6 +66,7 @@ struct BreakpointAttribute {
 #define BREAKPOINT_EVENT_ARGS       "EventArgs"
 #define BREAKPOINT_CLIENT_DATA      "ClientData"
 #define BREAKPOINT_CONTEXT_QUERY    "ContextQuery"
+#define BREAKPOINT_SERVICE          "Service"
 
 
 /* Breakpoints event listener */
@@ -142,7 +143,7 @@ typedef void IterateCBLinksCallBack(BreakpointInfo *, void *);
 extern void iterate_context_breakpoint_links(Context * ctx, ContextBreakpoint * cb, IterateCBLinksCallBack * callback, void * args);
 
 /*
- * The function is called from context.c every time a context is stopped by a breakpoint.
+ * The function is called by Run Control service every time a context is stopped by a breakpoint.
  * The function evaluates breakpoint condition and calls suspend_debug_context() if the condition is true.
  */
 extern void evaluate_breakpoint(Context * ctx);
@@ -199,7 +200,9 @@ extern int check_breakpoints_on_memory_write(Context * ctx, ContextAddress addre
 typedef void EventPointCallBack(Context *, void *);
 
 /* Create, plant and return eventpoint. Eventpoints are breakpoints that are created by agent to control execution of debugee.
- * Eventpoint are not exposed through "Breakpoints" TCF service, they are handled by the agent itself. */
+ * Eventpoint are not exposed through "Breakpoints" TCF service, they are handled by the agent itself.
+ * 'attrs' are disposed by the Breakpoints service using loc_free().
+ * create_eventpoint_ext() throws exception if 'attrs' format is invalid. */
 extern BreakpointInfo * create_eventpoint(const char * location, Context * ctx, EventPointCallBack * callback, void * callback_args);
 extern BreakpointInfo * create_eventpoint_ext(BreakpointAttribute * attrs, Context * ctx, EventPointCallBack * callback, void * callback_args);
 
