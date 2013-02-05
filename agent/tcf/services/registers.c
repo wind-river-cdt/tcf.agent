@@ -492,23 +492,37 @@ typedef struct Location {
 static Location * buf = NULL;
 static unsigned buf_pos = 0;
 static unsigned buf_len = 0;
+static unsigned loc_pos = 0;
+
+static void read_location_element(InputStream * inp, void * args) {
+    Location * loc = (Location *)args;
+    switch (loc_pos) {
+    case 0:
+        json_read_string(inp, loc->id, sizeof(loc->id));
+        break;
+    case 1:
+        loc->offs = json_read_ulong(inp);
+        break;
+    case 2:
+        loc->size = json_read_ulong(inp);
+        break;
+    default:
+        json_skip_object(inp);
+        break;
+    }
+    loc_pos++;
+}
 
 static void read_location(InputStream * inp, void * args) {
-    int ch = read_stream(inp);
     Location * loc = NULL;
-    if (ch != '[') exception(ERR_JSON_SYNTAX);
     if (buf_pos >= buf_len) {
         buf_len = buf_len == 0 ? 0x10 : buf_len * 2;
         buf = (Location *)loc_realloc(buf, buf_len * sizeof(Location));
     }
+    loc_pos = 0;
     loc = buf + buf_pos++;
     memset(loc, 0, sizeof(Location));
-    json_read_string(inp, loc->id, sizeof(loc->id));
-    json_test_char(inp, ',');
-    loc->offs = json_read_ulong(inp);
-    json_test_char(inp, ',');
-    loc->size = json_read_ulong(inp);
-    if (read_stream(inp) != ']') exception(ERR_JSON_SYNTAX);
+    json_read_array(inp, read_location_element, loc);
 }
 
 static Location * read_location_list(InputStream * inp, unsigned * cnt) {
