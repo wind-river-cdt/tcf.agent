@@ -545,6 +545,7 @@ static void safe_memory_fill(void * parm) {
             unsigned long size = args->size;
             MemoryErrorInfo err_info;
             MemoryFillBuffer buf;
+            char * tmp = NULL;
             int err = 0;
 
             memset(&err_info, 0, sizeof(err_info));
@@ -570,8 +571,8 @@ static void safe_memory_fill(void * parm) {
 
             while (err == 0 && addr < addr0 + size) {
                 /* Note: context_write_mem() modifies buffer contents */
-                char tmp[BUF_SIZE];
                 unsigned wr = (unsigned)(addr0 + size - addr);
+                if (tmp == NULL) tmp = (char *)tmp_alloc(buf.pos);
                 if (wr > buf.pos) wr = buf.pos;
                 /* TODO: word size, mode */
                 memcpy(tmp, buf.buf, wr);
