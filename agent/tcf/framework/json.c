@@ -46,6 +46,7 @@
 #define ENCODING_BASE64     1
 
 #define ignore_whitespace(ch, inp)  do { while (isspace(ch)) (ch) = read_stream(inp); } while (0)
+#define read_whitespace(inp)  do { while (isspace(peek_stream(inp))) read_stream(inp); } while (0)
 
 static char * buf = NULL;
 static size_t buf_pos = 0;
@@ -402,6 +403,7 @@ double json_read_double(InputStream * inp) {
     double n;
     char * end = buf;
 
+    read_whitespace(inp);
     for (;;) {
         int ch = peek_stream(inp);
         switch (ch) {
@@ -446,6 +448,7 @@ int json_read_struct(InputStream * inp, JsonStructCallBack * call_back, void * a
         exception(ERR_PROTOCOL);
         return 1;
     }
+    read_whitespace(inp);
     if (peek_stream(inp) == '}') {
         read_stream(inp);
         return 1;
@@ -453,9 +456,11 @@ int json_read_struct(InputStream * inp, JsonStructCallBack * call_back, void * a
     for (;;) {
         char nm[256];
         json_read_string(inp, nm, sizeof(nm));
+        read_whitespace(inp);
         json_test_char(inp, ':');
         call_back(inp, nm, arg);
         ch = read_stream(inp);
+        ignore_whitespace(ch, inp);
         if (ch == ',') continue;
         check_char(ch, '}');
         break;
@@ -489,6 +494,7 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
 
         buf_pos = 0;
 
+        read_whitespace(inp);
         if (peek_stream(inp) == ']') {
             read_stream(inp);
         }
@@ -500,6 +506,7 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
                     len_buf_size = len_buf_size == 0 ? 0x100 : len_buf_size * 2;
                     len_buf = (size_t *)loc_realloc(len_buf, len_buf_size * sizeof(size_t));
                 }
+                ignore_whitespace(ch, inp);
                 if (ch == 'n') {
                     json_test_char(inp, 'u');
                     json_test_char(inp, 'l');
@@ -527,6 +534,7 @@ char ** json_read_alloc_string_array(InputStream * inp, int * cnt) {
                 buf_add(0);
                 len_buf[len_pos++] = len;
                 ch = read_stream(inp);
+                ignore_whitespace(ch, inp);
                 if (ch == ',') continue;
                 check_char(ch, ']');
                 break;
@@ -567,6 +575,7 @@ int json_read_array(InputStream * inp, JsonArrayCallBack * call_back, void * arg
         exception(ERR_PROTOCOL);
         return 1;
     }
+    read_whitespace(inp);
     if (peek_stream(inp) == ']') {
         read_stream(inp);
         return 1;
@@ -574,6 +583,7 @@ int json_read_array(InputStream * inp, JsonArrayCallBack * call_back, void * arg
     for (;;) {
         call_back(inp, arg);
         ch = read_stream(inp);
+        ignore_whitespace(ch, inp);
         if (ch == ',') continue;
         check_char(ch, ']');
         break;
@@ -587,6 +597,7 @@ void json_read_binary_start(JsonReadBinaryState * state, InputStream * inp) {
     state->rem = 0;
     state->size_start = 0;
     state->size_done = 0;
+    ignore_whitespace(ch, inp);
     if (ch == '(') {
         state->encoding = ENCODING_BINARY;
         state->size_start = json_read_ulong(inp);
@@ -808,7 +819,9 @@ static int skip_char(InputStream * inp) {
 }
 
 static void skip_object(InputStream * inp) {
-    int ch = skip_char(inp);
+    int ch;
+    read_whitespace(inp);
+    ch = skip_char(inp);
     if (ch == 'n') {
         check_char(skip_char(inp), 'u');
         check_char(skip_char(inp), 'l');
@@ -846,6 +859,7 @@ static void skip_object(InputStream * inp) {
         return;
     }
     if (ch == '[') {
+        read_whitespace(inp);
         if (peek_stream(inp) == ']') {
             skip_char(inp);
         }
@@ -853,6 +867,7 @@ static void skip_object(InputStream * inp) {
             for (;;) {
                 int ch;
                 skip_object(inp);
+                read_whitespace(inp);
                 ch = skip_char(inp);
                 if (ch == ',') continue;
                 check_char(ch, ']');
@@ -862,6 +877,7 @@ static void skip_object(InputStream * inp) {
         return;
     }
     if (ch == '{') {
+        read_whitespace(inp);
         if (peek_stream(inp) == '}') {
             skip_char(inp);
         }
@@ -869,8 +885,11 @@ static void skip_object(InputStream * inp) {
             for (;;) {
                 int ch;
                 skip_object(inp);
-                check_char(skip_char(inp), ':');
+                read_whitespace(inp);
+                ch = skip_char(inp);
+                check_char(ch, ':');
                 skip_object(inp);
+                read_whitespace(inp);
                 ch = skip_char(inp);
                 if (ch == ',') continue;
                 check_char(ch, '}');
@@ -924,6 +943,7 @@ int read_errno(InputStream * inp) {
     int no = 0;
     ErrorReport * err = NULL;
     int ch = read_stream(inp);
+    ignore_whitespace(ch, inp);
     if (ch == 0) return 0;
     if (ch == 'n') {
         json_test_char(inp, 'u');
@@ -940,10 +960,11 @@ int read_errno(InputStream * inp) {
         for (;;) {
             char name[256];
             json_read_string(inp, name, sizeof(name));
+            read_whitespace(inp);
             json_test_char(inp, ':');
             if (err == NULL) err = create_error_report();
             if (strcmp(name, "Code") == 0) {
-                err->code = (int) json_read_long(inp);
+                err->code = (int)json_read_long(inp);
             }
             else if (strcmp(name, "Time") == 0) {
                 err->time_stamp = json_read_uint64(inp);
@@ -962,6 +983,7 @@ int read_errno(InputStream * inp) {
                 err->props = i;
             }
             ch = read_stream(inp);
+            ignore_whitespace(ch, inp);
             if (ch == ',') continue;
             check_char(ch, '}');
             break;

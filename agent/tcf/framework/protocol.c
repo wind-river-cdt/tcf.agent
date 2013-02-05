@@ -26,6 +26,7 @@
 #include <string.h>
 #include <assert.h>
 #include <assert.h>
+#include <ctype.h>
 #include <tcf/framework/protocol.h>
 #include <tcf/framework/trace.h>
 #include <tcf/framework/events.h>
@@ -573,11 +574,14 @@ static void free_string_list(int cnt, char **list) {
 }
 
 static void event_locator_hello(Channel * c) {
+    int ch;
     int cnt = 0;
     char **list = NULL;
 
     c->out.supports_zero_copy = 0;
-    if (read_stream(&c->inp) != '[') exception(ERR_PROTOCOL);
+    do ch = read_stream(&c->inp);
+    while (isspace(ch));
+    if (ch != '[') exception(ERR_PROTOCOL);
     if (peek_stream(&c->inp) == ']') {
         read_stream(&c->inp);
     }
@@ -585,7 +589,6 @@ static void event_locator_hello(Channel * c) {
         int max = 4;
         list = (char **)loc_alloc(max * sizeof *list);
         for (;;) {
-            int ch;
             char * service = json_read_alloc_string(&c->inp);
             if (strcmp(service, "ZeroCopy") == 0) c->out.supports_zero_copy = 1;
             if (cnt == max) {
@@ -593,7 +596,8 @@ static void event_locator_hello(Channel * c) {
                 list = (char **)loc_realloc(list, max * sizeof *list);
             }
             list[cnt++] = service;
-            ch = read_stream(&c->inp);
+            do ch = read_stream(&c->inp);
+            while (isspace(ch));
             if (ch == ',') continue;
             if (ch == ']') break;
             free_string_list(cnt, list);
