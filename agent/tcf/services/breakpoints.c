@@ -1666,32 +1666,19 @@ static BreakpointRef * find_breakpoint_ref(BreakpointInfo * bp, Channel * channe
     return NULL;
 }
 
+static void read_breakpoint_property(InputStream * inp, const char * name, void * args) {
+    BreakpointAttribute *** p = (BreakpointAttribute ***)args;
+    BreakpointAttribute * attr = (BreakpointAttribute *)loc_alloc_zero(sizeof(BreakpointAttribute));
+    attr->name = loc_strdup(name);
+    attr->value = json_read_object(inp);
+    **p = attr;
+    *p = &attr->next;
+}
+
 static BreakpointAttribute * read_breakpoint_properties(InputStream * inp) {
     BreakpointAttribute * attrs = NULL;
-    json_test_char(inp, '{');
-    if (peek_stream(inp) == '}') {
-        read_stream(inp);
-    }
-    else {
-        BreakpointAttribute ** p = &attrs;
-        for (;;) {
-            int ch;
-            char name[256];
-            BreakpointAttribute * attr = (BreakpointAttribute *)loc_alloc_zero(sizeof(BreakpointAttribute));
-
-            json_read_string(inp, name, sizeof(name));
-            json_test_char(inp, ':');
-            attr->name = loc_strdup(name);
-            attr->value = json_read_object(inp);
-            *p = attr;
-            p = &attr->next;
-
-            ch = read_stream(inp);
-            if (ch == ',') continue;
-            if (ch == '}') break;
-            exception(ERR_JSON_SYNTAX);
-        }
-    }
+    BreakpointAttribute ** p = &attrs;
+    json_read_struct(inp, read_breakpoint_property, &p);
     return attrs;
 }
 
