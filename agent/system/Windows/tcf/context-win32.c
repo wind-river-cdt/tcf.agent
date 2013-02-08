@@ -446,6 +446,10 @@ static void break_process_event(void * args) {
                     SIZE_T size = 0;
                     int error = 0;
 
+                    for (l = ctx->children.next; l != &ctx->children; l = l->next) {
+                        SuspendThread(EXT(cldl2ctxp(l))->handle);
+                    }
+
                     trace(LOG_CONTEXT, "context: creating remote thread in process %#lx, id %s", ctx, ctx->id);
                     if (debug_state->break_thread_code == NULL) {
                         debug_state->break_thread_code = VirtualAllocEx(ext->handle,
@@ -546,6 +550,7 @@ static int win32_resume(Context * ctx, int step) {
         ext->start_pending = 1;
     }
     else {
+        ext->start_pending = 0;
         for (;;) {
             DWORD cnt = ResumeThread(ext->handle);
             if (cnt == (DWORD)-1) {
@@ -692,6 +697,7 @@ static void debug_event_handler(DebugEvent * debug_event) {
         }
         ext = EXT(ctx = add_thread(prs, win32_event->dwProcessId, win32_event->dwThreadId, debug_state));
         debug_event->continue_status = event_win32_context_stopped(ctx);
+        if (debug_state->detach) ctx->exiting = 1;
         ext->debug_event = *win32_event;
         break;
     case EXCEPTION_DEBUG_EVENT:
@@ -822,7 +828,7 @@ static void continue_debug_event(void * args) {
         return;
     }
 
-    trace(LOG_WAITPID, "continue debug event 1, process id %u", debug_state->process_id);
+    trace(LOG_WAITPID, "check suspend requests, process ID %u", debug_state->process_id);
 
     if (prs != NULL && !prs->exited) {
         LINK * l;
@@ -834,27 +840,21 @@ static void continue_debug_event(void * args) {
                 ext->start_pending = 0;
                 continue;
             }
-            if (ext->stop_pending) {
+            if (debug_state->break_thread_id == debug_event->win32_event.dwThreadId &&
+                    debug_event->win32_event.dwDebugEventCode == CREATE_THREAD_DEBUG_EVENT) {
                 memset(&ext->suspend_reason, 0, sizeof(ext->suspend_reason));
                 event_win32_context_stopped(ctx);
                 ext->debug_event = debug_event->win32_event;
             }
-            if (ext->start_pending) {
-                for (;;) {
-                    DWORD cnt = ResumeThread(ext->handle);
-                    if (cnt <= 1) break;
-                }
-                ext->start_pending = 0;
-            }
         }
     }
 
-    trace(LOG_WAITPID, "continue debug event, process id %u", debug_state->process_id);
-    log_error("ReleaseSemaphore", SetEvent(debug_state->debug_event_inp));
+    trace(LOG_WAITPID, "continue debug event, process ID %u", debug_state->process_id);
+    log_error("SetEvent", SetEvent(debug_state->debug_event_inp));
     log_error("WaitForSingleObject", WaitForSingleObject(debug_state->debug_event_out, INFINITE) != WAIT_FAILED);
     debug_state->reporting_debug_event = 0;
 
-    if (prs != NULL && !prs->exited) {
+    if (prs != NULL && !prs->exited && debug_state->break_thread_id == 0) {
         LINK * l;
         for (l = prs->children.next; l != &prs->children; l = l->next) {
             Context * ctx = cldl2ctxp(l);
@@ -869,7 +869,7 @@ static void continue_debug_event(void * args) {
         }
     }
 
-    log_error("ReleaseSemaphore", SetEvent(debug_state->debug_event_inp));
+    log_error("SetEvent", SetEvent(debug_state->debug_event_inp));
 }
 
 static void early_debug_event_handler(void * x) {
@@ -904,11 +904,12 @@ static void debugger_detach_handler(void * x) {
     assert(debug_state->break_thread == NULL);
     for (l = prs->children.next; l != &prs->children; l = l->next) {
         Context * ctx = cldl2ctxp(l);
+        assert(ctx->exiting);
         if (ctx->stopped) win32_resume(ctx, 0);
     }
     if (prs != NULL && !prs->exited) event_win32_context_exited(prs, 1);
 
-    log_error("ReleaseSemaphore", SetEvent(debug_state->debug_event_inp));
+    log_error("SetEvent", SetEvent(debug_state->debug_event_inp));
 }
 
 static void debugger_exit_handler(void * x) {
