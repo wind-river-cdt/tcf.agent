@@ -122,7 +122,8 @@ static void get_isa(Context * ctx, ContextAddress addr, ContextISA * isa) {
         unsigned i, j;
         MemoryMap * client_map = NULL;
         MemoryMap * target_map = NULL;
-        if (memory_map_get(ctx, &client_map, &target_map) == 0) {
+        Context * mem = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
+        if (memory_map_get(mem, &client_map, &target_map) == 0) {
             isa->addr = addr;
             isa->size = ~(ContextAddress)0;
             for (j = 0; j < 2; j++) {
