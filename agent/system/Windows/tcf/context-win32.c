@@ -376,7 +376,7 @@ static void event_win32_context_exited(Context * ctx, int detach) {
     context_lock(ctx);
     ctx->exiting = 1;
     ext->stop_pending = 0;
-    if (ctx->stopped) win32_resume(ctx, 0);
+    if (ctx->stopped) event_win32_context_started(ctx);
     l = ctx->children.next;
     while (l != &ctx->children) {
         Context * c = cldl2ctxp(l);
@@ -680,13 +680,16 @@ static void debug_event_handler(DebugEvent * debug_event) {
     case CREATE_THREAD_DEBUG_EVENT:
         assert(prs != NULL);
         assert(ctx == NULL);
+        if (debug_state->break_thread_id == win32_event->dwThreadId) break;
         if (debug_state->state < DEBUG_STATE_PRS_ATTACHED) {
-            if (debug_state->break_thread_id != win32_event->dwThreadId) {
-                add_pending_thread(debug_state ,win32_event->dwThreadId);
+            if (debug_state->ini_thread_handle == NULL) {
+                debug_state->ini_thread_id = win32_event->dwThreadId;
+                debug_state->ini_thread_handle = win32_event->u.CreateProcessInfo.hThread;
+                break;
             }
+            add_pending_thread(debug_state, win32_event->dwThreadId);
             break;
         }
-        if (debug_state->break_thread_id == win32_event->dwThreadId) break;
         ext = EXT(ctx = add_thread(prs, win32_event->dwProcessId, win32_event->dwThreadId, debug_state));
         debug_event->continue_status = event_win32_context_stopped(ctx);
         ext->debug_event = *win32_event;

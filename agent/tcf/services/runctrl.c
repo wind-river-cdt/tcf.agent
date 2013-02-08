@@ -1630,16 +1630,18 @@ static void stop_all_timer(void * args) {
 static void resume_error(Context * ctx, int error) {
     ContextExtensionRC * ext = EXT(ctx);
     trace(LOG_ALWAYS, "Cannot resume context %s: %s", ctx->id, errno_to_str(error));
-    error = set_errno(error, ext->step_bp_info ? "Cannot continue stepping" : "Cannot resume");
-    ctx->signal = 0;
-    ctx->stopped = 1;
-    ctx->stopped_by_bp = 0;
-    ctx->stopped_by_cb = NULL;
-    ctx->stopped_by_exception = 1;
-    ctx->pending_intercept = 1;
-    loc_free(ctx->exception_description);
-    ctx->exception_description = loc_strdup(errno_to_str(error));
-    send_context_changed_event(ctx);
+    if (context_has_state(ctx)) {
+        error = set_errno(error, ext->step_bp_info ? "Cannot continue stepping" : "Cannot resume");
+        ctx->signal = 0;
+        ctx->stopped = 1;
+        ctx->stopped_by_bp = 0;
+        ctx->stopped_by_cb = NULL;
+        ctx->stopped_by_exception = 1;
+        ctx->pending_intercept = 1;
+        loc_free(ctx->exception_description);
+        ctx->exception_description = loc_strdup(errno_to_str(error));
+        send_context_changed_event(ctx);
+    }
 }
 
 static void check_step_breakpoint_instances(InputStream * inp, void * args);
