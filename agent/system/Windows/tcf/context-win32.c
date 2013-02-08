@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -34,6 +34,7 @@
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/waitpid.h>
 #include <tcf/framework/signames.h>
+#include <tcf/services/symbols.h>
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/memorymap.h>
 #include <tcf/services/runctrl.h>
@@ -1394,6 +1395,29 @@ int context_get_breakpoint_status(ContextBreakpoint * bp, const char *** names, 
     *names = n;
     *values = v;
     *cnt = 1;
+    return 0;
+}
+#endif
+
+#if ENABLE_ContextISA
+int context_get_isa(Context * ctx, ContextAddress addr, ContextISA * isa) {
+    ContextExtensionWin32 * ext = EXT(ctx->mem);
+    memset(isa, 0, sizeof(ContextISA));
+    if (ext->debug_state->wow64) {
+        isa->def = "386";
+    }
+    else {
+#if defined(_M_IX86)
+        isa->def = "386";
+#elif defined(_M_AMD64)
+        isa->def = "X86_64";
+#else
+        isa->def = NULL;
+#endif
+    }
+#if SERVICE_Symbols
+    if (get_context_isa(ctx, addr, &isa->isa, &isa->addr, &isa->size) < 0) return -1;
+#endif
     return 0;
 }
 #endif

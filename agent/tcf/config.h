@@ -115,6 +115,9 @@
 #if !defined(SERVICE_DPrintf)
 #define SERVICE_DPrintf         (SERVICE_Expressions && SERVICE_Streams)
 #endif
+#if !defined(SERVICE_Disassembly)
+#define SERVICE_Disassembly     (SERVICE_Memory)
+#endif
 
 #if !defined(ENABLE_Plugins)
 #  if TARGET_UNIX && defined(PATH_Plugins)
@@ -158,7 +161,8 @@
 #endif
 
 #if !defined(ENABLE_DebugContext)
-#  define ENABLE_DebugContext   (ENABLE_ContextProxy || SERVICE_RunControl || SERVICE_Breakpoints || SERVICE_Memory || SERVICE_Registers || SERVICE_StackTrace)
+#  define ENABLE_DebugContext   (ENABLE_ContextProxy || SERVICE_RunControl || SERVICE_Breakpoints || \
+        SERVICE_Memory || SERVICE_Registers || SERVICE_StackTrace || SERVICE_Disassembly)
 #endif
 
 #if !defined(ENABLE_SymbolsProxy)
@@ -279,6 +283,10 @@
 
 #if !defined(ENABLE_ExternalStackcrawl)
 #  define ENABLE_ExternalStackcrawl 0
+#endif
+
+#if !defined(ENABLE_ContextISA)
+#  define ENABLE_ContextISA SERVICE_Disassembly
 #endif
 
 #endif /* D_config */

@@ -652,6 +652,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\disassembly.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\disassembly.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\discovery.c"
 				>
 			</File>

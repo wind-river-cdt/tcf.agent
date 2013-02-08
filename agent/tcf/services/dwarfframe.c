@@ -1094,7 +1094,7 @@ static void read_frame_info_section(Context * ctx, ELF_Section * text_section,
     unsigned l, h;
     ELF_Section * section = index->mSection;
     ELF_File * file = section->file;
-    U2_T sec_idx = 0;
+    U4_T sec_idx = 0;
 
     if (text_section != NULL && text_section->file != file) {
         unsigned i;

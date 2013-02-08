@@ -48,6 +48,7 @@
 #define SERVICE_SysMonitor      0
 #define SERVICE_Expressions     0
 #define SERVICE_DPrintf         0
+#define SERVICE_Disassembly     0
 #if !defined(SERVICE_Streams)
 #define SERVICE_Streams         0
 #endif
@@ -143,5 +144,6 @@
 #define ENABLE_ExternalStackcrawl               0
 #define ENABLE_SymbolsMux                       0
 #define ENABLE_LineNumbersMux                   0
+#define ENABLE_ContextISA                       0
 
 #endif /* D_config */

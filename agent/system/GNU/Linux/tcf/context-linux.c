@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -41,6 +41,7 @@
 #include <tcf/framework/myalloc.h>
 #include <tcf/framework/waitpid.h>
 #include <tcf/framework/signames.h>
+#include <tcf/services/symbols.h>
 #include <tcf/services/contextquery.h>
 #include <tcf/services/breakpoints.h>
 #include <tcf/services/expressions.h>
@@ -912,6 +913,23 @@ int context_get_memory_map(Context * ctx, MemoryMap * map) {
     fclose(file);
     return 0;
 }
+
+#if ENABLE_ContextISA
+int context_get_isa(Context * ctx, ContextAddress addr, ContextISA * isa) {
+    memset(isa, 0, sizeof(ContextISA));
+#if defined(__i386__)
+    isa->def = "386";
+#elif defined(__x86_64__)
+    isa->def = "X86_64";
+#else
+    isa->def = NULL;
+#endif
+#if SERVICE_Symbols
+    if (get_context_isa(ctx, addr, &isa->isa, &isa->addr, &isa->size) < 0) return -1;
+#endif
+    return 0;
+}
+#endif
 
 static Context * find_pending_attach(pid_t pid) {
     LINK * l = attach_list.next;

@@ -544,6 +544,24 @@ extern int context_get_breakpoint_capabilities(Context * ctx, const char *** nam
 extern int context_get_breakpoint_status(ContextBreakpoint * bp, const char *** names, const char *** values, int * cnt);
 #endif
 
+#if ENABLE_ContextISA
+typedef struct {
+    ContextAddress addr;
+    ContextAddress size;
+    ContextAddress alignment;
+    ContextAddress max_instruction_size;
+    const char * isa;
+    const char * def;
+} ContextISA;
+
+/*
+ * Get context Instruction Set Architecture information.
+ * Return -1 and set errno if cannot access the status.
+ * Return 0 on success.
+ */
+extern int context_get_isa(Context * ctx, ContextAddress addr, ContextISA * isa);
+#endif
+
 /*
  * Functions that notify listeners of various context event.
  * These function are called by context implementation.

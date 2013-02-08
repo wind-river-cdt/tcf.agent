@@ -303,6 +303,12 @@
     <ClCompile Include="tcf\services\symbols_mux.c">
       <Filter>services</Filter>
     </ClCompile>
+    <ClCompile Include="tcf\services\disassembly.c">
+      <Filter>services</Filter>
+    </ClCompile>
+    <ClCompile Include="tcf\services\dprintf.c">
+      <Filter>services</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="tcf\framework\asyncreq.h">
@@ -561,5 +567,11 @@
       <Filter>machine\i686</Filter>
     </ClInclude>
     <ClInclude Include="tcf\config.h" />
+    <ClInclude Include="tcf\services\disassembly.h">
+      <Filter>services</Filter>
+    </ClInclude>
+    <ClInclude Include="tcf\services\dprintf.h">
+      <Filter>services</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

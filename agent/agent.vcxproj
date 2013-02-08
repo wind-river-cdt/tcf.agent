@@ -272,8 +272,10 @@
     <ClCompile Include="tcf\services\breakpoints.c" />
     <ClCompile Include="tcf\services\contextquery.c" />
     <ClCompile Include="tcf\services\diagnostics.c" />
+    <ClCompile Include="tcf\services\disassembly.c" />
     <ClCompile Include="tcf\services\discovery.c" />
     <ClCompile Include="tcf\services\discovery_udp.c" />
+    <ClCompile Include="tcf\services\dprintf.c" />
     <ClCompile Include="tcf\services\dwarfcache.c" />
     <ClCompile Include="tcf\services\dwarfecomp.c" />
     <ClCompile Include="tcf\services\dwarfexpr.c" />
@@ -419,8 +421,10 @@
     <ClInclude Include="tcf\services\breakpoints.h" />
     <ClInclude Include="tcf\services\contextquery.h" />
     <ClInclude Include="tcf\services\diagnostics.h" />
+    <ClInclude Include="tcf\services\disassembly.h" />
     <ClInclude Include="tcf\services\discovery.h" />
     <ClInclude Include="tcf\services\discovery_udp.h" />
+    <ClInclude Include="tcf\services\dprintf.h" />
     <ClInclude Include="tcf\services\dwarf.h" />
     <ClInclude Include="tcf\services\dwarfcache.h" />
     <ClInclude Include="tcf\services\dwarfecomp.h" />
