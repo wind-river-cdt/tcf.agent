@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -1236,8 +1236,14 @@ static int get_address_info(Context * ctx, ContextAddress addr, AddressInfoCache
 
     if (!set_trap(&trap)) return -1;
 
-    h = hash_address(ctx);
     syms = get_symbols_cache();
+    if (!syms->service_available) {
+        clear_trap(&trap);
+        *info = NULL;
+        return 0;
+    }
+
+    h = hash_address(ctx);
     for (l = syms->link_address[h].next; l != syms->link_address + h; l = l->next) {
         AddressInfoCache * c = syms2address(l);
         if (c->ctx == ctx) {
@@ -1283,6 +1289,7 @@ ContextAddress is_plt_section(Context * ctx, ContextAddress addr) {
     AddressInfoCache * i = NULL;
     errno = 0;
     if (get_address_info(ctx, addr, &i) < 0) return 0;
+    if (i == NULL) return 0;
     return i->plt;
 }
 
@@ -1290,9 +1297,16 @@ int get_context_isa(Context * ctx, ContextAddress addr, const char ** isa,
         ContextAddress * range_addr, ContextAddress * range_size) {
     AddressInfoCache * i = NULL;
     if (get_address_info(ctx, addr, &i) < 0) return -1;
-    *isa = i->isa;
-    *range_addr = i->range_addr;
-    *range_size = i->range_size;
+    if (i == NULL) {
+        *isa = NULL;
+        *range_addr = 0;
+        *range_size = 0;
+    }
+    else {
+        *isa = i->isa;
+        *range_addr = i->range_addr;
+        *range_size = i->range_size;
+    }
     return 0;
 }
 
