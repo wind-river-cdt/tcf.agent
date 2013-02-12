@@ -904,6 +904,7 @@ static ConditionEvaluationRequest * add_condition_evaluation_request(EvaluationR
 
     assert(bp->instruction_cnt);
     assert(bp->error == NULL);
+    assert(list_is_empty(&req->link_active));
 
     for (i = 0; i < req->bp_cnt; i++) {
         if (req->bp_arr[i].ctx == ctx && req->bp_arr[i].bp == bp) return NULL;
@@ -1244,6 +1245,8 @@ static void done_all_evaluations(void) {
         context_unlock(req->ctx);
     }
 
+    assert(list_is_empty(&evaluations_active));
+
     if (list_is_empty(&evaluations_posted)) {
         assert(cache_enter_cnt == 0);
         assert(generation_done != generation_active);
@@ -1528,16 +1531,21 @@ static void event_replant_breakpoints(void * arg) {
     if ((uintptr_t)arg != generation_posted) return;
     if (cache_enter_cnt > 0) return;
 
-    assert(list_is_empty(&evaluations_active));
     cache_enter_cnt++;
+    assert(list_is_empty(&evaluations_active));
     generation_active = generation_posted;
-    q = evaluations_posted.next;
-    while (q != &evaluations_posted) {
-        EvaluationRequest * req = link_posted2erl(q);
+    while (!list_is_empty(&evaluations_posted)) {
+        EvaluationRequest * req = link_posted2erl(evaluations_posted.next);
+        assert(list_is_empty(&req->link_active));
+        list_add_last(&req->link_active, &evaluations_active);
+        list_remove(&req->link_posted);
+    }
+
+    q = evaluations_active.next;
+    while (q != &evaluations_active) {
+        EvaluationRequest * req = link_active2erl(q);
         Context * ctx = req->ctx;
         q = q->next;
-        list_remove(&req->link_posted);
-        list_add_first(&req->link_active, &evaluations_active);
         if (req->location) {
             BreakpointInfo * bp = req->bp;
             req->location = 0;
@@ -2724,9 +2732,8 @@ static void event_context_disposed(Context * ctx, void * args) {
     ContextExtensionBP * ext = EXT(ctx);
     EvaluationRequest * req = ext->req;
     if (req != NULL) {
-        int i;
-        for (i = 0; i < req->bp_cnt; i++) context_unlock(req->bp_arr[i].ctx);
-        req->bp_cnt = 0;
+        assert(list_is_empty(&req->link_posted));
+        assert(list_is_empty(&req->link_active));
         loc_free(req->bp_arr);
         loc_free(req);
         ext->req = NULL;
