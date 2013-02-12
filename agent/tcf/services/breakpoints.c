@@ -52,6 +52,7 @@ typedef struct InstructionRef InstructionRef;
 typedef struct BreakInstruction BreakInstruction;
 typedef struct EvaluationArgs EvaluationArgs;
 typedef struct EvaluationRequest EvaluationRequest;
+typedef struct LocationEvaluationRequest LocationEvaluationRequest;
 typedef struct ConditionEvaluationRequest ConditionEvaluationRequest;
 typedef struct ContextExtensionBP ContextExtensionBP;
 typedef struct BreakpointHitCount BreakpointHitCount;
@@ -147,15 +148,22 @@ struct ConditionEvaluationRequest {
     int triggered;
 };
 
+struct LocationEvaluationRequest {
+#   define LOC_EVALUATION_BP_MAX 8
+#   define LOC_EVALUATION_BP_ALL 9
+    BreakpointInfo * bp_arr[LOC_EVALUATION_BP_MAX];
+    int bp_cnt; /* bp_cnt > LOC_EVALUATION_BP_MAX means all breakpoints */
+};
+
 struct EvaluationRequest {
     Context * ctx; /* Must be breakpoints group context */
-    BreakpointInfo * bp; /* NULL means all breakpoints */
     LINK link_posted;
     LINK link_active;
-    int location;
+    LocationEvaluationRequest loc_posted;
+    LocationEvaluationRequest loc_active;
+    ConditionEvaluationRequest * bp_arr;
     int bp_cnt;
     int bp_max;
-    ConditionEvaluationRequest * bp_arr;
 };
 
 struct ContextExtensionBP {
@@ -454,8 +462,7 @@ static void flush_instructions(void) {
                          * because in such case the context represents canonical address space,
                          * which can be different from the breakpoint address space. */
                         EvaluationRequest * req = create_evaluation_request(bi->cb.ctx);
-                        req->bp = NULL;
-                        req->location = 1;
+                        req->loc_posted.bp_cnt = LOC_EVALUATION_BP_ALL;
                         post_evaluation_request(req);
                     }
                     free_instruction(bi);
@@ -949,8 +956,7 @@ static void post_location_evaluation_request(Context * ctx, BreakpointInfo * bp)
         }
         if (cnt == 0) {
             EvaluationRequest * req = create_evaluation_request(ext->bp_grp);
-            req->bp = NULL;
-            req->location = 1;
+            req->loc_posted.bp_cnt = LOC_EVALUATION_BP_ALL;
             post_evaluation_request(req);
             EXT(ext->bp_grp)->empty_bp_grp = 1;
         }
@@ -973,15 +979,13 @@ static void post_location_evaluation_request(Context * ctx, BreakpointInfo * bp)
     ext->bp_grp = grp;
     if (grp != NULL) {
         EvaluationRequest * req = create_evaluation_request(grp);
-        if (!req->location) {
-            req->bp = bp;
-            req->location = 1;
-            post_evaluation_request(req);
+        if (bp != NULL && req->loc_posted.bp_cnt < LOC_EVALUATION_BP_MAX) {
+            req->loc_posted.bp_arr[req->loc_posted.bp_cnt++] = bp;
         }
-        else if (req->bp != bp) {
-            assert(!list_is_empty(&req->link_posted));
-            req->bp = NULL;
+        else {
+            req->loc_posted.bp_cnt = LOC_EVALUATION_BP_ALL;
         }
+        post_evaluation_request(req);
         EXT(grp)->empty_bp_grp = 0;
     }
 }
@@ -1526,6 +1530,7 @@ static void evaluate_bp_location(void * x) {
 
 static void event_replant_breakpoints(void * arg) {
     LINK * q;
+    int i;
 
     assert(!list_is_empty(&evaluations_posted));
     if ((uintptr_t)arg != generation_posted) return;
@@ -1536,6 +1541,8 @@ static void event_replant_breakpoints(void * arg) {
     generation_active = generation_posted;
     while (!list_is_empty(&evaluations_posted)) {
         EvaluationRequest * req = link_posted2erl(evaluations_posted.next);
+        req->loc_active = req->loc_posted;
+        memset(&req->loc_posted, 0, sizeof(LocationEvaluationRequest));
         assert(list_is_empty(&req->link_active));
         list_add_last(&req->link_active, &evaluations_active);
         list_remove(&req->link_posted);
@@ -1546,28 +1553,27 @@ static void event_replant_breakpoints(void * arg) {
         EvaluationRequest * req = link_active2erl(q);
         Context * ctx = req->ctx;
         q = q->next;
-        if (req->location) {
-            BreakpointInfo * bp = req->bp;
-            req->location = 0;
-            req->bp = NULL;
-            clear_instruction_refs(ctx, bp);
+        context_lock(ctx);
+        if (req->loc_active.bp_cnt > LOC_EVALUATION_BP_MAX) {
+            clear_instruction_refs(ctx, NULL);
             if (!ctx->exiting && !ctx->exited && !EXT(ctx)->empty_bp_grp) {
-                context_lock(ctx);
-                if (bp != NULL) {
+                LINK * l = breakpoints.next;
+                while (l != &breakpoints) {
+                    expr_cache_enter(evaluate_bp_location, link_all2bp(l), ctx, -1);
+                    l = l->next;
+                }
+            }
+        }
+        else if (req->loc_active.bp_cnt > 0) {
+            for (i = 0; i < req->loc_active.bp_cnt; i++) {
+                BreakpointInfo * bp = req->loc_active.bp_arr[i];
+                clear_instruction_refs(ctx, bp);
+                if (!ctx->exiting && !ctx->exited && !EXT(ctx)->empty_bp_grp) {
                     expr_cache_enter(evaluate_bp_location, bp, ctx, -1);
                 }
-                else {
-                    LINK * l = breakpoints.next;
-                    while (l != &breakpoints) {
-                        expr_cache_enter(evaluate_bp_location, link_all2bp(l), ctx, -1);
-                        l = l->next;
-                    }
-                }
-                context_unlock(ctx);
             }
         }
         if (req->bp_cnt > 0) {
-            int i;
             for (i = 0; i < req->bp_cnt; i++) {
                 ConditionEvaluationRequest * r = req->bp_arr + i;
                 r->condition_ok = 0;
@@ -1575,6 +1581,7 @@ static void event_replant_breakpoints(void * arg) {
                 expr_cache_enter(evaluate_condition, r->bp, ctx, i);
             }
         }
+        context_unlock(ctx);
     }
     done_evaluation();
 }
