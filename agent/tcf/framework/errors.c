@@ -317,7 +317,7 @@ static const char * posix_strerror(int err) {
         msg = buf;
     }
     errno = n;
-    return buf;
+    return msg;
 }
 
 const char * errno_to_str(int err) {
