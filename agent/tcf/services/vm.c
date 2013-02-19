@@ -659,6 +659,46 @@ static void evaluate_expression(void) {
                 state->stk[state->stk_pos - 1] += read_u8leb128();
             }
             break;
+        case OP_GNU_entry_value:
+            {
+                LocationExpressionState * s = state;
+                LocationExpressionState entry_state;
+                int frame = get_prev_frame(s->ctx, get_info_frame(s->ctx, s->stack_frame));
+                uint32_t size = read_u4leb128();
+                get_state(s);
+                memset(&entry_state, 0, sizeof(entry_state));
+                entry_state.ctx = s->ctx;
+                if (get_frame_info(s->ctx, frame, &entry_state.stack_frame) < 0) exception(errno);
+                entry_state.reg_id_scope = s->reg_id_scope;
+                entry_state.addr_size = s->addr_size;
+                entry_state.code = s->code + s->code_pos;
+                entry_state.code_len = size;
+                entry_state.client_op = s->client_op;
+                if (evaluate_vm_expression(&entry_state) < 0) exception(errno);
+                if (entry_state.pieces_cnt > 0) {
+                    size_t i;
+                    uint64_t value = 0;
+                    void * value_addr = NULL;
+                    size_t value_size = 0;
+                    read_location_pieces(entry_state.ctx, entry_state.stack_frame,
+                        entry_state.pieces, entry_state.pieces_cnt, 0,
+                        &value_addr, &value_size);
+                    if (value_size > sizeof(value)) inv_dwarf("Invalid OP_entry_value expression");
+                    for (i = 0; i < value_size; i++) {
+                        value |= ((uint8_t *)value_addr)[i] << (i * 8);
+                    }
+                    s->stk[s->stk_pos++] = value;
+                }
+                else if (entry_state.stk_pos == 1) {
+                    s->stk[s->stk_pos++] = entry_state.stk[entry_state.stk_pos - 1];
+                }
+                else {
+                    inv_dwarf("Invalid OP_entry_value expression");
+                }
+                s->code_pos += size;
+                set_state(s);
+            }
+            break;
         case OP_call2:
         case OP_call4:
         case OP_call_ref:

@@ -86,6 +86,16 @@ static void add_uleb128(U8_T x) {
     }
 }
 
+static U4_T read_u4leb128(void) {
+    U4_T v = 0;
+    for (;;) {
+        U1_T n = expr->expr_addr[expr_pos++];
+        v = (v << 7) | (n & 0x7f);
+        if ((n & 0x80) == 0) break;
+    }
+    return v;
+}
+
 #if 0
 /* Not used yet */
 static void add_sleb128(I8_T x) {
@@ -102,6 +112,17 @@ static void add_sleb128(I8_T x) {
 #endif
 
 static void add_expression(DWARFExpressionInfo * info);
+
+static int get_num_prop(ObjectInfo * obj, U2_T at, U8_T * res) {
+    Trap trap;
+    PropertyValue v;
+
+    if (!set_trap(&trap)) return 0;
+    read_and_evaluate_dwarf_object_property(expr_ctx, STACK_NO_FRAME, obj, at, &v);
+    *res = get_numeric_property_value(&v);
+    clear_trap(&trap);
+    return 1;
+}
 
 static void op_addr(void) {
     ContextAddress addr = 0;
@@ -312,7 +333,7 @@ static void op_push_tls_address(void) {
     }
 }
 
-static void op_call() {
+static void op_call(void) {
     U8_T ref_id = 0;
     DIO_UnitDescriptor * desc = &expr->unit->mDesc;
     U8_T dio_pos = 0;
@@ -348,6 +369,32 @@ static void op_call() {
     read_dwarf_object_property(expr_ctx, STACK_NO_FRAME, ref_obj, AT_location, &pv);
     dwarf_find_expression(&pv, expr_ip, &info);
     add_expression(&info);
+}
+
+static void op_entry_value(void) {
+    size_t size = 0;
+    size_t size_pos = 0;
+    DWARFExpressionInfo info;
+
+    add(expr->expr_addr[expr_pos++]);
+    size_pos = buf_pos;
+    add(0);
+    add(0);
+    add(0);
+    size = read_u4leb128();
+    memset(&info, 0, sizeof(info));
+    info.code_addr = expr->code_addr;
+    info.code_size = expr->code_size;
+    info.unit = expr->unit;
+    info.section = expr->section;
+    info.expr_addr = expr->expr_addr + expr_pos;
+    info.expr_size = size;
+    add_expression(&info);
+    expr_pos += size;
+    size = buf_pos - size_pos - 3;
+    buf[size_pos++] = (U1_T)((size & 0x7f) | 0x80);
+    buf[size_pos++] = (U1_T)(((size >> 7) & 0x7f) | 0x80);
+    buf[size_pos++] = (U1_T)((size >> 14) & 0x7f);
 }
 
 static void adjust_jumps(void) {
@@ -559,6 +606,26 @@ static void add_expression(DWARFExpressionInfo * info) {
         case OP_call4:
         case OP_call_ref:
             op_call();
+            break;
+        case OP_GNU_entry_value:
+            check_frame();
+            op_entry_value();
+            break;
+        case OP_GNU_regval_type:
+            expr_pos++;
+            {
+                U8_T size = 0;
+                U4_T reg = read_u4leb128();
+                U4_T type = read_u4leb128();
+                ObjectInfo * obj = find_object(get_dwarf_cache(expr->unit->mFile),
+                    expr->unit->mDesc.mSection->addr + expr->unit->mDesc.mUnitOffs + type);
+                if (obj == NULL) str_exception(ERR_INV_DWARF, "Invalid reference in OP_GNU_regval_type");
+                if (!get_num_prop(obj, AT_byte_size, &size))str_exception(ERR_INV_DWARF, "Invalid reference in OP_GNU_regval_type");
+                add(OP_regx);
+                add_uleb128(reg);
+                add(OP_piece);
+                add_uleb128(size);
+            }
             break;
         default:
             if (op >= OP_lo_user) {

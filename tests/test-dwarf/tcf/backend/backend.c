@@ -132,6 +132,7 @@ int read_reg_bytes(StackFrame * frame, RegisterDefinition * reg_def, unsigned of
         if (frame->regs != NULL) {
             size_t i;
             uint8_t * r_addr = (uint8_t *)&frame->regs->data + reg_def->offset;
+#if 0
             uint8_t * m_addr = (uint8_t *)&frame->regs->mask + reg_def->offset;
             for (i = 0; i < size; i++) {
                 if (m_addr[offs + i] != 0xff) {
@@ -139,6 +140,7 @@ int read_reg_bytes(StackFrame * frame, RegisterDefinition * reg_def, unsigned of
                     return -1;
                 }
             }
+#endif
             if (offs + size > reg_def->size) {
                 errno = ERR_INV_DATA_SIZE;
                 return -1;
@@ -253,10 +255,8 @@ int context_get_memory_map(Context * ctx, MemoryMap * map) {
 int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
     if (frame->is_top_frame) {
         frame->fp = frame_addr;
-        return 0;
     }
-    errno = ERR_INV_ADDRESS;
-    return -1;
+    return 0;
 }
 
 static void print_symbol(Symbol * sym) {
