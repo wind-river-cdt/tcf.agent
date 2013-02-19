@@ -524,7 +524,7 @@ int get_info_frame(Context * ctx, StackFrame * info) {
     assert(stack->valid);
     assert(info >= stack->frames);
     assert(info < stack->frames + stack->frame_cnt);
-    return stack->frames - info;
+    return info - stack->frames;
 }
 
 int is_top_frame(Context * ctx, int frame) {
