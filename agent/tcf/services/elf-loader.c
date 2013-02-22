@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2011, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -189,11 +189,12 @@ ContextAddress elf_get_debug_structure_address(Context * ctx, ELF_File ** file_p
 static void read_field(Context * ctx, const Symbol * sym, ContextAddress base, ContextAddress * value) {
     LocationInfo * loc_info = NULL;
     LocationExpressionState * state = NULL;
-    uint64_t args[] = { base };
+    uint64_t args[1];
     void * buf = NULL;
     size_t size = 0;
     size_t i;
 
+    args[0] = base;
     if (get_location_info(sym, &loc_info) < 0) exception(errno);
     if (loc_info->args_cnt != 1) str_exception(ERR_OTHER, "Wrong object kind");
     state = evaluate_location_expression(ctx, NULL,
