@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2011, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -42,6 +42,7 @@ typedef struct LineNumbersCache {
     Channel * channel;
     LINK link_root;
     LINK link_entries[HASH_SIZE];
+    int service_available;
 } LineNumbersCache;
 
 /* Cache entry */
@@ -66,6 +67,8 @@ typedef struct LineNumbersCacheEntry {
 
 #define root2cache(A) ((LineNumbersCache *)((char *)(A) - offsetof(LineNumbersCache, link_root)))
 #define cache2entry(A) ((LineNumbersCacheEntry *)((char *)(A) - offsetof(LineNumbersCacheEntry, link_cache)))
+
+static const char * LINENUMBERS = "LineNumbers";
 
 static LINK root = TCF_LIST_INIT(root);
 
@@ -130,6 +133,9 @@ static LineNumbersCache * get_line_numbers_cache(void) {
             list_init(cache->link_entries + i);
         }
         channel_lock(c);
+        for (i = 0; i < c->peer_service_cnt; i++) {
+            if (strcmp(c->peer_service_list[i], LINENUMBERS) == 0) cache->service_available = 1;
+        }
     }
     return cache;
 }
@@ -218,6 +224,11 @@ int line_to_address(Context * ctx, char * file, int line, int column,
     h = calc_hash(ctx, file, line, column, 0);
     cache = get_line_numbers_cache();
     assert(cache->magic == LINE_NUMBERS_CACHE_MAGIC);
+    if (!cache->service_available) {
+        clear_trap(&trap);
+        return 0;
+    }
+
     for (l = cache->link_entries[h].next; l != cache->link_entries + h; l = l->next) {
         LineNumbersCacheEntry * c = cache2entry(l);
         if (c->ctx == ctx && c->line == line && c->column == column && c->file && strcmp(c->file, file) == 0) {
@@ -279,6 +290,11 @@ int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress addr1, L
     h = calc_hash(ctx, NULL, 0, 0, addr0);
     cache = get_line_numbers_cache();
     assert(cache->magic == LINE_NUMBERS_CACHE_MAGIC);
+    if (!cache->service_available) {
+        clear_trap(&trap);
+        return 0;
+    }
+
     for (l = cache->link_entries[h].next; l != cache->link_entries + h; l = l->next) {
         LineNumbersCacheEntry * c = cache2entry(l);
         if (c->ctx == ctx && c->file == NULL && c->addr0 == addr0 && c->addr1 == addr1) {
