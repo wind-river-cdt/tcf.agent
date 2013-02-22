@@ -45,6 +45,7 @@
 #include <tcf/services/stacktrace.h>
 #include <tcf/services/memorymap.h>
 #include <tcf/services/funccall.h>
+#include <tcf/services/pathmap.h>
 #include <tcf/services/symbols.h>
 #include <tcf/services/elf-symbols.h>
 #include <tcf/services/vm.h>
@@ -529,12 +530,14 @@ static int check_in_range(ObjectInfo * obj, UnitAddress * addr) {
             ELF_Section * debug_ranges = cache->mDebugRanges;
             if (debug_ranges != NULL) {
                 ContextAddress base = unit->mObject->u.mCode.mLowPC;
-                U8_T entry_pc = 0;
                 int res = 0;
 
+#if 0
+                U8_T entry_pc = 0;
                 if (obj->mTag == TAG_inlined_subroutine &&
                     get_num_prop(obj, AT_entry_pc, &entry_pc))
                     base = (ContextAddress)entry_pc;
+#endif
 
                 dio_EnterSection(&unit->mDesc, debug_ranges, obj->u.mCode.mHighPC.mRanges);
                 for (;;) {
@@ -1834,42 +1837,133 @@ int get_context_isa(Context * ctx, ContextAddress ip, const char ** isa,
     return 0;
 }
 
+static int buf_sub_max = 0;
+
+static void search_inlined_subroutine(ObjectInfo * obj, UnitAddress * addr, StackTracingInfo * buf) {
+    ObjectInfo * o = get_dwarf_children(obj);
+    while (o != NULL) {
+        switch (o->mTag) {
+        case TAG_compile_unit:
+        case TAG_partial_unit:
+        case TAG_module:
+        case TAG_global_subroutine:
+        case TAG_lexical_block:
+        case TAG_with_stmt:
+        case TAG_try_block:
+        case TAG_catch_block:
+        case TAG_subroutine:
+        case TAG_subprogram:
+            if (!check_in_range(o, addr)) break;
+            search_inlined_subroutine(o, addr, buf);
+            break;
+        case TAG_inlined_subroutine:
+            if (o->mFlags & DOIF_ranges) {
+                DWARFCache * cache = get_dwarf_cache(addr->file);
+                ELF_Section * debug_ranges = cache->mDebugRanges;
+                if (debug_ranges != NULL) {
+                    CompUnit * unit = addr->unit;
+                    ContextAddress base = unit->mObject->u.mCode.mLowPC;
+                    Symbol * sym = NULL;
+                    U8_T call_file = 0;
+                    CodeArea area;
+                    object2symbol(o, &sym);
+                    memset(&area, 0, sizeof(area));
+                    if (get_num_prop(o, AT_call_file, &call_file)) {
+                        U8_T call_line = 0;
+                        FileInfo * file_info = unit->mFiles + (int)call_file;
+                        area.directory = unit->mDir;
+                        if (is_absolute_path(file_info->mName) || file_info->mDir == NULL) {
+                            area.file = file_info->mName;
+                        }
+                        else if (is_absolute_path(file_info->mDir)) {
+                            area.directory = file_info->mDir;
+                            area.file = file_info->mName;
+                        }
+                        else {
+                            char buf[FILE_PATH_SIZE];
+                            snprintf(buf, sizeof(buf), "%s/%s", file_info->mDir, file_info->mName);
+                            area.file = tmp_strdup(buf);
+                        }
+                        area.file_mtime = file_info->mModTime;
+                        area.file_size = file_info->mSize;
+                        if (get_num_prop(o, AT_call_line, &call_line)) {
+                            area.start_line = (int)call_line;
+                            area.end_line = (int)call_line + 1;
+                        }
+                    }
+                    dio_EnterSection(&unit->mDesc, debug_ranges, o->u.mCode.mHighPC.mRanges);
+                    for (;;) {
+                        ELF_Section * x_sec = NULL;
+                        ELF_Section * y_sec = NULL;
+                        U8_T x = dio_ReadAddress(&x_sec);
+                        U8_T y = dio_ReadAddress(&y_sec);
+                        if (x == 0 && y == 0) break;
+                        if (x == ((U8_T)1 << unit->mDesc.mAddressSize * 8) - 1) {
+                            base = (ContextAddress)y;
+                        }
+                        else {
+                            if (x_sec == NULL) x_sec = unit->mTextSection;
+                            if (y_sec == NULL) y_sec = unit->mTextSection;
+                            if (x_sec == addr->section && y_sec == addr->section) {
+                                StackFrameInlinedSubroutine * sub = (StackFrameInlinedSubroutine *)tmp_alloc(
+                                        sizeof(StackFrameInlinedSubroutine));
+                                sub->sym = sym;
+                                sub->area = area;
+                                sub->area.start_address = base + x;
+                                sub->area.end_address = base + y;
+                                if (buf->sub_cnt >= buf_sub_max) {
+                                    buf_sub_max += 16;
+                                    buf->subs = (StackFrameInlinedSubroutine **)tmp_realloc(
+                                        buf->subs, sizeof(StackFrameInlinedSubroutine *) * buf_sub_max);
+                                }
+                                buf->subs[buf->sub_cnt++] = sub;
+                            }
+                        }
+                    }
+                    dio_ExitSection();
+                }
+            }
+            break;
+        }
+        o = o->mSibling;
+    }
+}
+
 int get_stack_tracing_info(Context * ctx, ContextAddress rt_addr, StackTracingInfo ** info) {
     /* TODO: no debug info exists for linux-gate.so, need to read stack tracing information from the kernel  */
-    ELF_File * file = NULL;
-    ELF_Section * sec = NULL;
-    ContextAddress lt_addr = 0;
-    int error = 0;
     Trap trap;
 
     *info = NULL;
 
-    lt_addr = elf_map_to_link_time_address(ctx, rt_addr, &file, &sec);
-    if (file != NULL) {
-        /* This assert fails because of ambiguity in Linux memory maps:
-         * assert(rt_addr == elf_map_to_run_time_address(ctx, file, sec, lt_addr)); */
-        if (set_trap(&trap)) {
-            get_dwarf_stack_frame_info(ctx, file, sec, lt_addr);
+    if (set_trap(&trap)) {
+        UnitAddress unit;
+        find_unit(ctx, rt_addr, &unit);
+        if (unit.file != NULL) {
+            get_dwarf_stack_frame_info(ctx, unit.file, unit.section, unit.lt_addr);
             if (dwarf_stack_trace_fp->cmds_cnt > 0) {
                 static StackTracingInfo buf;
-                buf.addr = (ContextAddress)dwarf_stack_trace_addr - lt_addr + rt_addr;
+                memset(&buf, 0, sizeof(buf));
+                assert(dwarf_stack_trace_addr <= unit.lt_addr);
+                assert(dwarf_stack_trace_addr + dwarf_stack_trace_size > unit.lt_addr);
+                buf.addr = (ContextAddress)dwarf_stack_trace_addr - unit.lt_addr + rt_addr;
                 buf.size = (ContextAddress)dwarf_stack_trace_size;
-                buf.fp = dwarf_stack_trace_fp;
                 buf.regs = dwarf_stack_trace_regs;
                 buf.reg_cnt = dwarf_stack_trace_regs_cnt;
+                buf.fp = dwarf_stack_trace_fp;
+                if (unit.unit != NULL) {
+                    buf_sub_max = 0;
+                    search_inlined_subroutine(unit.unit->mObject, &unit, &buf);
+                }
                 *info = &buf;
             }
-            clear_trap(&trap);
         }
-        else {
-            error = trap.error;
-        }
+        clear_trap(&trap);
     }
-
-    if (error) {
-        errno = error;
+    else {
+        errno = trap.error;
         return -1;
     }
+
     return 0;
 }
 

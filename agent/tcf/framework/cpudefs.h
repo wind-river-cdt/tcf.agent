@@ -187,14 +187,37 @@ struct LocationExpressionCommand {
     } args;
 };
 
+typedef struct CodeArea {
+    const char * directory;
+    const char * file;
+    uint32_t file_mtime;
+    uint32_t file_size;
+    ContextAddress start_address;
+    int start_line;
+    int start_column;
+    ContextAddress end_address;
+    int end_line;
+    int end_column;
+    ContextAddress next_address; /* Address of next area - in source text order */
+    int isa;
+    int is_statement;
+    int basic_block;
+    int prologue_end;
+    int epilogue_begin;
+    int op_index;
+    int discriminator;
+} CodeArea;
+
 #define STACK_BOTTOM_FRAME  0
 #define STACK_NO_FRAME      (-1)
 #define STACK_TOP_FRAME     (-2)
 
 typedef struct StackFrame {
+    int frame;
     int is_top_frame;
     int is_walked;          /* Data collected by: 0 - crawl, 1 - walk */
     int has_reg_data;
+    CodeArea * area;        /* if the frame is inlined */
     Context * ctx;
     ContextAddress fp;      /* frame address */
     RegisterData * regs;    /* register values */

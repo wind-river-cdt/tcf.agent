@@ -112,6 +112,11 @@ typedef struct StackFrameRegisterLocation {
     LocationExpressionCommand cmds[1];
 } StackFrameRegisterLocation;
 
+typedef struct StackFrameInlinedSubroutine {
+    Symbol * sym;
+    CodeArea area;
+} StackFrameInlinedSubroutine;
+
 /* Complete stack tracing info for a range of instruction addresses */
 typedef struct StackTracingInfo {
     ContextAddress addr;
@@ -119,6 +124,8 @@ typedef struct StackTracingInfo {
     StackFrameRegisterLocation * fp;
     StackFrameRegisterLocation ** regs;
     int reg_cnt;
+    StackFrameInlinedSubroutine ** subs;
+    int sub_cnt;
 } StackTracingInfo;
 
 #endif

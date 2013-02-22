@@ -74,6 +74,16 @@ char * canonic_path_map_file_name(const char * fnm) {
     return buf;
 }
 
+int is_absolute_path(const char * fnm) {
+    if (fnm[0] == '/') return 1;
+    if (fnm[0] == '\\') return 1;
+    if (fnm[0] != 0 && fnm[1] == ':') {
+        if (fnm[2] == '/') return 1;
+        if (fnm[2] == '\\') return 1;
+    }
+    return 0;
+}
+
 #if SERVICE_PathMap
 
 #include <stdio.h>

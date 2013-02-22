@@ -46,7 +46,7 @@ extern int get_frame_info(Context * ctx, int frame, StackFrame ** info);
 /*
  * Get frame number for 'info'.
  */
-extern int get_info_frame(Context * ctx, StackFrame * info);
+#define get_info_frame(ctx, info) (info ? info->frame : STACK_NO_FRAME)
 
 /*
  * For given context and its registers in a stack frame,

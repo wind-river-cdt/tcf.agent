@@ -661,6 +661,7 @@ static void evaluate_expression(void) {
             break;
         case OP_GNU_entry_value:
             {
+#if SERVICE_StackTrace || ENABLE_ContextProxy
                 LocationExpressionState * s = state;
                 LocationExpressionState entry_state;
                 int frame = get_prev_frame(s->ctx, get_info_frame(s->ctx, s->stack_frame));
@@ -697,6 +698,9 @@ static void evaluate_expression(void) {
                 }
                 s->code_pos += size;
                 set_state(s);
+#else
+                inv_dwarf("Cannot execute OP_entry_value: stack trace not available");
+#endif
             }
             break;
         case OP_call2:

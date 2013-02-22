@@ -46,16 +46,6 @@
 #include <tcf/services/linenumbers_mux.h>
 #endif
 
-static int is_absolute_path(const char * fnm) {
-    if (fnm[0] == '/') return 1;
-    if (fnm[0] == '\\') return 1;
-    if (fnm[0] != 0 && fnm[1] == ':') {
-        if (fnm[2] == '/') return 1;
-        if (fnm[2] == '\\') return 1;
-    }
-    return 0;
-}
-
 static int compare_path(Channel * chnl, Context * ctx, const char * file, const char * pwd, const char * dir, const char * name) {
     int i, j;
     char buf[FILE_PATH_SIZE];

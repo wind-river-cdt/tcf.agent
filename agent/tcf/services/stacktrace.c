@@ -457,25 +457,17 @@ int get_prev_frame(Context * ctx, int frame) {
 }
 
 int get_next_frame(Context * ctx, int frame) {
-    StackTrace * stack;
+    int top_frame = 0;
 
     if (frame < 0) {
         set_errno(ERR_OTHER, "No next stack frame");
         return STACK_NO_FRAME;
     }
 
-    if (!ctx->stopped) {
-        errno = ERR_IS_RUNNING;
-        return STACK_NO_FRAME;
-    }
+    top_frame = get_top_frame(ctx);
+    if (top_frame < 0) return top_frame;
 
-    stack = create_stack_trace(ctx);
-    if (stack->error != NULL) {
-        set_error_report_errno(stack->error);
-        return STACK_NO_FRAME;
-    }
-
-    if (frame >= stack->frame_cnt - 1) {
+    if (frame >= top_frame) {
         set_errno(ERR_OTHER, "No next stack frame");
         return STACK_NO_FRAME;
     }
@@ -515,16 +507,8 @@ int get_frame_info(Context * ctx, int frame, StackFrame ** info) {
     }
 
     *info = stack->frames + frame;
+    (*info)->frame = frame;
     return 0;
-}
-
-int get_info_frame(Context * ctx, StackFrame * info) {
-    StackTrace * stack = EXT(ctx);
-    if (info == NULL) return STACK_NO_FRAME;
-    assert(stack->valid);
-    assert(info >= stack->frames);
-    assert(info < stack->frames + stack->frame_cnt);
-    return info - stack->frames;
 }
 
 int is_top_frame(Context * ctx, int frame) {

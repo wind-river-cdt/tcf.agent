@@ -32,6 +32,13 @@
  */
 extern char * canonic_path_map_file_name(const char * fnm);
 
+/*
+ * Check if the file name is an absolute path.
+ * Unlike canonicalize_file_name() or realpath(), the function can be used for remote files.
+ * Return 1 if asolute path, 0 if relative.
+ */
+extern int is_absolute_path(const char * fnm);
+
 #if SERVICE_PathMap
 
 typedef struct PathMapRule PathMapRule;

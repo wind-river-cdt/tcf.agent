@@ -25,26 +25,7 @@
 #include <tcf/framework/protocol.h>
 #include <tcf/framework/context.h>
 
-typedef struct CodeArea {
-    const char * directory;
-    const char * file;
-    uint32_t file_mtime;
-    uint32_t file_size;
-    ContextAddress start_address;
-    int start_line;
-    int start_column;
-    ContextAddress end_address;
-    int end_line;
-    int end_column;
-    ContextAddress next_address; /* Address of next area - in source text order */
-    int isa;
-    int is_statement;
-    int basic_block;
-    int prologue_end;
-    int epilogue_begin;
-    int op_index;
-    int discriminator;
-} CodeArea;
+#if ENABLE_LineNumbers
 
 typedef void LineNumbersCallBack(CodeArea *, void *);
 
@@ -58,5 +39,6 @@ extern int address_to_line(Context * ctx, ContextAddress addr0, ContextAddress a
 extern void ini_line_numbers_service(Protocol *);
 extern void ini_line_numbers_lib(void);
 
+#endif /* ENABLE_LineNumbers */
 
 #endif /* D_linenumbers */
