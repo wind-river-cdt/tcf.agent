@@ -132,7 +132,6 @@ struct StackFrameCache {
     ContextCache * ctx;
     AbstractCache cache;
     ErrorReport * error;
-    int frame;
     ContextAddress ip;
     ContextAddress rp;
     StackFrame info;
@@ -1585,7 +1584,7 @@ static void validate_stack_frame_cache(Channel * c, void * args, int error) {
             json_test_char(&c->inp, MARKER_EOM);
             if (!error && !s->disposed && !s->info.is_top_frame) {
                 s->pending = protocol_send_command(c, "Registers", "getChildren", validate_reg_children_cache, s);
-                json_write_string(&c->out, frame2id(s->ctx->ctx, s->frame));
+                json_write_string(&c->out, frame2id(s->ctx->ctx, s->info.frame));
                 write_stream(&c->out, 0);
                 write_stream(&c->out, MARKER_EOM);
                 clear_trap(&trap);
@@ -1626,7 +1625,7 @@ int get_frame_info(Context * ctx, int frame, StackFrame ** info) {
     check_registers_cache(cache);
     for (l = cache->stk_cache_list.next; l != &cache->stk_cache_list; l = l->next) {
         s = ctx2stk(l);
-        if (s->frame == frame) {
+        if (s->info.frame == frame) {
             assert(!s->disposed);
             if (s->pending != NULL) cache_wait(&s->cache);
             *info = &s->info;
@@ -1645,7 +1644,7 @@ int get_frame_info(Context * ctx, int frame, StackFrame ** info) {
     s = (StackFrameCache *)loc_alloc_zero(sizeof(StackFrameCache));
     list_add_first(&s->link_ctx, &cache->stk_cache_list);
     s->ctx = cache;
-    s->frame = frame;
+    s->info.frame = frame;
     s->info.ctx = ctx;
     s->info.regs = &s->reg_data;
     s->reg_data.data = (uint8_t *)loc_alloc_zero(cache->reg_size);
@@ -1668,13 +1667,36 @@ int get_top_frame(Context * ctx) {
 }
 
 int get_prev_frame(Context * ctx, int frame) {
-    set_errno(ERR_UNSUPPORTED, "get_prev_frame()");
-    return STACK_NO_FRAME;
+    if (frame == STACK_TOP_FRAME) {
+        frame = get_top_frame(ctx);
+        if (frame < 0) return frame;
+    }
+
+    if (frame <= 0) {
+        set_errno(ERR_OTHER, "No previous stack frame");
+        return STACK_NO_FRAME;
+    }
+
+    return frame - 1;
 }
 
 int get_next_frame(Context * ctx, int frame) {
-    set_errno(ERR_UNSUPPORTED, "get_next_frame()");
-    return STACK_NO_FRAME;
+    int top_frame = 0;
+
+    if (frame < 0) {
+        set_errno(ERR_OTHER, "No next stack frame");
+        return STACK_NO_FRAME;
+    }
+
+    top_frame = get_top_frame(ctx);
+    if (top_frame < 0) return top_frame;
+
+    if (frame >= top_frame) {
+        set_errno(ERR_OTHER, "No next stack frame");
+        return STACK_NO_FRAME;
+    }
+
+    return frame + 1;
 }
 
 unsigned context_word_size(Context * ctx) {
