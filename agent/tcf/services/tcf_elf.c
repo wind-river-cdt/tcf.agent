@@ -1162,10 +1162,11 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
             continue;
         }
         if (r->sect_name == NULL) {
-            for (j = 0; range == NULL && j < file->pheader_cnt; j++) {
+            ELF_File * debug = get_dwarf_file(file);
+            for (j = 0; range == NULL && j < debug->pheader_cnt; j++) {
                 U8_T offs_min = 0;
                 U8_T offs_max = 0;
-                ELF_PHeader * p = file->pheaders + j;
+                ELF_PHeader * p = debug->pheaders + j;
                 ELF_Section * sec = NULL;
                 if (p->type != PT_LOAD) continue;
                 if (r->flags) {
@@ -1181,13 +1182,7 @@ UnitAddressRange * elf_find_unit(Context * ctx, ContextAddress addr_min, Context
                 if (link_addr_min < p->address) link_addr_min = (ContextAddress)p->address;
                 if (link_addr_max >= p->address + p->mem_size) link_addr_max = (ContextAddress)(p->address + p->mem_size);
                 sec = find_section_by_offset(file, offs_min);
-                range = find_comp_unit_addr_range(get_dwarf_cache(file), sec, link_addr_min, link_addr_max);
-                if (range == NULL) {
-                    ELF_File * debug = get_dwarf_file(file);
-                    if (debug != file) {
-                        range = find_comp_unit_addr_range(get_dwarf_cache(debug), sec, link_addr_min, link_addr_max);
-                    }
-                }
+                range = find_comp_unit_addr_range(get_dwarf_cache(debug), sec, link_addr_min, link_addr_max);
                 if (range != NULL && range_rt_addr != NULL) {
                     *range_rt_addr = (ContextAddress)(range->mAddr - p->address + p->offset - r->file_offs + r->addr);
                 }
