@@ -1936,35 +1936,39 @@ int get_stack_tracing_info(Context * ctx, ContextAddress rt_addr, StackTracingIn
     *info = NULL;
 
     if (set_trap(&trap)) {
-        UnitAddress unit;
-        find_unit(ctx, rt_addr, &unit);
-        if (unit.file != NULL) {
-            get_dwarf_stack_frame_info(ctx, unit.file, unit.section, unit.lt_addr);
+        ELF_File * file = NULL;
+        ELF_Section * sec = NULL;
+        ContextAddress lt_addr = elf_map_to_link_time_address(ctx, rt_addr, &file, &sec);
+        if (file != NULL) {
+            get_dwarf_stack_frame_info(ctx, file, sec, lt_addr);
             if (dwarf_stack_trace_fp->cmds_cnt > 0) {
                 static StackTracingInfo buf;
                 memset(&buf, 0, sizeof(buf));
-                assert(dwarf_stack_trace_addr <= unit.lt_addr);
-                assert(dwarf_stack_trace_addr + dwarf_stack_trace_size > unit.lt_addr);
-                buf.addr = (ContextAddress)dwarf_stack_trace_addr - unit.lt_addr + rt_addr;
+                assert(dwarf_stack_trace_addr <= lt_addr);
+                assert(dwarf_stack_trace_addr + dwarf_stack_trace_size > lt_addr);
+                buf.addr = (ContextAddress)dwarf_stack_trace_addr - lt_addr + rt_addr;
                 buf.size = (ContextAddress)dwarf_stack_trace_size;
                 buf.regs = dwarf_stack_trace_regs;
                 buf.reg_cnt = dwarf_stack_trace_regs_cnt;
                 buf.fp = dwarf_stack_trace_fp;
-                if (unit.unit != NULL) {
-                    buf_sub_max = 0;
-                    search_inlined_subroutine(unit.unit->mObject, &unit, &buf);
+                {
+                    /* Search inlined functions info.
+                     * Note: when debug info is a separate file,
+                     * 'lt_addr' is not same as 'unit.lt_addr' */
+                    UnitAddress unit;
+                    find_unit(ctx, rt_addr, &unit);
+                    if (unit.unit != NULL) {
+                        buf_sub_max = 0;
+                        search_inlined_subroutine(unit.unit->mObject, &unit, &buf);
+                    }
                 }
                 *info = &buf;
             }
         }
         clear_trap(&trap);
+        return 0;
     }
-    else {
-        errno = trap.error;
-        return -1;
-    }
-
-    return 0;
+    return -1;
 }
 
 const char * get_symbol_file_name(Context * ctx, MemoryRegion * module) {
