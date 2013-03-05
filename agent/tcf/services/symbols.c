@@ -531,6 +531,7 @@ static void command_find_in_scope_cache_client(void * x) {
     else if (ctx->exited) err = ERR_ALREADY_EXITED;
 
     if (err == 0 && args->scope_id[0] && id2symbol(args->scope_id, &scope) < 0) err = errno;
+    if (err == 0 && args->name == NULL) err = set_errno(EINVAL, "Symbol name must not be null");
     if (err == 0 && find_symbol_in_scope(ctx, frame, args->ip, scope, args->name, &sym) < 0) err = errno;
 
     list_cnt = 0;
