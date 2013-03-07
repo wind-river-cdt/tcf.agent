@@ -1069,10 +1069,12 @@ static Context * add_thread(Context * parent, Context * creator, pid_t pid) {
     alloc_regs(ctx);
     ctx->mem = parent;
     ctx->big_endian = parent->big_endian;
-    ctx->sig_dont_stop = ctx->sig_dont_stop;
-    ctx->sig_dont_pass = ctx->sig_dont_pass;
     ctx->creator = creator;
-    if (creator) creator->ref_count++;
+    if (creator) {
+        ctx->sig_dont_stop = creator->sig_dont_stop;
+        ctx->sig_dont_pass = creator->sig_dont_pass;
+        creator->ref_count++;
+    }
     (ctx->parent = parent)->ref_count++;
     if (EXT(parent)->detach_req) {
         ctx->exiting = 1;
