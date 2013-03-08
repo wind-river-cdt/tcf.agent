@@ -129,16 +129,18 @@ static unsigned trace_cmds_cnt = 0;
 static LocationExpressionCommand * trace_cmds = NULL;
 
 static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
+    int min_reg_cnt = 0;
     while (reg >= regs->regs_max) {
         regs->regs_max = regs->regs_max == 0 ? 32 : regs->regs_max * 2;
         regs->regs = (RegisterRules *)loc_realloc(regs->regs, sizeof(RegisterRules) * regs->regs_max);
     }
-    while (regs->regs_cnt <= reg) {
+    while (regs->regs_cnt <= reg || regs->regs_cnt < min_reg_cnt) {
         int n = regs->regs_cnt++;
         memset(regs->regs + n, 0, sizeof(RegisterRules));
         /* Architecture specific implied rules */
         switch (rules.reg_id_scope.machine) {
         case EM_386:
+            min_reg_cnt = 8;
             switch (n) {
             case 4: /* SP */
                 regs->regs[n].rule = RULE_VAL_OFFSET;
@@ -152,6 +154,7 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             }
             break;
         case EM_X86_64:
+            min_reg_cnt = 16;
             switch (n) {
             case 3: /* BX */
             case 6: /* BP */
@@ -168,6 +171,7 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             break;
         case EM_PPC:
         case EM_PPC64:
+            min_reg_cnt = 64;
             if (n == 1) {
                 regs->regs[n].rule = RULE_VAL_OFFSET;
             }
@@ -180,10 +184,30 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             }
             break;
         case EM_ARM:
+            min_reg_cnt = 14;
             if (n >= 4 && n <= 11) { /* Local variables */
                 regs->regs[n].rule = RULE_SAME_VALUE;
             }
             else if (n == 13) { /* Stack pointer */
+                regs->regs[n].rule = RULE_VAL_OFFSET;
+            }
+            else if (n == rules.return_address_register) {
+                regs->regs[n].rule = RULE_REGISTER;
+                regs->regs[n].offset = rules.return_address_register;
+            }
+            break;
+        case EM_MICROBLAZE:
+            min_reg_cnt = 32;
+            if (n >= 19 && n <= 31) { /* Must be saved across function calls. Callee-save */
+                regs->regs[n].rule = RULE_SAME_VALUE;
+            }
+            else if (n == 2) { /* Read-only small data area anchor */
+                regs->regs[n].rule = RULE_SAME_VALUE;
+            }
+            else if (n == 13) { /* Read-write small data area anchor */
+                regs->regs[n].rule = RULE_SAME_VALUE;
+            }
+            else if (n == 1) { /* Stack pointer */
                 regs->regs[n].rule = RULE_VAL_OFFSET;
             }
             else if (n == rules.return_address_register) {

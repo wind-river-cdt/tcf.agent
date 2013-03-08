@@ -364,7 +364,9 @@ typedef struct {
 #ifndef EM_PPC64
 #define EM_PPC64 21
 #endif
-
+#ifndef EM_MICROBLAZE
+#define EM_MICROBLAZE 189
+#endif
 #ifndef STT_GNU_IFUNC
 #define STT_GNU_IFUNC  10
 #endif
