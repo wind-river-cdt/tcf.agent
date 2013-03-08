@@ -597,14 +597,16 @@ int check_breakpoints_on_memory_read(Context * ctx, ContextAddress address, void
             ContextAddress mem_addr = 0;
             ContextAddress mem_base = 0;
             ContextAddress mem_size = 0;
-            if (context_get_canonical_addr(ctx, address, &mem, &mem_addr, &mem_base, &mem_size) < 0) return -1;
-            if ((size_t)(mem_base + mem_size - mem_addr) < sz) sz = (size_t)(mem_base + mem_size - mem_addr);
             while (l != &instructions) {
                 BreakInstruction * bi = link_all2bi(l);
                 size_t i;
                 l = l->next;
                 if (!bi->planted) continue;
                 if (!bi->saved_size) continue;
+                if (mem == NULL) {
+                    if (context_get_canonical_addr(ctx, address, &mem, &mem_addr, &mem_base, &mem_size) < 0) return -1;
+                    if ((size_t)(mem_base + mem_size - mem_addr) < sz) sz = (size_t)(mem_base + mem_size - mem_addr);
+                }
                 if (bi->cb.ctx != mem) continue;
                 if (bi->cb.address + bi->saved_size <= mem_addr) continue;
                 if (bi->cb.address >= mem_addr + sz) continue;
@@ -632,13 +634,15 @@ int check_breakpoints_on_memory_write(Context * ctx, ContextAddress address, voi
             ContextAddress mem_addr = 0;
             ContextAddress mem_base = 0;
             ContextAddress mem_size = 0;
-            if (context_get_canonical_addr(ctx, address, &mem, &mem_addr, &mem_base, &mem_size) < 0) return -1;
-            if ((size_t)(mem_base + mem_size - mem_addr) < sz) sz = (size_t)(mem_base + mem_size - mem_addr);
             while (l != &instructions) {
                 BreakInstruction * bi = link_all2bi(l);
                 l = l->next;
                 if (!bi->planted) continue;
                 if (!bi->saved_size) continue;
+                if (mem == NULL) {
+                    if (context_get_canonical_addr(ctx, address, &mem, &mem_addr, &mem_base, &mem_size) < 0) return -1;
+                    if ((size_t)(mem_base + mem_size - mem_addr) < sz) sz = (size_t)(mem_base + mem_size - mem_addr);
+                }
                 if (bi->cb.ctx != mem) continue;
                 if (bi->cb.address + bi->saved_size <= mem_addr) continue;
                 if (bi->cb.address >= mem_addr + sz) continue;
