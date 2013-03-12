@@ -45,6 +45,18 @@ typedef struct {
     unsigned disassemblers_max;
 } ContextExtensionDS;
 
+typedef struct {
+    Channel * c;
+    char token[256];
+    char id[256];
+    ContextAddress addr;
+    ContextAddress size;
+    char * isa;
+    int simplified;
+    int pseudo_instr;
+    int opcodeVal;
+} DisassembleCmdArgs;
+
 static const char * DISASSEMBLY = "Disassembly";
 static size_t context_extension_offset = 0;
 
@@ -144,18 +156,29 @@ static void get_isa(Context * ctx, ContextAddress addr, ContextISA * isa) {
 
 static void disassemble_block(Context * ctx, OutputStream * out, uint8_t * mem_buf,
                               ContextAddress buf_addr, ContextAddress buf_size,
-                              ContextAddress mem_size, ContextISA * isa) {
+                              ContextAddress mem_size, ContextISA * isa,
+                              DisassembleCmdArgs * args) {
     ContextAddress offs = 0;
     Disassembler * disassembler = NULL;
     Context * cpu = context_get_group(ctx, CONTEXT_GROUP_CPU);
     int disassembler_ok = 0;
+    DisassemblerParams param;
+
+    param.big_endian = ctx->big_endian;
+    param.pseudo_instr = args->pseudo_instr;
+    param.simplified = args->simplified;
+    if (args->isa) {
+	isa->isa = args->isa;
+	isa->addr = args->addr;
+	isa->size = args->size;
+    }
 
     write_stream(out, '[');
     while (offs < buf_size && offs < mem_size) {
         ContextAddress addr = buf_addr + offs;
         ContextAddress size = mem_size - offs;
         DisassemblyResult * dr = NULL;
-        if (addr < isa->addr || addr >= isa->addr + isa->size) {
+        if ((args->isa == NULL) && (addr < isa->addr || addr >= isa->addr + isa->size)) {
             get_isa(ctx, addr, isa);
             disassembler_ok = 0;
         }
@@ -164,7 +187,7 @@ static void disassemble_block(Context * ctx, OutputStream * out, uint8_t * mem_b
             if (disassembler == NULL) disassembler = find_disassembler(cpu, isa->def);
             disassembler_ok = 1;
         }
-        if (disassembler) dr = disassembler(mem_buf + (size_t)offs, addr, size);
+        if (disassembler) dr = disassembler(mem_buf + (size_t)offs, addr, size, &param);
         if (dr == NULL) {
             static char buf[32];
             static DisassemblyResult dd;
@@ -206,19 +229,20 @@ static void disassemble_block(Context * ctx, OutputStream * out, uint8_t * mem_b
         json_write_string(out, dr->text);
         write_stream(out, '}');
         write_stream(out, ']');
+        if (args->opcodeVal) {
+            JsonWriteBinaryState state;
+            write_stream(out, ',');
+            json_write_string(out, "OpcodeValue");
+            write_stream(out, ':');
+            json_write_binary_start(&state, out, (size_t) dr->size);
+            json_write_binary_data(&state, mem_buf + (size_t)offs, (size_t) dr->size);
+            json_write_binary_end(&state);
+        }
         write_stream(out, '}');
         offs += dr->size;
     }
     write_stream(out, ']');
 }
-
-typedef struct {
-    Channel * c;
-    char token[256];
-    char id[256];
-    ContextAddress addr;
-    ContextAddress size;
-} DisassembleCmdArgs;
 
 #if SERVICE_LineNumbers
 static void address_to_line_cb(CodeArea * area, void * args) {
@@ -334,7 +358,8 @@ static void disassemble_cache_client(void * x) {
         }
     }
 
-    if (!error) disassemble_block(ctx, buf_out, mem_buf, buf_addr, buf_size, mem_size, &isa);
+    if (!error) disassemble_block(ctx, buf_out, mem_buf, buf_addr, buf_size, 
+                                  mem_size, &isa, args);
 
     cache_exit();
 
@@ -366,8 +391,19 @@ static void safe_event_disassemble(void * x) {
 }
 
 static void read_disassembly_params(InputStream * inp, const char * name, void * x) {
-    /* TODO: disassembly params */
-    json_skip_object(inp);
+    DisassembleCmdArgs * args = (DisassembleCmdArgs *) x;
+    
+    if (strcmp(name, "ISA") == 0) {
+	args->isa = json_read_alloc_string(inp);
+    } else if (strcmp(name, "Simplified") == 0) {
+	args->simplified = json_read_boolean(inp);
+    } else if (strcmp(name, "Pseudo") == 0) {
+	args->pseudo_instr = json_read_boolean(inp);
+    } else if (strcmp(name, "OpcodeValue") == 0) {
+	args->opcodeVal =json_read_boolean(inp);
+    } else {
+        exception(ERR_JSON_SYNTAX);
+    }
 }
 
 static void command_disassemble(char * token, Channel * c) {
