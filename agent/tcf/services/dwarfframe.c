@@ -130,12 +130,12 @@ static LocationExpressionCommand * trace_cmds = NULL;
 
 static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
     int min_reg_cnt = 0;
-    while (reg >= regs->regs_max) {
-        regs->regs_max = regs->regs_max == 0 ? 32 : regs->regs_max * 2;
-        regs->regs = (RegisterRules *)loc_realloc(regs->regs, sizeof(RegisterRules) * regs->regs_max);
-    }
     while (regs->regs_cnt <= reg || regs->regs_cnt < min_reg_cnt) {
         int n = regs->regs_cnt++;
+        if (n >= regs->regs_max) {
+            regs->regs_max = regs->regs_max == 0 ? 32 : regs->regs_max * 2;
+            regs->regs = (RegisterRules *)loc_realloc(regs->regs, sizeof(RegisterRules) * regs->regs_max);
+        }
         memset(regs->regs + n, 0, sizeof(RegisterRules));
         /* Architecture specific implied rules */
         switch (rules.reg_id_scope.machine) {
