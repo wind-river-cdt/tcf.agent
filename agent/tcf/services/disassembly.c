@@ -54,7 +54,7 @@ typedef struct {
     char * isa;
     int simplified;
     int pseudo_instr;
-    int opcodeVal;
+    int opcode_value;
 } DisassembleCmdArgs;
 
 static const char * DISASSEMBLY = "Disassembly";
@@ -168,9 +168,9 @@ static void disassemble_block(Context * ctx, OutputStream * out, uint8_t * mem_b
     param.pseudo_instr = args->pseudo_instr;
     param.simplified = args->simplified;
     if (args->isa) {
-	isa->isa = args->isa;
-	isa->addr = args->addr;
-	isa->size = args->size;
+        isa->isa = args->isa;
+        isa->addr = args->addr;
+        isa->size = args->size;
     }
 
     write_stream(out, '[');
@@ -229,14 +229,11 @@ static void disassemble_block(Context * ctx, OutputStream * out, uint8_t * mem_b
         json_write_string(out, dr->text);
         write_stream(out, '}');
         write_stream(out, ']');
-        if (args->opcodeVal) {
-            JsonWriteBinaryState state;
+        if (args->opcode_value) {
             write_stream(out, ',');
             json_write_string(out, "OpcodeValue");
             write_stream(out, ':');
-            json_write_binary_start(&state, out, (size_t) dr->size);
-            json_write_binary_data(&state, mem_buf + (size_t)offs, (size_t) dr->size);
-            json_write_binary_end(&state);
+            json_write_binary(out, mem_buf + (size_t)offs, (size_t)dr->size);
         }
         write_stream(out, '}');
         offs += dr->size;
@@ -358,7 +355,7 @@ static void disassemble_cache_client(void * x) {
         }
     }
 
-    if (!error) disassemble_block(ctx, buf_out, mem_buf, buf_addr, buf_size, 
+    if (!error) disassemble_block(ctx, buf_out, mem_buf, buf_addr, buf_size,
                                   mem_size, &isa, args);
 
     cache_exit();
@@ -392,17 +389,21 @@ static void safe_event_disassemble(void * x) {
 
 static void read_disassembly_params(InputStream * inp, const char * name, void * x) {
     DisassembleCmdArgs * args = (DisassembleCmdArgs *) x;
-    
+
     if (strcmp(name, "ISA") == 0) {
-	args->isa = json_read_alloc_string(inp);
-    } else if (strcmp(name, "Simplified") == 0) {
-	args->simplified = json_read_boolean(inp);
-    } else if (strcmp(name, "Pseudo") == 0) {
-	args->pseudo_instr = json_read_boolean(inp);
-    } else if (strcmp(name, "OpcodeValue") == 0) {
-	args->opcodeVal =json_read_boolean(inp);
-    } else {
-        exception(ERR_JSON_SYNTAX);
+        args->isa = json_read_alloc_string(inp);
+    }
+    else if (strcmp(name, "Simplified") == 0) {
+        args->simplified = json_read_boolean(inp);
+    }
+    else if (strcmp(name, "Pseudo") == 0) {
+        args->pseudo_instr = json_read_boolean(inp);
+    }
+    else if (strcmp(name, "OpcodeValue") == 0) {
+        args->opcode_value =json_read_boolean(inp);
+    }
+    else {
+        json_skip_object(inp);
     }
 }
 

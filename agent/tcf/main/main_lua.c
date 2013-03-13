@@ -285,7 +285,8 @@ static void lua_read_command_getline(void *client_data)
             if(state->linemax == 0) {
                 state->linemax = 1024;
                 state->line = (char *)loc_alloc(state->linemax);
-            } else {
+            }
+            else {
                 state->linemax *= 2;
                 state->line = (char *)loc_realloc(state->line, state->linemax);
             }
@@ -307,7 +308,8 @@ eol:
         trace(LOG_LUA, "lua_read_command: %.*s", state->lineind, state->line);
         lua_pushlstring(L, state->line, state->lineind);
         state->lineind = 0;
-    } else {
+    }
+    else {
         trace(LOG_LUA, "lua_read_command: EOF");
         lua_pushnil(L);
     }
@@ -328,7 +330,8 @@ static void lua_read_command_done(void *client_data)
     if(state->req.u.fio.rval > 0) {
         state->bufwr += state->req.u.fio.rval;
         state->eof = 0;
-    } else {
+    }
+    else {
         state->eof = 1;
     }
     lua_read_command_getline(state);
@@ -364,7 +367,8 @@ static int lua_read_command(lua_State *L)
     state->reqline = 1;
     if(state->bufrd == state->bufwr) {
         lua_read_command_fillbuf(state);
-    } else {
+    }
+    else {
         post_event(lua_read_command_getline, state);
     }
     return 0;
@@ -412,7 +416,9 @@ static struct peer_extra *lua_push_pse(lua_State *L, PeerServer *ps)
     if((pse = (struct peer_extra *)lua_touserdata(L, -1)) != NULL) {
         assert(lua_isclass(L, -1, "tcf_peer"));
         assert(pse->managed);
-    } else {
+
+    }
+    else {
         assert(lua_isnil(L, -1));
         lua_pop(L, 1);
 
@@ -645,7 +651,8 @@ static void lua_channel_connect_cb(void * client_data, int error, Channel * c)
         c->disconnected = channel_disconnected;
         lua_rawgeti(L, LUA_REGISTRYINDEX, ce->self_refp->ref);
         lua_pushnil(L);
-    } else {
+    }
+    else {
         assert(c == NULL);
         luaref_owner_free(L, ce);
         lua_pushnil(L);
@@ -725,7 +732,8 @@ static int lua_post_event(lua_State *L)
     delay = lua_tointeger(L, 2);
     if(delay == 0) {
         post_event(lua_post_event_cb, p);
-    } else {
+    }
+    else {
         post_event_with_delay(lua_post_event_cb, p, delay);
     }
     return 1;
@@ -854,7 +862,8 @@ static int lua_channel_tostring(lua_State *L)
     if(ce->c != NULL) {
         lua_pushfstring(L, "tcf_channel (%s, %p, %s)", ce->c->peer_name, ce,
                         channel_state_string(ce->c));
-    } else {
+    }
+    else {
         lua_pushfstring(L, "tcf_channel (<disconnected>, %p)", ce);
     }
     return 1;
@@ -1058,7 +1067,8 @@ static void channel_send_command_cb(Channel * c, void * client_data, int error)
         luaL_pushresult(&msg);
         lua_pushnil(L);
         trace(LOG_LUA, "lua_channel_send_command_reply %p %d %s", c, cmd->result_cbrefp->ref, lua_tostring(L, -2));
-    } else {
+    }
+    else {
         lua_pushnil(L);
         lua_pushstring(L, errno_to_str(error));
         trace(LOG_LUA, "lua_channel_send_command_reply %p %d error %d", c, cmd->result_cbrefp->ref, error);
@@ -1133,7 +1143,8 @@ static void channel_redirect_cb(Channel * c, void * client_data, int error)
     if(!error) {
         lua_pushnil(L);
         trace(LOG_LUA, "lua_channel_redirect_reply %p %d %s", c, cmd->result_cbrefp->ref, lua_tostring(L, -2));
-    } else {
+    }
+    else {
         lua_pushstring(L, errno_to_str(error));
         trace(LOG_LUA, "lua_channel_redirect_reply %p %d error %d", c, cmd->result_cbrefp->ref, error);
     }
@@ -1360,19 +1371,24 @@ static int lua_peer_setflags(lua_State *L)
             if(strcmp(lua_tostring(L, -2), "local") == 0) {
                 if(lua_toboolean(L, 2)) {
                     pse->ps->flags |= PS_FLAG_LOCAL;
-                } else {
+                }
+                else {
                     pse->ps->flags &= ~PS_FLAG_LOCAL;
                 }
-            } else if(strcmp(lua_tostring(L, -2), "private") == 0) {
+            }
+            else if(strcmp(lua_tostring(L, -2), "private") == 0) {
                 if(lua_toboolean(L, 2)) {
                     pse->ps->flags |= PS_FLAG_PRIVATE;
-                } else {
+                }
+                else {
                     pse->ps->flags &= ~PS_FLAG_PRIVATE;
                 }
-            } else if(strcmp(lua_tostring(L, -2), "discoverable") == 0) {
+            }
+            else if(strcmp(lua_tostring(L, -2), "discoverable") == 0) {
                 if(lua_toboolean(L, 2)) {
                     pse->ps->flags |= PS_FLAG_DISCOVERABLE;
-                } else {
+                }
+                else {
                     pse->ps->flags &= ~PS_FLAG_DISCOVERABLE;
                 }
             }
@@ -1540,7 +1556,8 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: error: cannot open script: %s\n", progname, script_name);
             exit(1);
         }
-    } else {
+    }
+    else {
         lua_read_command_state.req.u.fio.fd = fileno(stdin);
     }
 

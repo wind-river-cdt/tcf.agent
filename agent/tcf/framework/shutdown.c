@@ -54,7 +54,8 @@ static void notify_all(void * arg) {
         if (obj->state == SHUTDOWN_STATE_NORMAL) {
             obj->state = SHUTDOWN_STATE_PENDING;
             obj->notify(obj);
-        } else {
+        }
+        else {
             assert(obj->state == SHUTDOWN_STATE_PENDING);
         }
     }
@@ -108,7 +109,8 @@ void shutdown_set_normal(ShutdownInfo *obj) {
 
     if (obj->state == SHUTDOWN_STATE_STOPPED) {
         list_add_last(&obj->link_active, &shutdown_active);
-    } else {
+    }
+    else {
         assert(obj->state == SHUTDOWN_STATE_PENDING);
     }
     obj->state = SHUTDOWN_STATE_NORMAL;

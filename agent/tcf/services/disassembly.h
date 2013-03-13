@@ -30,13 +30,13 @@ typedef struct {
  * Parameters to a disassembler.
  */
 typedef struct DisassemblerParams {
-    int big_endian;	/* 0 - little endian, 1 -  big endian */
-    int simplified;	/* If true, simplified mnemonics are specified */
-    int pseudo_instr;	/* If true, pseudo-instructions are requested */
+    int big_endian;     /* 0 - little endian, 1 -  big endian */
+    int simplified;     /* If true, simplified mnemonics are specified */
+    int pseudo_instr;   /* If true, pseudo-instructions are requested */
 } DisassemblerParams;
 
 typedef DisassemblyResult * Disassembler(uint8_t * /* code */, ContextAddress /* addr */,
-				ContextAddress /* size */, DisassemblerParams * /* param */);
+                                ContextAddress /* size */, DisassemblerParams * /* param */);
 
 extern void add_disassembler(Context * ctx, const char * isa, Disassembler disassembler);
 

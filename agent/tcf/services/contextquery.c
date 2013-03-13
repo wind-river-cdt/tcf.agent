@@ -134,7 +134,8 @@ static int parse_quoted_string(const char **q) {
                           " are the only characters that can be escaped");
                 return -1;
             }
-        } else if (*c == '\0') {
+        }
+        else if (*c == '\0') {
             set_errno(ERR_OTHER, "Invalid context query syntax: missing closing"
                       " quote character");
             return -1;
@@ -152,7 +153,8 @@ static int parse_string(const char **q) {
 
     if (*c == '"') {
         if (parse_quoted_string(&c) < 0) return -1;
-    } else {
+    }
+    else {
         if (parse_symbol(&c) < 0) return -1;
     }
     *q = c;
@@ -164,9 +166,11 @@ static int parse_value(const char **q) {
 
     if ((*c >= '0') && (*c <= '9')) {
         if (parse_number(&c) < 0) return -1;
-    } else if (*c == '"') {
+    }
+    else if (*c == '"') {
         if (parse_quoted_string(&c) < 0) return -1;
-    } else {
+    }
+    else {
         if (parse_symbol(&c) < 0) return -1;
     }
     *q = c;
@@ -230,7 +234,8 @@ int parse_context_query(const char * q) {
             if (parse_wildcard(&q) < 0) return -1;
             a = (Attribute *) tmp_alloc_zero(sizeof(Attribute));
             a->value = tmp_strdup(str_buf);
-        } else {
+        }
+        else {
             a = parse_property(&q);
             if (a == NULL) return -1;
         }

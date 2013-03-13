@@ -309,7 +309,8 @@ void async_req_post(AsyncReqInfo * req) {
         assert(wtlist_size == 0);
         if (is_dispatch_thread()) {
             worker_thread_add(req);
-        } else {
+        }
+        else {
             post_event(worker_thread_add_deferred, req);
         }
     }
