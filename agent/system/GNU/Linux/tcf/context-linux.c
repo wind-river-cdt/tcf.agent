@@ -1328,7 +1328,9 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
                 trace(LOG_EVENTS, "event: pid %d exit sys call %d, PC = %#lx",
                     pid, ext->syscall_id, pc1);
                 switch (ext->syscall_id) {
+#ifdef __NR_mmap
                 case __NR_mmap:
+#endif
                 case __NR_munmap:
 #ifdef __NR_mmap2
                 case __NR_mmap2:

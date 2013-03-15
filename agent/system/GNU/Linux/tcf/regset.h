@@ -25,7 +25,11 @@
 
 typedef struct REG_SET {
     struct user user;
+#if defined(__arm__)
+    struct user_fpregs fp;
+#else
     struct user_fpregs_struct fp;
+#endif
 
 /* Additional CPU registers - defined in regset-mdep.h */
 #ifdef MDEP_OtherRegisters
