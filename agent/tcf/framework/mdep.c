@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -785,7 +785,11 @@ ip_ifc_info* get_ip_ifc(void) {
 #  include <asm/unistd.h>
 #endif
 
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__APPLE__)
+#if !defined(USE_clock_gettime)
+#  define USE_clock_gettime (!defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__APPLE__))
+#endif
+
+#if !USE_clock_gettime
 int clock_gettime(clockid_t clock_id, struct timespec * tp) {
     struct timeval tv;
 
@@ -1249,7 +1253,11 @@ size_t strlcat(char * dst, const char * src, size_t size) {
 
 #endif
 
-#if defined(__linux__) && !defined(__UCLIBC__) && !defined(ANDROID)
+#if !defined(USE_uuid_generate)
+#  define USE_uuid_generate (defined(__linux__) && !defined(__UCLIBC__) && !defined(ANDROID))
+#endif
+
+#if USE_uuid_generate
 
 #include <uuid/uuid.h>
 
