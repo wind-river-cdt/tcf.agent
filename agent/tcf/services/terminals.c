@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2008, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2008, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -417,17 +417,26 @@ static void command_launch(char * token, Channel * c) {
     {
         struct stat st;
         if (err == 0 && stat(exec, &st) != 0) {
-            int n = errno;
-            static char fnm[FILE_PATH_SIZE];
-            /* On some systems (e.g. Free DSB) bash is installed under /usr/local */
-            assert(exec[0] == '/');
-            snprintf(fnm, sizeof(fnm), "/usr/local%s", exec);
-            if (stat(fnm, &st) == 0) {
-                args[0] = exec = fnm;
+            err = errno;
+            if (err == ENOENT) {
+                static char fnm[FILE_PATH_SIZE];
+                /* On some systems (e.g. Free DSB) bash is installed under /usr/local */
+                assert(exec[0] == '/');
+                snprintf(fnm, sizeof(fnm), "/usr/local%s", exec);
+                if (stat(fnm, &st) == 0) {
+                    args[0] = exec = fnm;
+                    err = 0;
+                }
             }
-            else {
-                err = n;
+            if (err == ENOENT && strcmp(exec, "/bin/bash") == 0) {
+                /* "bash" not found, try "sh" */
+                const char * fnm = "/bin/sh";
+                if (stat(fnm, &st) == 0) {
+                    args[0] = exec = fnm;
+                    err = 0;
+                }
             }
+            if (err) err = set_fmt_errno(err, "Cannot start %s", exec);
         }
     }
     set_terminal_env(&prms.envp, pty_type, encoding, exec);
