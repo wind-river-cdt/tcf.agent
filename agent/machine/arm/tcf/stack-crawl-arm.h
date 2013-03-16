@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013 Stanislav Yakovlev.
+ * Copyright (c) 2013 Xilinx, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -10,24 +10,16 @@
  * You may elect to redistribute this code under either of these licenses.
  *
  * Contributors:
- *     Stanislav Yakovlev - initial API and implementation
+ *     Xilinx - initial API and implementation
  *******************************************************************************/
 
 /*
- * This module provides CPU specific definitions for ARM.
+ * This module implements stack crawl for ARM processor.
  */
 
-#if defined (__arm__)
+#ifndef D_stack_crawl_arm
+#define D_stack_crawl_arm
 
-#include <tcf/regset.h>
+extern int crawl_stack_frame_arm(StackFrame * frame, StackFrame * down);
 
-extern RegisterDefinition * regs_index;
-extern unsigned char BREAK_INST[4];
-
-#define ENABLE_ini_cpudefs_mdep 1
-extern void ini_cpudefs_mdep(void);
-
-#define ENABLE_add_cpudefs_disassembler 1
-extern void add_cpudefs_disassembler(Context * cpu_ctx);
-
-#endif
+#endif /* D_stack_crawl_arm */

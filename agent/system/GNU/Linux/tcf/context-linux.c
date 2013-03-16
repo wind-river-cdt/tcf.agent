@@ -815,7 +815,10 @@ Context * context_get_group(Context * ctx, int group) {
     case CONTEXT_GROUP_INTERCEPT:
         return ctx;
     case CONTEXT_GROUP_CPU:
-        if (cpu_group == NULL) cpu_group = create_context("CPU");
+        if (cpu_group == NULL) {
+            cpu_group = create_context("CPU");
+            ini_cpu_disassembler(cpu_group);
+        }
         return cpu_group;
     }
     return ctx->mem;
@@ -921,6 +924,8 @@ int context_get_isa(Context * ctx, ContextAddress addr, ContextISA * isa) {
     isa->def = "386";
 #elif defined(__x86_64__)
     isa->def = "X86_64";
+#elif defined(__arm__)
+    isa->def = "ARM";
 #else
     isa->def = NULL;
 #endif

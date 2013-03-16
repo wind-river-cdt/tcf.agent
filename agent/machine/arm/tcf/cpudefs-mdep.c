@@ -25,6 +25,8 @@
 #include <tcf/framework/context.h>
 #include <tcf/framework/myalloc.h>
 #include <tcf/services/symbols.h>
+#include <machine/arm/tcf/disassembler-arm.h>
+#include <machine/arm/tcf/stack-crawl-arm.h>
 #include <tcf/cpudefs-mdep.h>
 
 #if defined(__arm__)
@@ -60,16 +62,21 @@ RegisterDefinition * regs_index = NULL;
 
 unsigned char BREAK_INST[] = { 0xf0, 0x01, 0xf0, 0xe7 };
 
-static RegisterDefinition * fp_def = NULL;
-static RegisterDefinition * sp_def = NULL;
 static RegisterDefinition * pc_def = NULL;
 
 void ini_cpudefs_mdep(void) {
     RegisterDefinition * r;
     for (r = regs_def; r->name != NULL; r++) {
-        if (r->offset == offsetof(REG_SET, REG_FP)) fp_def = r;
-        if (r->offset == offsetof(REG_SET, REG_SP)) sp_def = r;
-        if (r->offset == offsetof(REG_SET, REG_PC)) pc_def = r;
+        if (r->offset == offsetof(REG_SET, REG_FP)) {
+            r->role = "FP";
+        }
+        else if (r->offset == offsetof(REG_SET, REG_SP)) {
+            r->role = "SP";
+        }
+        else if (r->offset == offsetof(REG_SET, REG_PC)) {
+            r->role = "PC";
+            pc_def = r;
+        }
     }
     regs_index = regs_def;
 }
@@ -79,39 +86,13 @@ RegisterDefinition * get_PC_definition(Context * ctx) {
     return pc_def;
 }
 
-static int read_reg(StackFrame * frame, RegisterDefinition * def, ContextAddress * addr) {
-    uint8_t buf[4];
-    uint32_t val;
-    assert(sizeof(buf) == def->size);
-    *addr = 0;
-    if (read_reg_bytes(frame, def, 0, def->size, buf) < 0) return -1;
-    val = buf[3];
-    val <<= 8;
-    val += buf[2];
-    val <<= 8;
-    val += buf[1];
-    val <<= 8;
-    val += buf[0];
-    *addr = (ContextAddress)val;
-    return 0;
+int crawl_stack_frame(StackFrame * frame, StackFrame * down) {
+    return crawl_stack_frame_arm(frame, down);
 }
 
-int crawl_stack_frame(StackFrame * frame, StackFrame * down)
-{
-    size_t word_size = 4;
-    ContextAddress fp = 0;
-    ContextAddress down_fp = 0;
-    ContextAddress down_sp = 0;
-    ContextAddress down_pc = 0;
-    Context * ctx = frame->ctx;
-    if (read_reg(frame, fp_def, &fp) < 0) return 0;
-    if (context_read_mem(ctx, fp - word_size*1, &down_pc, word_size) < 0) down_pc = 0;
-    if (context_read_mem(ctx, fp - word_size*2, &down_sp, word_size) < 0) down_sp = 0;
-    if (context_read_mem(ctx, fp - word_size*3, &down_fp, word_size) < 0) down_fp = 0;
-    if (down_fp != 0 && write_reg_value(down, fp_def, down_fp) < 0) return -1;
-    if (down_sp != 0 && write_reg_value(down, sp_def, down_sp) < 0) return -1;
-    if (down_pc != 0 && write_reg_value(down, pc_def, down_pc) < 0) return -1;
-    return 0;
+void add_cpudefs_disassembler(Context * cpu_ctx) {
+    add_disassembler(cpu_ctx, "ARM", disassemble_arm);
+    add_disassembler(cpu_ctx, "Thumb", disassemble_thumb);
 }
 
 #endif

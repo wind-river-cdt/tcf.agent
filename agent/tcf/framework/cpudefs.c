@@ -614,6 +614,12 @@ int cpu_bp_on_suspend(Context * ctx, int * triggered) {
 }
 #endif
 
+void ini_cpu_disassembler(Context * cpu) {
+#if defined(ENABLE_add_cpudefs_disassembler) && ENABLE_add_cpudefs_disassembler
+    add_cpudefs_disassembler(cpu);
+#endif
+}
+
 void ini_cpudefs(void) {
 #if defined(ENABLE_ini_cpudefs_mdep) && ENABLE_ini_cpudefs_mdep
     ini_cpudefs_mdep();

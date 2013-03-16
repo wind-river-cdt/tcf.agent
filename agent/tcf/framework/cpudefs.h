@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -313,9 +313,12 @@ extern int cpu_bp_remove(ContextBreakpoint * bp);
 /* Setup breakpoint registers for a context that is about to resume */
 extern int cpu_bp_on_resume(Context * ctx, int * single_step);
 
-/* Chcek breakpoint registers for a context that has stopped */
+/* Check breakpoint registers for a context that has stopped */
 extern int cpu_bp_on_suspend(Context * ctx, int * triggered);
 
+/*** Initialization functions ***/
+
+extern void ini_cpu_disassembler(Context * cpu);
 
 extern void ini_cpudefs(void);
 
