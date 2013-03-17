@@ -68,7 +68,7 @@ static DisassemblerInfo * find_disassembler_info(Context * ctx, const char * isa
         ContextExtensionDS * ext = EXT(ctx);
         while (i < ext->disassemblers_cnt) {
             if (strcmp(ext->disassemblers[i].isa, isa) == 0)
-                return &ext->disassemblers[i];
+                return ext->disassemblers + i;
             i++;
         }
     }
@@ -85,16 +85,14 @@ void add_disassembler(Context * ctx, const char * isa, Disassembler disassembler
     ContextExtensionDS * ext = EXT(ctx);
     assert(ctx == context_get_group(ctx, CONTEXT_GROUP_CPU));
     if ((i = find_disassembler_info(ctx, isa)) == NULL) {
-	if (ext->disassemblers_cnt >= ext->disassemblers_max) {
-	    ext->disassemblers_max += 8;
-	    ext->disassemblers = (DisassemblerInfo *)loc_realloc(ext->disassemblers,
+        if (ext->disassemblers_cnt >= ext->disassemblers_max) {
+            ext->disassemblers_max += 8;
+            ext->disassemblers = (DisassemblerInfo *)loc_realloc(ext->disassemblers,
                 sizeof(DisassemblerInfo) * ext->disassemblers_max);
-	}
-	i = ext->disassemblers + ext->disassemblers_cnt++;
-    } else {
-	if (i->isa) loc_free(i->isa);
+        }
+        i = ext->disassemblers + ext->disassemblers_cnt++;
+        i->isa = loc_strdup(isa);
     }
-    i->isa = loc_strdup(isa);
     i->disassembler = disassembler;
 }
 
