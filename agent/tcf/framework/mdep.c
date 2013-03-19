@@ -551,6 +551,17 @@ extern int big_endian_host(void) {
 }
 #endif
 
+void swap_bytes(void * buf, size_t size) {
+    size_t i, j, n;
+    char * p = (char *)buf;
+    n = size >> 1;
+    for (i = 0, j = size - 1; i < n; i++, j--) {
+        char x = p[i];
+        p[i] = p[j];
+        p[j] = x;
+    }
+}
+
 #if defined(_WIN32)
 
 #include <shlobj.h>

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2011 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -379,6 +379,10 @@ extern int posix_openpt(int flags);
 #else
    extern int big_endian_host(void);
 #endif
+
+/* Swap bytes in a buffer - change value endianness */
+extern void swap_bytes(void * buf, size_t size);
+#define SWAP(x) swap_bytes(&(x), sizeof(x))
 
 /* Return Operating System name */
 extern const char * get_os_name(void);

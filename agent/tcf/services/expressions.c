@@ -318,14 +318,14 @@ static void set_string_text_val(int pos, int len, int in_quotes, size_t char_siz
     if (in_quotes) {
         while (cnt < len) {
             int ch = next_char_val();
-	    if (big_endian) swap_bytes(&ch, sizeof (ch));
+            if (big_endian) swap_bytes(&ch, sizeof(ch));
             memcpy((uint8_t *)text_val.value + char_size * cnt++, &ch, char_size);
         }
     }
     else {
         while (cnt < len) {
             int ch = text_ch;
-	    if (big_endian) swap_bytes(&ch, sizeof (ch));
+            if (big_endian) swap_bytes(&ch, sizeof(ch));
             memcpy((uint8_t *)text_val.value + char_size * cnt++, &ch, char_size);
             next_ch_fast();
         }

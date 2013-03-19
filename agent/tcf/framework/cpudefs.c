@@ -448,17 +448,6 @@ LocationExpressionState * evaluate_location_expression(Context * ctx, StackFrame
     return state;
 }
 
-static void swap_bytes(void * buf, size_t size) {
-    size_t i, j, n;
-    char * p = (char *)buf;
-    n = size >> 1;
-    for (i = 0, j = size - 1; i < n; i++, j--) {
-        char x = p[i];
-        p[i] = p[j];
-        p[j] = x;
-    }
-}
-
 #define bit_mask(n) (1u << (big_endian ? 7 - (n) % 8 : (n) % 8))
 
 void read_location_pieces(Context * ctx, StackFrame * frame,

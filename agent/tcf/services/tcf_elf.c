@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -344,17 +344,6 @@ static ELF_File * find_open_file_by_inode(dev_t dev, ino_t ino, int64_t mtime) {
         file = file->next;
     }
     return NULL;
-}
-
-void swap_bytes(void * buf, size_t size) {
-    size_t i, j, n;
-    char * p = (char *)buf;
-    n = size >> 1;
-    for (i = 0, j = size - 1; i < n; i++, j--) {
-        char x = p[i];
-        p[i] = p[j];
-        p[j] = x;
-    }
 }
 
 static char * get_debug_info_file_name(ELF_File * file, int * error) {
