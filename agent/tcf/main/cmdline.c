@@ -290,6 +290,50 @@ static int cmd_connect(char * s) {
     return 1;
 }
 
+static void redirect_cb(Channel * c, void * client_data, int error) {
+    if (error) {
+        fprintf(stderr, "Reply error %d: %s\n", error, errno_to_str(error));
+        cmd_done(error);
+        return;
+    }
+
+    /* We flush the stream to be able to connect to the client with pipes
+     * and receive the message when it's displayed */
+
+    fflush(0);
+
+    /* The cmd_done() is done by channel_connected() in the case the 
+     * redirection succeed. */
+}
+
+static int cmd_redirect(char * s) {
+    PeerServer * ps;
+
+    ps = channel_peer_from_url(s);
+    if (ps == NULL) {
+        fprintf(stderr, "Error: Cannot parse peer identifier: %s\n", s);
+        return -1;
+    }
+    send_redirect_command_by_props(chan, ps, redirect_cb, NULL);
+    peer_server_free(ps);
+    return 1;
+}
+
+static int cmd_services(char * s) {
+    int i;
+    if (chan == NULL) {
+        printf (" Not connected to a peer.\n");
+        return 0;
+    }
+    printf (" Remote services = [");
+    for (i = 0; i < chan->peer_service_cnt; i++) {
+        if (i == 0) printf ("%s", chan->peer_service_list[i]);
+        else printf (", %s", chan->peer_service_list[i]);
+    }
+    printf ("]\n");
+    return 0;
+}
+
 static void event_cmd_line(void * arg) {
     char * s = (char *)arg;
     size_t len;
@@ -527,6 +571,8 @@ void ini_cmdline_handler(int mode, Protocol * protocol) {
     add_cmdline_cmd("peers",     "show list of known peers",  cmd_peers);
     add_cmdline_cmd("peerinfo",  "show info about a peer",    cmd_peerinfo);
     add_cmdline_cmd("connect",   "connect a peer",            cmd_connect);
+    add_cmdline_cmd("redirect",  "redirect connection to another peer", cmd_redirect);
+    add_cmdline_cmd("services",  "display list of services for the current connection", cmd_services);
 
     mode_flag = mode;
     if (infile == NULL) infile = stdin;
