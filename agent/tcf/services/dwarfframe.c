@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2012 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -180,7 +180,7 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             }
             else if (n == rules.return_address_register) {
                 regs->regs[n].rule = RULE_REGISTER;
-                regs->regs[n].offset = 108;
+                regs->regs[n].offset = 108; /* LR */
             }
             break;
         case EM_ARM:
@@ -193,12 +193,15 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             }
             else if (n == rules.return_address_register) {
                 regs->regs[n].rule = RULE_REGISTER;
-                regs->regs[n].offset = rules.return_address_register;
+                regs->regs[n].offset = 14; /* LR */
             }
             break;
         case EM_MICROBLAZE:
             min_reg_cnt = 32;
-            if (n >= 19 && n <= 31) { /* Must be saved across function calls. Callee-save */
+            if (n == 0) { /* Always same - reads as zero */
+                regs->regs[n].rule = RULE_SAME_VALUE;
+            }
+            else if (n >= 19 && n <= 31) { /* Must be saved across function calls. Callee-save */
                 regs->regs[n].rule = RULE_SAME_VALUE;
             }
             else if (n == 2) { /* Read-only small data area anchor */
@@ -212,7 +215,7 @@ static RegisterRules * get_reg(StackFrameRegisters * regs, int reg) {
             }
             else if (n == rules.return_address_register) {
                 regs->regs[n].rule = RULE_REGISTER;
-                regs->regs[n].offset = rules.return_address_register;
+                regs->regs[n].offset = 15; /* R15 is used for func return address */
             }
             break;
         }
@@ -786,6 +789,12 @@ static void generate_register_commands(RegisterRules * reg, RegisterDefinition *
         str_exception(ERR_INV_DWARF, "Invalid .debug_frame");
         break;
     }
+    if (rules.reg_id_scope.machine == EM_MICROBLAZE &&
+            dst_reg_def != NULL && dst_reg_def->dwarf_id == 32 &&
+            rules.return_address_register == 15) {
+        add_command(SFT_CMD_NUMBER)->args.num = 8;
+        add_command(SFT_CMD_ADD);
+    }
     if (dwarf_stack_trace_regs_cnt >= trace_regs_max) {
         int i;
         trace_regs_max += 16;
@@ -807,7 +816,6 @@ static void generate_commands(void) {
         generate_register_commands(reg, get_PC_definition(rules.ctx), reg_def);
     }
     for (i = 0; i < frame_regs.regs_cnt; i++) {
-        if (i == rules.return_address_register) continue;
         reg = get_reg(&frame_regs, i);
         if (reg->rule == 0) continue;
         reg_def = get_reg_by_id(rules.ctx, i, &rules.reg_id_scope);
@@ -898,7 +906,18 @@ static void generate_plt_section_commands(Context * ctx, ELF_File * file, U8_T o
         rules.return_address_register = 108; /* LR */
         frame_regs.cfa_rule = RULE_OFFSET;
         frame_regs.cfa_register = 1; /* R1 */
-        frame_regs.cfa_offset = 0;
+        generate_commands();
+        break;
+    case EM_ARM:
+        rules.return_address_register = 14; /* LR */
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = 13; /* SP */
+        generate_commands();
+        break;
+    case EM_MICROBLAZE:
+        rules.return_address_register = 15; /* R15 */
+        frame_regs.cfa_rule = RULE_OFFSET;
+        frame_regs.cfa_register = 1; /* R1 */
         generate_commands();
         break;
     }
