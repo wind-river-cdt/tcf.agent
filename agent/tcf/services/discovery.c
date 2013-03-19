@@ -34,6 +34,7 @@
 #include <tcf/framework/peer.h>
 #include <tcf/services/discovery.h>
 #include <tcf/services/discovery_udp.h>
+#include <tcf/framework/protocol.h>
 
 #if SERVICE_Locator
 
@@ -150,6 +151,16 @@ static void command_get_peers(char * token, Channel * c) {
     write_stream(&c->out, MARKER_EOM);
 }
 
+static void command_get_agent_id(char * token, Channel * c) {
+    json_test_char(&c->inp, MARKER_EOM);
+    write_stringz(&c->out, "R");
+    write_stringz(&c->out, token);
+    write_errno(&c->out, 0);
+    json_write_string(&c->out, get_agent_id());
+    write_stream(&c->out, 0);
+    write_stream(&c->out, MARKER_EOM);
+}
+
 static void peer_change_event(PeerServer * ps, int type, void * arg) {
     OutputStream * out = (OutputStream *)arg;
 
@@ -186,6 +197,7 @@ void ini_locator_service(Protocol * p, TCFBroadcastGroup * bcg) {
     add_command_handler(p, LOCATOR, "sync", command_sync);
     add_command_handler(p, LOCATOR, "redirect", command_redirect);
     add_command_handler(p, LOCATOR, "getPeers", command_get_peers);
+    add_command_handler(p, LOCATOR, "getAgentID", command_get_agent_id);
 }
 #endif /* SERVICE_Locator */
 
