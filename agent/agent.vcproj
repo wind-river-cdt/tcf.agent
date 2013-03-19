@@ -1507,6 +1507,42 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="arm"
+				>
+				<File
+					RelativePath=".\machine\arm\tcf\cpudefs-mdep.c"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\arm\tcf\cpudefs-mdep.h"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\arm\tcf\disassembler-arm.c"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\arm\tcf\disassembler-arm.h"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\arm\tcf\disassembler-thumb.c"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\arm\tcf\regset-mdep.h"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\arm\tcf\stack-crawl-arm.c"
+					>
+				</File>
+				<File
+					RelativePath=".\machine\arm\tcf\stack-crawl-arm.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<File
 			RelativePath=".\tcf\config.h"
