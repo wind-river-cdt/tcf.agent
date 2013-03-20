@@ -1871,22 +1871,28 @@ static void search_inlined_subroutine(ObjectInfo * obj, UnitAddress * addr, Stac
                     memset(&area, 0, sizeof(area));
                     if (get_num_prop(o, AT_call_file, &call_file)) {
                         U8_T call_line = 0;
-                        FileInfo * file_info = unit->mFiles + (int)call_file;
+                        load_line_numbers(unit);
                         area.directory = unit->mDir;
-                        if (is_absolute_path(file_info->mName) || file_info->mDir == NULL) {
-                            area.file = file_info->mName;
-                        }
-                        else if (is_absolute_path(file_info->mDir)) {
-                            area.directory = file_info->mDir;
-                            area.file = file_info->mName;
+                        if (call_file < unit->mFilesCnt) {
+                            FileInfo * file_info = unit->mFiles + (int)call_file;
+                            if (is_absolute_path(file_info->mName) || file_info->mDir == NULL) {
+                                area.file = file_info->mName;
+                            }
+                            else if (is_absolute_path(file_info->mDir)) {
+                                area.directory = file_info->mDir;
+                                area.file = file_info->mName;
+                            }
+                            else {
+                                char buf[FILE_PATH_SIZE];
+                                snprintf(buf, sizeof(buf), "%s/%s", file_info->mDir, file_info->mName);
+                                area.file = tmp_strdup(buf);
+                            }
+                            area.file_mtime = file_info->mModTime;
+                            area.file_size = file_info->mSize;
                         }
                         else {
-                            char buf[FILE_PATH_SIZE];
-                            snprintf(buf, sizeof(buf), "%s/%s", file_info->mDir, file_info->mName);
-                            area.file = tmp_strdup(buf);
+                            area.file = unit->mObject->mName;
                         }
-                        area.file_mtime = file_info->mModTime;
-                        area.file_size = file_info->mSize;
                         if (get_num_prop(o, AT_call_line, &call_line)) {
                             area.start_line = (int)call_line;
                             area.end_line = (int)call_line + 1;
@@ -1952,7 +1958,7 @@ int get_stack_tracing_info(Context * ctx, ContextAddress rt_addr, StackTracingIn
                 buf.regs = dwarf_stack_trace_regs;
                 buf.reg_cnt = dwarf_stack_trace_regs_cnt;
                 buf.fp = dwarf_stack_trace_fp;
-                {
+                if (get_sym_context(ctx, STACK_NO_FRAME, rt_addr) == 0) {
                     /* Search inlined functions info.
                      * Note: when debug info is a separate file,
                      * 'lt_addr' is not same as 'unit.lt_addr' */
