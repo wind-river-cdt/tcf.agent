@@ -1623,9 +1623,9 @@ static void disassemble_misc_instr(uint32_t instr, const char * cond) {
 }
 
 static void disassemble_media_instr(uint32_t instr, const char * cond) {
-    if ((instr & 0x0fc00000) == 0x06000000) {
+    if ((instr & 0x0f800000) == 0x06000000) {
         /* Parallel addition and subtraction */
-        if ((instr & (1 << 2)) == 0) {
+        if ((instr & (1 << 22)) == 0) {
             /* signed */
             switch ((instr >> 20) & 3) {
             case 1: add_str("s"); break;
