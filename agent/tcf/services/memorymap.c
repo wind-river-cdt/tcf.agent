@@ -148,6 +148,17 @@ static void update_context_client_map(Context * ctx) {
                         str_equ(y->file_name, x->file_name) &&
                         str_equ(y->sect_name, x->sect_name) &&
                         str_equ(y->query, x->query);
+                    if (equ) {
+                        MemoryRegionAttribute * ax = x->attrs;
+                        MemoryRegionAttribute * ay = y->attrs;
+                        while (ax != NULL && ay != NULL) {
+                            if (strcmp(ax->name, ay->name) != 0) break;
+                            if (strcmp(ax->value, ay->value) != 0) break;
+                            ax = ax->next;
+                            ay = ay->next;
+                        }
+                        equ = ax == NULL && ay == NULL;
+                    }
                 }
             }
         }
@@ -171,6 +182,20 @@ static void update_context_client_map(Context * ctx) {
                     if (x->sect_name) y->sect_name = loc_strdup(x->sect_name);
                     if (x->query) y->query = loc_strdup(x->query);
                     if (x->id) y->id = loc_strdup(x->id);
+                    if (x->attrs) {
+                        MemoryRegionAttribute ** p = NULL;
+                        MemoryRegionAttribute * ax = x->attrs;
+                        while (ax != NULL) {
+                            MemoryRegionAttribute * ay = (MemoryRegionAttribute *)
+                                loc_alloc_zero(sizeof(MemoryRegionAttribute));
+                            ay->name = loc_strdup(ax->name);
+                            ay->value = loc_strdup(ax->value);
+                            if (p == NULL) y->attrs = ay;
+                            else *p = ay;
+                            p = &ay->next;
+                            ax = ax->next;
+                        }
+                    }
                 }
             }
         }
