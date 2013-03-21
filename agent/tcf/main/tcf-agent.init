@@ -41,6 +41,11 @@ if [ -f /etc/SuSE-release ]; then
     system=suse
 fi
 
+if [ -f /etc/os-release ]; then
+    # Tested on Raspberry PI: "2013-02-09-wheezy-raspbian"
+    system=debian
+fi
+
 if [ $system = unknown ]; then
     echo "$0: Unknown system, please port and contact tcf-dev@eclipse.org" 1>&2
     exit 1
@@ -61,6 +66,14 @@ if [ $system = suse ]; then
     rc_reset
 fi
 
+if [ $system = debian ]; then
+    #set -e
+    #umask 022
+    . /lib/lsb/init-functions
+    DAEMON_ARGS="-d -L- -l0"
+    PIDFILE=/var/run/$DAEMON_NAME.pid
+fi
+
 test -e $DAEMON_PATH || exit 0
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
@@ -68,7 +81,7 @@ export PATH
 
 # Redhat start/stop function.
 #
-function redhat()
+redhat()
 {
 
 #
@@ -128,7 +141,7 @@ esac
 
 # SuSE start/stop function.
 #
-function suse()
+suse()
 {
 
 #
@@ -188,6 +201,64 @@ case "$1" in
 esac
 }
 
+# Debian start/stop function.
+#
+debian()
+{
+
+#
+# See how we were called.
+#
+case "$1" in
+  start)
+    log_daemon_msg "Starting TCF agent" "$DAEMON_NAME" || true
+    pid=$( pidofproc $DAEMON_PATH )
+    if [ -n "$pid" ]; then
+      log_begin_msg "Already running."
+      log_end_msg 0
+      exit 0
+    fi
+    if start-stop-daemon --start --quiet --oknodo --exec $DAEMON_PATH -- $DAEMON_ARGS ; then
+        pid=$( pidofproc $DAEMON_PATH )
+        echo -n "$pid" > "$PIDFILE"
+        log_end_msg 0 || true
+    else
+        log_end_msg 1 || true
+    fi
+    ;;
+  stop)
+    log_daemon_msg "Shutting down TCF agent" "$DAEMON_NAME" || true
+    if start-stop-daemon --stop --quiet --oknodo --exec $DAEMON_PATH ; then
+        rm -f "$PIDFILE"
+        log_end_msg 0 || true
+    else
+        log_end_msg 1 || true
+    fi
+    ;;
+  restart)
+    log_daemon_msg "Restarting TCF agent" "$DAEMON_NAME" || true
+    start-stop-daemon --stop --quiet --oknodo --retry 30 --exec $DAEMON_PATH
+    rm -f "$PIDFILE"
+    if start-stop-daemon --start --quiet --oknodo --exec $DAEMON_PATH -- $DAEMON_ARGS ; then
+        pid=$( pidofproc $DAEMON_PATH )
+        echo -n "$pid" > "$PIDFILE"
+        log_end_msg 0 || true
+    else
+        rm -f "$PIDFILE"
+        log_end_msg 1 || true
+    fi
+    ;;
+  status)
+    status_of_proc -p "$PIDFILE" $DAEMON_PATH $DAEMON_NAME && exit 0 || exit $?
+    ;;
+  *)
+    log_action_msg "Usage: /etc/init.d/tcf-agent {start|stop|status|restart}" || true
+    exit 1
+    ;;
+esac
+}
+
+
 if [ $system = suse ]; then
   suse "$@"
   rc_exit
@@ -197,6 +268,10 @@ RETVAL=0
 
 if [ $system = redhat -o $system = wrlinux  ]; then
   redhat "$@"
+fi
+
+if [ $system = debian ]; then
+  debian "$@"
 fi
 
 exit $RETVAL
