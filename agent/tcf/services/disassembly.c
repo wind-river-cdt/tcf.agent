@@ -28,7 +28,6 @@
 #include <tcf/services/symbols.h>
 #include <tcf/services/linenumbers.h>
 #include <tcf/services/memorymap.h>
-#include <tcf/services/tcf_elf.h>
 #include <tcf/services/disassembly.h>
 
 #define MAX_INSTRUCTION_SIZE 8

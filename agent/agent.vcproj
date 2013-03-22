@@ -836,6 +836,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tcf\services\profiler.c"
+				>
+			</File>
+			<File
+				RelativePath=".\tcf\services\profiler.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tcf\services\registers.c"
 				>
 			</File>

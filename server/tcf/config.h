@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007, 2010 Wind River Systems, Inc. and others.
+ * Copyright (c) 2007, 2013 Wind River Systems, Inc. and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
@@ -49,6 +49,7 @@
 #define SERVICE_Expressions     0
 #define SERVICE_DPrintf         0
 #define SERVICE_Disassembly     0
+#define SERVICE_Profiler        0
 #if !defined(SERVICE_Streams)
 #define SERVICE_Streams         0
 #endif
