@@ -234,7 +234,7 @@ int cpu_enable_stepping_mode (Context * ctx, uint32_t * is_cont) {
     return 0;
 }
 
-int cpu_disable_stepping_mode (Context * ctx, ContextAddress unpatched_pc) {
+int cpu_disable_stepping_mode (Context * ctx) {
     Context * grp = context_get_group(ctx, CONTEXT_GROUP_PROCESS);
     ContextExtensionARM * ext = EXT(grp);
     trace (LOG_ALWAYS, "cpu_disable_stepping_mode");

@@ -319,7 +319,7 @@ extern int cpu_bp_on_suspend(Context * ctx, int * triggered);
 /*** CPU external stepping mode API ***/
 
 /* Disable the stepping mode */
-extern int cpu_disable_stepping_mode (Context * ctx, ContextAddress pc);
+extern int cpu_disable_stepping_mode (Context * ctx);
 
 /* Enable the stepping mode */
 extern int cpu_enable_stepping_mode (Context * ctx, uint32_t * is_cont);

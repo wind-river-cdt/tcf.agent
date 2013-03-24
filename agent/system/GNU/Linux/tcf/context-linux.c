@@ -422,7 +422,7 @@ static int do_single_step(Context * ctx) {
     if (skip_breakpoint(ctx, 1)) return 0;
 
     trace(LOG_CONTEXT, "context: single step ctx %#lx, id %s", ctx, ctx->id);
-    cpu_enable_stepping_mode(ctx, &is_cont);
+    if (cpu_enable_stepping_mode(ctx, &is_cont) < 0) return -1;
     if (flush_regs(ctx) < 0) return -1;
     if (!ctx->stopped) return 0;
     if (is_cont) {
@@ -1385,7 +1385,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             else ctx->stopped_by_bp = is_breakpoint_address(ctx, pc1);
             ext->end_of_step = !ctx->stopped_by_cb && !ctx->stopped_by_bp && ext->pending_step;
         }
-        cpu_disable_stepping_mode(ctx, pc1);
+        cpu_disable_stepping_mode(ctx);
         ext->pending_step = 0;
         send_context_stopped_event(ctx);
     }
