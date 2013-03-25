@@ -316,6 +316,14 @@ extern int cpu_bp_on_resume(Context * ctx, int * single_step);
 /* Check breakpoint registers for a context that has stopped */
 extern int cpu_bp_on_suspend(Context * ctx, int * triggered);
 
+/*** CPU external stepping mode API ***/
+
+/* Disable the stepping mode */
+extern int cpu_disable_stepping_mode (Context * ctx, ContextAddress pc);
+
+/* Enable the stepping mode */
+extern int cpu_enable_stepping_mode (Context * ctx, uint32_t * is_cont);
+
 /*** Initialization functions ***/
 
 extern void ini_cpu_disassembler(Context * cpu);

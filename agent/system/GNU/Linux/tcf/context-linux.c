@@ -414,6 +414,7 @@ static void send_process_exited_event(Context * prs) {
 }
 
 static int do_single_step(Context * ctx) {
+    uint32_t is_cont;
     ContextExtensionLinux * ext = EXT(ctx);
 
     assert(!ext->pending_step);
@@ -421,20 +422,38 @@ static int do_single_step(Context * ctx) {
     if (skip_breakpoint(ctx, 1)) return 0;
 
     trace(LOG_CONTEXT, "context: single step ctx %#lx, id %s", ctx, ctx->id);
+    cpu_enable_stepping_mode(ctx, &is_cont);
     if (flush_regs(ctx) < 0) return -1;
     if (!ctx->stopped) return 0;
-    if (ptrace(PTRACE_SINGLESTEP, ext->pid, 0, 0) < 0) {
-        int err = errno;
-        if (err == ESRCH) {
-            ctx->exiting = 1;
-            send_context_started_event(ctx);
-            return 0;
+    if (is_cont) {
+        if (ptrace(PTRACE_CONT, ext->pid, 0, 0) < 0) {
+            int err = errno;
+            if (err == ESRCH) {
+                ctx->exiting = 1;
+                send_context_started_event(ctx);
+                return 0;
+            }
+            trace(LOG_ALWAYS, "error: ptrace(PTRACE_CONT, ...) failed: ctx %#lx, id %s, error %d %s",
+                ctx, ctx->id, err, errno_to_str(err));
+            errno = err;
+            return -1;
         }
-        trace(LOG_ALWAYS, "error: ptrace(PTRACE_SINGLESTEP, ...) failed: ctx %#lx, id %s, error %d %s",
-            ctx, ctx->id, err, errno_to_str(err));
-        errno = err;
-        return -1;
     }
+    else {
+        if (ptrace(PTRACE_SINGLESTEP, ext->pid, 0, 0) < 0) {
+            int err = errno;
+            if (err == ESRCH) {
+                ctx->exiting = 1;
+                send_context_started_event(ctx);
+                return 0;
+            }
+            trace(LOG_ALWAYS, "error: ptrace(PTRACE_SINGLESTEP, ...) failed: ctx %#lx, id %s, error %d %s",
+                ctx, ctx->id, err, errno_to_str(err));
+            errno = err;
+            return -1;
+        }
+    }
+
     ext->pending_step = 1;
     send_context_started_event(ctx);
     return 0;
@@ -1366,6 +1385,7 @@ static void event_pid_stopped(pid_t pid, int signal, int event, int syscall) {
             else ctx->stopped_by_bp = is_breakpoint_address(ctx, pc1);
             ext->end_of_step = !ctx->stopped_by_cb && !ctx->stopped_by_bp && ext->pending_step;
         }
+        cpu_disable_stepping_mode(ctx, pc1);
         ext->pending_step = 0;
         send_context_stopped_event(ctx);
     }

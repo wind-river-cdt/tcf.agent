@@ -579,6 +579,17 @@ void write_location_pieces(Context * ctx, StackFrame * frame,
     }
 }
 
+#if !defined(ENABLE_external_stepping_mode) || !ENABLE_external_stepping_mode
+int cpu_enable_stepping_mode (Context * ctx, uint32_t * is_cont) {
+    * is_cont = 0;
+    return 0;
+}
+
+int cpu_disable_stepping_mode (Context * ctx) {
+    return 0;
+}
+#endif
+
 #if !defined(ENABLE_HardwareBreakpoints) || !ENABLE_HardwareBreakpoints
 int cpu_bp_get_capabilities(Context * ctx) {
     return 0;
